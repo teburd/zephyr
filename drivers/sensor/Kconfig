@@ -69,6 +69,10 @@ source "drivers/sensor/hts221/Kconfig"
 
 source "drivers/sensor/isl29035/Kconfig"
 
+source "drivers/sensor/icm20601/Kconfig"
+
+source "drivers/sensor/icm20649/Kconfig"
+
 source "drivers/sensor/lis2dh/Kconfig"
 
 source "drivers/sensor/lis2ds12/Kconfig"

@@ -1,0 +1,172 @@
+# Kconfig - ICM20601 accelerometer and gyroscope sensor configuration
+# options
+
+#
+# Copyright (c) 2018 LeanUp
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig ICM20601
+	bool "ICM20601 SPI accelerometer and gyroscope Chip"
+	depends on SENSOR && SPI
+	default n
+	help
+	  Enable driver for ICM20601 accelerometer and gyroscope
+	  sensor.
+
+config ICM20601_NAME
+	string "ICM20601 device name"
+	depends on ICM20601
+	default "ICM20601"
+
+config ICM20601_SPI_SELECT_SLAVE
+	hex "ICM20601 SPI slave select pin"
+	depends on ICM20601
+	default 1
+	help
+	  ICM20601 SPI chip select pin (active low).
+
+config ICM20601_SPI_BUS_FREQ
+	int "ICM20601 SPI bus speed in Hz"
+	default 8000000
+	depends on ICM20601
+	help
+	  This is the maximum supported SPI bus frequency. The chip supports a
+	  frequency up to 8MHz.
+
+config ICM20601_SPI_MASTER_DEV_NAME
+	string "SPI master name where ICM20601 chip is connected"
+	depends on ICM20601
+	default "SPI_2"
+	help
+	  Specify the device name of the spi master device to which ICM20601 is
+	  connected.
+
+config ICM20601_SPI_GPIO_CS
+	bool "ICM20601 SPI CS through a GPIO pin"
+	default n
+	depends on ICM20601
+	help
+	  This option is useful if one needs to manage SPI CS through a GPIO
+	  pin to by-pass the SPI controller's CS logic.
+
+config ICM20601_SPI_GPIO_CS_DRV_NAME
+	string "GPIO driver's name to use to drive SPI CS through"
+	default ""
+	depends on ICM20601_SPI_GPIO_CS
+	help
+	  This option is mandatory to set which GPIO controller to use in order
+	  to actually emulate the SPI CS.
+
+config ICM20601_SPI_GPIO_CS_PIN
+	int "GPIO PIN to use to drive SPI CS through"
+	default 0
+	depends on ICM20601_SPI_GPIO_CS
+	help
+	  This option is mandatory to set which GPIO pin to use in order
+	  to actually emulate the SPI CS.
+
+choice
+	prompt "Trigger mode"
+	depends on ICM20601
+	default ICM20601_TRIGGER_NONE
+	help
+	  Specify the type of triggering to be used by the driver.
+
+config ICM20601_TRIGGER_NONE
+	bool
+	prompt "No trigger"
+
+config ICM20601_TRIGGER_GLOBAL_THREAD
+	bool
+	prompt "Use global thread"
+	depends on GPIO
+	select ICM20601_TRIGGER
+
+config ICM20601_TRIGGER_OWN_THREAD
+	bool
+	prompt "Use own thread"
+	depends on GPIO
+	select ICM20601_TRIGGER
+
+endchoice
+
+config ICM20601_TRIGGER
+	bool
+	depends on ICM20601
+
+config ICM20601_GPIO_DEV_NAME
+	string
+	prompt "GPIO device"
+	depends on ICM20601 && ICM20601_TRIGGER
+	help
+	  The device name of the GPIO device to which the ICM20601 interrupt pin
+	  is connected.
+
+config ICM20601_GPIO_PIN_NUM
+	int
+	prompt "Interrupt GPIO pin number"
+	depends on ICM20601 && ICM20601_TRIGGER
+	help
+	  The number of the GPIO on which the interrupt signal from the ICM20601
+	  chip will be received.
+
+config ICM20601_THREAD_PRIORITY
+	int
+	prompt "Thread priority"
+	depends on ICM20601 && ICM20601_TRIGGER_OWN_THREAD
+	default 10
+	help
+	  Priority of thread used by the driver to handle interrupts.
+
+config ICM20601_THREAD_STACK_SIZE
+	int
+	prompt "Thread stack size"
+	depends on ICM20601 && ICM20601_TRIGGER_OWN_THREAD
+	default 1024
+	help
+	  Stack size of thread used by the driver to handle interrupts.
+
+config ICM20601_ENABLE_TEMP
+	bool "Enable temperature"
+	depends on ICM20601
+	default n
+	help
+	  Enable/disable temperature
+
+menu "Attributes"
+	depends on ICM20601
+
+config ICM20601_GYRO_FS
+	int
+	prompt "Gyroscope full-scale range"
+	depends on ICM20601
+	default 0
+	help
+	  Specify the default gyroscope full-scale range.
+	  An X value for the config represents a range of +/- X degree per
+	  second. Valid values are:
+	  0:  Full Scale selected at runtime
+	  500:   +/- 500dps
+	  1000:  +/- 1000dps
+	  2000:  +/- 2000dps
+	  4000:  +/- 4000dps
+
+config ICM20601_ACCEL_FS
+	int
+	prompt "Accelerometer full-scale range"
+	depends on ICM20601
+	default 0
+	help
+	  Specify the default accelerometer full-scale range.
+	  An X value for the config represents a range of +/- X G. Valid values
+	  are:
+	  0:  Full Scale selected at runtime
+	  2:  +/- 2g
+	  4:  +/- 4g
+	  8:  +/- 8g
+	  16: +/- 16g
+	  32: +/- 32g
+
+endmenu
