@@ -131,6 +131,11 @@
 			status = "disabled";
 		};
 
+		usb_cdc: virtualcom@0 {
+			compatible = "nordic,nrf-usbd";
+			label = "CDC_ACM";
+		};
+
 		i2c0: i2c@40003000 {
 			compatible = "nordic,nrf-i2c";
 			#address-cells = <1>;
