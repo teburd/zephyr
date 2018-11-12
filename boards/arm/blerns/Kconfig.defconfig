@@ -1,0 +1,61 @@
+# Kconfig - nRF52 PCA10040 board configuration
+#
+# Copyright (c) 2016 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_BLERNS
+
+config BOARD
+	default "blerns"
+
+if UART_NRFX
+
+config UART_0_NRF_TX_PIN
+	default 19
+
+config UART_0_NRF_RX_PIN
+	default 21
+
+config UART_0_NRF_RTS_PIN
+	default 23
+
+config UART_0_NRF_CTS_PIN
+	default 25
+
+if MODEM_WNCM14A2A
+
+config UART_1_NRF_TX_PIN
+	default 46
+
+config UART_1_NRF_RX_PIN
+	default 45
+
+config UART_1_NRF_RTS_PIN
+	default 44
+
+config UART_1_NRF_CTS_PIN
+	default 47
+
+endif # MODEM_WCN14A2A
+
+endif # UART_NRFX
+
+if USB
+
+config USB_NRF52840
+	def_bool y
+
+config USB_DEVICE_STACK
+	def_bool y
+
+endif # USB
+
+if IEEE802154
+
+config IEEE802154_NRF5
+	def_bool y
+
+endif # IEEE802154
+
+endif # BOARD_NRF52840_PCA10056
