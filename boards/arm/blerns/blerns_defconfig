@@ -15,6 +15,7 @@ CONFIG_UART_INTERRUPT_DRIVEN=y
 
 # enable console
 CONFIG_CONSOLE=y
+CONFIG_UART_CONSOLE=n
 CONFIG_RTT_CONSOLE=y
 
 # additional board options
