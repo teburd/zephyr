@@ -1,0 +1,66 @@
+#
+# Copyright (c) 2018 Workaround GmbH
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig LP5521
+	bool "LP5521 LED driver"
+	depends on I2C
+	help
+	  Enable LED driver for LP5521.
+
+	  LP5521 LED driver has 3 channels (RGB). Each channel can drive up to
+	  25.5 mA per LED.
+
+if !HAS_DTS_I2C_DEVICE && LP5521
+
+config LP5521_DEV_NAME
+	string "LP5521 device name"
+	default "LP5521"
+	help
+	  Device name for LP5521 LED driver.
+
+config LP5521_I2C_ADDRESS
+	hex "LP5521 I2C slave address"
+	range 0x32 0x35
+	default 0x32
+	help
+	  Specify the I2C slave address for the LP5521 LED driver.
+	  0x32: ADR0 = 0, ADR1 = 0
+	  0x33: ADR0 = 0, ADR1 = 1
+	  0x34: ADR0 = 1, ADR1 = 0
+	  0x35: ADR0 = 1, ADR1 = 1
+
+config LP5521_I2C_MASTER_DEV_NAME
+	string "I2C master where LP5521 is connected"
+	default "I2C_0"
+	help
+	  Specify the device name of the I2C master device to which
+	  LP5521 is connected.
+
+endif
+
+config LP5521_GPIO_ENABLE 
+	bool "Enable GPIO enable for LP5521"
+	depends on LP5521
+	help
+	  Enable GPIO enable support for LP5521 
+
+
+config LP5521_GPIO_ENABLE_DEV_NAME
+	string "GPIO device"
+	default "GPIO_1"
+	depends on LP5521 && LP5521_GPIO_ENABLE
+	help
+	  The device name of the GPIO device to which the LP5521 ENABLE
+	  pin is connected.
+
+
+config LP5521_GPIO_ENABLE_PIN_NUM
+	int "GPIO Wakeup pin number"
+	default 0
+	depends on LP5521 && LP5521_GPIO_ENABLE
+	help
+	  The number of the GPIO pin on which the ENABLE pin of LP5521
+	  is connected
