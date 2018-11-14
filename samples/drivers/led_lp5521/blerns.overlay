@@ -1,0 +1,10 @@
+&i2c0 {
+	status = "ok";
+	clock-frequency = <I2C_BITRATE_FAST>;
+
+	lp5521@30 {
+		compatible = "ti,lp5521";
+		reg = <0x30>;
+		label = "LP5521";
+	};
+};

@@ -1,0 +1,17 @@
+---
+title: TI LP5521 LED Driver
+id: ti,lp5521
+version: 0.1
+
+description: TI LP5521 LED binding
+
+inherits:
+    !include i2c-device.yaml
+
+properties:
+    compatible:
+      type: string
+      category: required
+      description: compatible strings
+      constraint: "ti,lp5521"
+...
