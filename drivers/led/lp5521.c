@@ -706,7 +706,7 @@ static int lp5521_led_blink(struct device *dev, u32_t led,
 		return ret;
 	}
 
-	ret = lp5521_program_wait(dev, channel, ++command_index, 250);
+	ret = lp5521_program_wait(dev, channel, ++command_index, delay_on);
 	if (ret) {
 		return ret;
 	}
@@ -717,7 +717,7 @@ static int lp5521_led_blink(struct device *dev, u32_t led,
 		return ret;
 	}
 
-	ret = lp5521_program_wait(dev, channel, ++command_index, 250);
+	ret = lp5521_program_wait(dev, channel, ++command_index, delay_off);
 	if (ret) {
 		return ret;
 	}
