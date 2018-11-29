@@ -8,18 +8,17 @@
  * @file
  * @brief LP5521 LED driver
  *
- * The LP5521 is a 4-channel LED driver that communicates over I2C. The four
- * channels are expected to be connected to a red, green, blue and white LED.
+ * The LP5521 is a 3-channel LED driver that communicates over I2C. The three 
+ * channels are expected to be connected to a red, green, and blue LED.
  * Each LED can be driven by two different sources.
  *
  * 1. The brightness of each LED can be configured directly by setting a
  * register that drives the PWM of the connected LED.
  *
- * 2. A program can be transferred to the driver and run by one of the three
- * available execution engines. Up to 16 commands can be defined in each
- * program. Possible commands are:
+ * 2. A program for each channel can be transferred to the driver and run.
+ * Up to 16 commands can be defined in each program. Possible commands are:
  *   - Set the brightness.
- *   - Fade the brightness over time.
+ *   - Fade in/out the brightness over time.
  *   - Loop parts of the program or the whole program.
  *   - Add delays.
  *   - Synchronize between the engines.
