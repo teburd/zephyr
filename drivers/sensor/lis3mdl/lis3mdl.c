@@ -21,8 +21,12 @@ static void lis3mdl_convert(struct sensor_value *val, s16_t raw_val,
 			    u16_t divider)
 {
 	/* val = raw_val / divider */
+  /*
 	val->val1 = raw_val / divider;
 	val->val2 = (((s64_t)raw_val % divider) * 1000000L) / divider;
+  */
+  val->val1 = raw_val;
+  val->val2 = 0;
 }
 
 static int lis3mdl_channel_get(struct device *dev,
