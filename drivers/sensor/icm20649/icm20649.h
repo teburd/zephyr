@@ -432,7 +432,4 @@ enum icm20649_int_state {
 //int icm20649_set_state(struct device *dev);
 
 
-#define SYS_LOG_DOMAIN "ICM20649"
-#define SYS_LOG_LEVEL CONFIG_SYS_LOG_SENSOR_LEVEL
-#include <logging/sys_log.h>
 #endif /* __SENSOR_ICM20649_H__ */

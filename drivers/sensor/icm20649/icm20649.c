@@ -3,6 +3,10 @@
 #include <sensor.h>
 #include "icm20649.h"
 
+#define SYS_LOG_DOMAIN "ICM20649"
+#define SYS_LOG_LEVEL CONFIG_SYS_LOG_SENSOR_LEVEL
+#include <logging/sys_log.h>
+
 #define SENSOR_PI_DOUBLE			(SENSOR_PI / 1000000.0)
 #define SENSOR_DEG2RAD_DOUBLE			(SENSOR_PI_DOUBLE / 180)
 #define SENSOR_G_DOUBLE				(SENSOR_G / 1000000.0)
