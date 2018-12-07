@@ -72,8 +72,8 @@
 
 &i2c1 {
 	status = "ok";
-	sda-pin = <30>;
-	scl-pin = <31>;
+	sda-pin = <16>;
+	scl-pin = <14>;
 };
 
 &flash0 {
