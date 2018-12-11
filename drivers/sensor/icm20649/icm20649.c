@@ -908,8 +908,6 @@ static void icm20649_thread_cb(void *arg)
 	struct device *dev = arg;
 	struct icm20649_data *drv_data = dev->driver_data;
 
-    SYS_LOG_DBG("Interrupt triggered");
-
 	// read data from fifo as an array of s16_t's up to 512bytes worth
     // pass data to callback given at setup time
 	if (drv_data->data_ready_handler != NULL) {
