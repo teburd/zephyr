@@ -1,4 +1,3 @@
-
 # Copyright (c) 2016 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -6,12 +5,25 @@
 
 menuconfig LIS3MDL
 	bool "LIS3MDL magnetometer"
-	depends on I2C && HAS_DTS_I2C
+	depends on (I2C && HAS_DTS_I2C) || (SPI && HAS_DTS_SPI)
 	help
 	  Enable driver for LIS3MDL I2C-based magnetometer.
 
 if LIS3MDL
 
+choice LIS3MDL_DATA_MODE
+  prompt "Data mode"
+  default LIS3MDL_DATA_CONVERTED
+  help
+    Specify if the data is converted to useful units or the raw sensor value is used.
+
+config LIS3MDL_DATA_RAW
+  bool "Raw data mode, raw values are placed in struct sensor_value val1"
+
+config  LIS3MDL_DATA_CONVERTED
+  bool "Data is scaled and converted and split into non-fractional/fraction pair"
+
+endchoice #LIS3MDL_DATA_MODE
 
 choice LIS3MDL_TRIGGER_MODE
 	prompt "Trigger mode"
@@ -32,42 +44,15 @@ config LIS3MDL_TRIGGER_OWN_THREAD
 	depends on GPIO
 	select LIS3MDL_TRIGGER
 
+config LIS3MDL_TRIGGER_IRQ
+	bool "Trigger callback is run in the interrupt callback"
+	depends on GPIO
+	select LIS3MDL_TRIGGER
+
 endchoice # LIS3MDL_TRIGGER_MODE
 
 config LIS3MDL_TRIGGER
 	bool
-
-config LIS3MDL_GPIO_DEV_NAME
-	string "GPIO device"
-	default "GPIO_0"
-	depends on LIS3MDL_TRIGGER
-	help
-	  The device name of the GPIO device to which the LIS3MDL interrupt pins
-	  are connected.
-
-config LIS3MDL_GPIO_INT_PIN_NUM
-	int "Interrupt GPIO pin number"
-	default 0
-	depends on LIS3MDL_TRIGGER
-	help
-	  The number of the GPIO on which the interrupt signal from the LIS3MDL
-	  chip will be received.
-
-config LIS3MDL_GPIO_CS_PIN_NUM
-	int "Chip select pin used to determine SPI/I2C connectivity"
-	default 0
-	depends on LIS3MDL
-	help
-	  The number of the GPIO on which the CS signal to the LIS3MDL
-	  chip will be sent.
-
-config LIS3MDL_GPIO_SA1_PIN_NUM
-	int "I2C Address pin if I2C is used, optionally set the address pin high/low to adjust the address"
-	default 0
-	depends on LIS3MDL
-	help
-	  The number of the GPIO on which the SA1 signal to the LIS3MDL
-	  chip will be sent.
 
 config LIS3MDL_THREAD_PRIORITY
 	int "Thread priority"
@@ -82,6 +67,8 @@ config LIS3MDL_THREAD_STACK_SIZE
 	default 1024
 	help
 	  Stack size of thread used by the driver to handle interrupts.
+
+menu "Attributes"
 
 config LIS3MDL_ODR
 	string "Output data rate"
@@ -98,5 +85,6 @@ config LIS3MDL_FS
 	  Magnetometer full-scale range.
 	  An X value for the config represents a range of +/- X gauss. Valid
 	  values are 4, 8, 12 and 16.
+endmenu
 
 endif # LIS3MDL
