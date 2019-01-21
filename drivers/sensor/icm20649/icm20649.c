@@ -217,6 +217,20 @@ static inline int icm20649_lp_enable(struct device *dev) {
 	return ret;
 }
 
+static inline int icm20649_lp_disable(struct device *dev) {
+	int ret = icm20649_update_reg8(dev, ICM20649_REG_LP_CONFIG,
+            ICM20649_MASK_LP_CONFIG_ACCEL_CYCLE | 
+            ICM20649_MASK_LP_CONFIG_GYRO_CYCLE,
+            0 << ICM20649_SHIFT_LP_CONFIG_ACCEL_CYCLE |
+            0 << ICM20649_SHIFT_LP_CONFIG_GYRO_CYCLE
+            );
+	ret |= icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1,
+			ICM20649_MASK_PWR_MGMT_1_LP_EN,
+			0 << ICM20649_SHIFT_PWR_MGMT_1_LP_EN);
+	return ret;
+}
+
+
 static inline int icm20649_accel_gyro_enable(struct device *dev) {
     return icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_2,
             ICM20649_MASK_PWR_MGMT_2_DISABLE_ACCEL | 
@@ -586,8 +600,8 @@ static int icm20649_init_chip(struct device *dev) {
 
 	k_sleep(K_MSEC(10));
 
-    if(icm20649_lp_enable(dev) < 0) {
-        SYS_LOG_DBG("failed to turn on low power mode for analog circuitry");
+    if(icm20649_lp_disable(dev) < 0) {
+        SYS_LOG_DBG("failed to turn off low power mode for analog circuitry");
         return -EIO;
     }
 
@@ -828,12 +842,12 @@ static inline int icm20649_fifo_enable(struct device *dev) {
 		return -EIO;
 	}
 	*/
-	/*
+	
 	if(icm20649_fifo_overflow_int_enable(dev) < 0) {
 		SYS_LOG_DBG("failed to enable FIFO overflow interrupt");
 		return -EIO;
 	}
-	*/
+	
 	if(icm20649_fifo_config(dev) < 0) {
 		SYS_LOG_DBG("failed to configure FIFO");
 		return -EIO;
