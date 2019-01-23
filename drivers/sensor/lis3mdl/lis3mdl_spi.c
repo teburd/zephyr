@@ -1,6 +1,8 @@
-
 #include <spi.h>
 #include "lis3mdl.h"
+
+#ifdef DT_ST_LIS3MDL_0_BUS_SPI
+
 
 #define LIS3MDL_SPI_READ		(1 << 7)
 #define LIS3MDL_SPI_MS			(1 << 6)
@@ -9,15 +11,11 @@
 static struct spi_cs_control lis3mdl_cs_ctrl;
 #endif
 
-#define SPI_CS NULL
-
-
 static struct spi_config lis3mdl_spi_conf = {
-	.frequency = CONFIG_LIS3MDL_SPI_BUS_FREQ,
+	.frequency = DT_ST_LIS3MDL_0_SPI_MAX_FREQUENCY,
 	.operation = (SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
 		      SPI_MODE_CPHA | SPI_WORD_SET(8) | SPI_LINES_SINGLE),
-	.slave     = CONFIG_LIS3MDL_SPI_SELECT_SLAVE,
-	.cs        = SPI_CS,
+	.slave     = DT_ST_LIS3MDL_0_BASE_ADDRESS,
 };
 
 
@@ -146,3 +144,6 @@ int lis3mdl_spi_init(struct lis3mdl_data *drv_data) {
 
 	return res;
 }
+
+#endif /* DT_ST_LIS3MDL_0_BUS_SPI */
+

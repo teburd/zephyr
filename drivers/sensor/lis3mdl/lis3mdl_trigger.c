@@ -24,7 +24,7 @@ int lis3mdl_trigger_set(struct device *dev,
 
 	__ASSERT_NO_MSG(trig->type == SENSOR_TRIG_DATA_READY);
 
-	gpio_pin_disable_callback(drv_data->gpio, DT_ST_LIS3MDL_0_DRDY_GPIOS_CONTROLLER);
+	gpio_pin_disable_callback(drv_data->gpio, DT_ST_LIS3MDL_0_DRDY_GPIOS_PIN);
 
 	drv_data->data_ready_handler = handler;
 	if (handler == NULL) {
