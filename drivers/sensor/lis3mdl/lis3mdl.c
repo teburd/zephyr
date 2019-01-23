@@ -68,25 +68,25 @@ int lis3mdl_sample_fetch(struct device *dev, enum sensor_channel chan)
 
   s16_t buf[4];
 
-  __ASSERT_NO_MSG(chan == SENSOR_CHAN_TEMP || chan == SENSOR_CHAN_MAGN_XYZ || chan == SENSOR_CHAN_ALL);
+  __ASSERT_NO_MSG(chan == SENSOR_CHAN_DIE_TEMP || chan == SENSOR_CHAN_MAGN_XYZ || chan == SENSOR_CHAN_ALL);
 
   if(chan == SENSOR_CHAN_MAGN_XYZ || chan == SENSOR_CHAN_ALL)
     {
       if (drv_data->hw_tf->read_data(drv_data, LIS3MDL_REG_SAMPLE_START,
                                      (u8_t *)buf, 6) < 0)
         {
-          SYS_LOG_DBG("Failed to fetch megnetometer sample.");
+          LOG_DBG("Failed to fetch megnetometer sample.");
           return -EIO;
         }
       drv_data->x_sample = sys_le16_to_cpu(buf[0]);
       drv_data->y_sample = sys_le16_to_cpu(buf[1]);
       drv_data->z_sample = sys_le16_to_cpu(buf[2]);
     }
-  if(chan == SENSOR_CHAN_TEMP || chan == SENSOR_CHAN_ALL)
+  if(chan == SENSOR_CHAN_DIE_TEMP || chan == SENSOR_CHAN_ALL)
     {
       if (drv_data->hw_tf->read_data(drv_data, LIS3MDL_REG_SAMPLE_START + 6,
                                      (u8_t *)(buf + 3), 2) < 0) {
-        SYS_LOG_DBG("Failed to fetch temperature sample.");
+        LOG_DBG("Failed to fetch temperature sample.");
         return -EIO;
       };
       drv_data->temp_sample = sys_le16_to_cpu(buf[3]);
@@ -103,12 +103,6 @@ static const struct sensor_driver_api lis3mdl_driver_api = {
 	.channel_get = lis3mdl_channel_get,
 };
 
-#ifdef CONFIG_LIS3MDL_SPI
-#define LIS3MDL_MASTER_DEV_NAME CONFIG_LIS3MDL_SPI_MASTER_DEV_NAME
-#else
-#define LIS3MDL_MASTER_DEV_NAME CONFIG_LIS3MDL_I2C_MASTER_DEV_NAME
-#endif
-
 int lis3mdl_init(struct device *dev)
 {
   struct lis3mdl_data *drv_data = dev->driver_data;
@@ -116,18 +110,18 @@ int lis3mdl_init(struct device *dev)
   u8_t id, idx;
 
 
-	drv_data->comm_master = device_get_binding(LIS3MDL_MASTER_DEV_NAME);
+	drv_data->comm_master = device_get_binding(DT_ST_LIS3MDL_0_BUS_NAME);
 	if (drv_data->comm_master == NULL) {
 		LOG_ERR("Could not get pointer to %s device.",
-		LIS3MDL_MASTER_DEV_NAME);
+		DT_ST_LIS3MDL_0_BUS_NAME);
 		return -EINVAL;
 	}
 
-  #ifdef CONFIG_LIS3MDL_SPI
+#ifdef DT_ST_LIS3MDL_BUS_SPI
   lis3mdl_spi_init(drv_data);
-  #else
+#else
   lis3mdl_i2c_init(drv_data);
-  #endif
+#endif
 
 	k_busy_wait(50 * USEC_PER_MSEC);
 
@@ -180,6 +174,6 @@ int lis3mdl_init(struct device *dev)
 
 struct lis3mdl_data lis3mdl_driver;
 
-DEVICE_AND_API_INIT(lis3mdl, DT_LIS3MDL_NAME, lis3mdl_init, &lis3mdl_driver,
-		NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
-		&lis3mdl_driver_api);
+DEVICE_AND_API_INIT(lis3mdl, DT_ST_LIS3MDL_0_LABEL, lis3mdl_init,
+		&lis3mdl_driver, NULL, POST_KERNEL,
+		CONFIG_SENSOR_INIT_PRIORITY, &lis3mdl_driver_api);

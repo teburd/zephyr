@@ -1,7 +1,18 @@
 #include <i2c.h>
 #include "lis3mdl.h"
 
-static u16_t lis3mdl_i2c_slave_addr = CONFIG_LIS3MDL_I2C_ADDR;
+
+#ifdef DT_ST_LIS3MDL_BUS_I2C
+
+#define LIS3MDL_I2C_ADDR_BASE           DT_LIS3MDL_I2C_ADDR
+#define LIS3MDL_I2C_ADDR_MASK           (~BIT(1))
+
+/* guard against invalid CONFIG_I2C_ADDR values */
+#if (DT_LIS3MDL_I2C_ADDR & LIS3MDL_I2C_ADDR_MASK) != LIS3MDL_I2C_ADDR_BASE
+#error "Invalid value for DT_LIS3MDL_I2C_ADDR"
+#endif
+
+static u16_t lis3mdl_i2c_slave_addr = DT_LIS3MDL_I2C_ADDR;
 
 static int lis3mdl_i2c_read_data(struct lis3mdl_data *data, u8_t reg_addr,
                                  u8_t *value, u8_t len)
