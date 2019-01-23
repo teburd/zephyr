@@ -13,8 +13,6 @@
 #include <gpio.h>
 #include <sensor.h>
 
-#define LIS3MDL_I2C_ADDR_BASE           0x1C
-#define LIS3MDL_I2C_ADDR_MASK           (~BIT(1))
 
 #define LIS3MDL_REG_WHO_AM_I            0x0F
 #define LIS3MDL_CHIP_ID                 0x3D
