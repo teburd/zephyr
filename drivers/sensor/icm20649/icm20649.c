@@ -15,14 +15,11 @@
 static struct spi_cs_control icm20649_cs_ctrl;
 #endif
 
-#define SPI_CS NULL
-
 static struct spi_config icm20649_spi_conf = {
-	.frequency = CONFIG_ICM20649_SPI_BUS_FREQ,
+	.frequency = DT_TDK_ICM20649_0_SPI_MAX_FREQUENCY,
 	.operation = (SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
 		      SPI_MODE_CPHA | SPI_WORD_SET(8) | SPI_LINES_SINGLE),
-	.slave     = CONFIG_ICM20649_SPI_SELECT_SLAVE,
-	.cs        = SPI_CS,
+	.slave     = DT_TDK_ICM20649_0_BASE_ADDRESS,
 };
 
 
@@ -868,7 +865,7 @@ int icm20649_trigger_set(struct device *dev,
 	if(handler == NULL) {
 		SYS_LOG_DBG("Clearing trigger");
 
-		gpio_pin_disable_callback(drv_data->gpio, CONFIG_ICM20649_GPIO_PIN_NUM);
+		gpio_pin_disable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 		/* enable fifo and watermark interrupt */
 		if(icm20649_fifo_disable(dev) < 0) {
@@ -881,12 +878,12 @@ int icm20649_trigger_set(struct device *dev,
 		
 		__ASSERT_NO_MSG(trig->type == SENSOR_TRIG_DATA_READY);
 
-		gpio_pin_disable_callback(drv_data->gpio, CONFIG_ICM20649_GPIO_PIN_NUM);
+		gpio_pin_disable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 		drv_data->data_ready_handler = handler;
 		drv_data->data_ready_trigger = *trig;
 
-		gpio_pin_enable_callback(drv_data->gpio, CONFIG_ICM20649_GPIO_PIN_NUM);
+		gpio_pin_enable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 		/* enable fifo and watermark interrupt */
 		if(icm20649_fifo_enable(dev) < 0) {
@@ -907,7 +904,7 @@ static void icm20649_gpio_callback(struct device *dev,
 
 	ARG_UNUSED(pins);
 
-	gpio_pin_disable_callback(dev, CONFIG_ICM20649_GPIO_PIN_NUM);
+	gpio_pin_disable_callback(dev, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 #if defined(CONFIG_ICM20649_TRIGGER_OWN_THREAD)
 	k_sem_give(&drv_data->gpio_sem);
@@ -931,7 +928,7 @@ static void icm20649_thread_cb(void *arg)
 
 	//icm20649_fifo_watermark_int_clear(dev);
 	//icm20649_fifo_overflow_int_clear(dev);
-	gpio_pin_enable_callback(drv_data->gpio, CONFIG_ICM20649_GPIO_PIN_NUM);
+	gpio_pin_enable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 }
 
 #ifdef CONFIG_ICM20649_TRIGGER_OWN_THREAD
@@ -965,20 +962,20 @@ int icm20649_init_interrupt(struct device *dev)
 	struct icm20649_data *drv_data = dev->driver_data;
 
 	/* setup data ready gpio interrupt */
-	drv_data->gpio = device_get_binding(CONFIG_ICM20649_GPIO_DEV_NAME);
+	drv_data->gpio = device_get_binding(DT_TDK_ICM20649_0_IRQ_GPIOS_CONTROLLER);
 	if (drv_data->gpio == NULL) {
 		SYS_LOG_ERR("Cannot get pointer to %s device.",
-			    CONFIG_ICM20649_GPIO_DEV_NAME);
+			    DT_TDK_ICM20649_0_IRQ_GPIOS_CONTROLLER);
 		return -EINVAL;
 	}
 
-	gpio_pin_configure(drv_data->gpio, CONFIG_ICM20649_GPIO_PIN_NUM,
+	gpio_pin_configure(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN,
 			   GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE |
 			   GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE);
 
 	gpio_init_callback(&drv_data->gpio_cb,
 			   icm20649_gpio_callback,
-			   BIT(CONFIG_ICM20649_GPIO_PIN_NUM));
+			   BIT(DT_TDK_ICM20649_0_IRQ_GPIOS_PIN));
 
 	if (gpio_add_callback(drv_data->gpio, &drv_data->gpio_cb) < 0) {
 		SYS_LOG_ERR("Could not set gpio callback.");
@@ -998,7 +995,7 @@ int icm20649_init_interrupt(struct device *dev)
 	drv_data->dev = dev;
 #endif
 
-	gpio_pin_enable_callback(drv_data->gpio, CONFIG_ICM20649_GPIO_PIN_NUM);
+	gpio_pin_enable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 	return 0;
 }
@@ -1100,7 +1097,7 @@ int icm20649_set_z_accel_offset(struct icm20649 *device, int16_t z) {
 
 
 static struct icm20649_config icm20649_config = {
-	.dev_name = CONFIG_ICM20649_SPI_MASTER_DEV_NAME,
+	.dev_name = DT_TDK_ICM20649_0_BUS_NAME,
 };
 
 
@@ -1154,6 +1151,6 @@ int icm20649_init(struct device *dev) {
 
 static struct icm20649_data icm20649_driver;
 
-DEVICE_AND_API_INIT(icm20649, CONFIG_ICM20649_NAME, icm20649_init,
+DEVICE_AND_API_INIT(icm20649, DT_TDK_ICM20649_0_LABEL, icm20649_init,
         &icm20649_driver, NULL, POST_KERNEL,
         CONFIG_SENSOR_INIT_PRIORITY, &icm20649_api_funcs);

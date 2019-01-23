@@ -1,8 +1,7 @@
 #include <i2c.h>
 #include "lis3mdl.h"
 
-
-#ifdef DT_ST_LIS3MDL_BUS_I2C
+#ifdef DT_ST_LIS3MDL_0_BUS_I2C
 
 #define LIS3MDL_I2C_ADDR_BASE           DT_LIS3MDL_I2C_ADDR
 #define LIS3MDL_I2C_ADDR_MASK           (~BIT(1))
@@ -81,3 +80,6 @@ int lis3mdl_i2c_init(struct lis3mdl_data *drv_data) {
 
   return res;
 }
+
+#endif /* DT_ST_LIS3MDL_BUS_I2C */
+
