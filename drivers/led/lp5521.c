@@ -32,12 +32,14 @@
 #include <device.h>
 #include <zephyr.h>
 
-#ifdef CONFIG_LP5521_GPIO_ENABLE
+#ifdef DT_TI_LP5521_ENABLE_GPIOS
 #include <gpio.h>
 #endif
 
-#define SYS_LOG_LEVEL CONFIG_SYS_LOG_LED_LEVEL
-#include <logging/sys_log.h>
+#define LOG_LEVEL CONFIG_LED_LOG_LEVEL
+#include <logging/log.h>
+LOG_MODULE_REGISTER(lp5562);
+
 
 #include "led_context.h"
 
@@ -142,7 +144,7 @@ enum lp5521_engine_fade_dirs {
 
 struct lp5521_data {
 	struct device *i2c;
-#ifdef CONFIG_LP5521_GPIO_ENABLE
+#ifdef DT_TI_LP5521_0_ENABLE_GPIOS
     struct device *gpio;
 #endif
 	struct led_data dev_data;
@@ -171,7 +173,7 @@ static int lp5521_get_pwm_reg(enum lp5521_led_channels channel, u8_t *reg)
 		*reg = LP5521_B_PWM;
 		break;
 	default:
-		SYS_LOG_ERR("Invalid channel given.");
+		LOG_ERR("Invalid channel given.");
 		return -EINVAL;
 	}
 
@@ -299,9 +301,9 @@ static int lp5521_get_channel_op_mode(struct device *dev,
 		return ret;
 	}
 
-	if (i2c_reg_read_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_read_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 				LP5521_OP_MODE, &reg)) {
-		SYS_LOG_ERR("Failed to read op mode register.");
+		LOG_ERR("Failed to read op mode register.");
 		return -EIO;
 	}
 
@@ -333,9 +335,9 @@ static bool lp5521_is_engine_executing(struct device *dev,
 		return false;
 	}
 
-	if (i2c_reg_read_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_read_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 				LP5521_ENABLE, &enabled)) {
-		SYS_LOG_ERR("Failed to read ENABLE register.");
+		LOG_ERR("Failed to read ENABLE register.");
 		return false;
 	}
 
@@ -372,7 +374,7 @@ static int lp5521_set_engine_reg(struct device *dev,
 		return ret;
 	}
 
-	if (i2c_reg_update_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_update_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 				   reg,
 				   LP5521_MASK << shift,
 				   val << shift)) {
@@ -487,21 +489,21 @@ static int lp5521_program_command(struct device *dev,
 
 	ret = lp5521_get_engine_ram_base_addr(channel, &prog_base_addr);
 	if (ret) {
-		SYS_LOG_ERR("Failed to get base RAM address.");
+		LOG_ERR("Failed to get base RAM address.");
 		return ret;
 	}
 
-	if (i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 			       prog_base_addr + (command_index << 1),
 			       command_msb)) {
-		SYS_LOG_ERR("Failed to update LED.");
+		LOG_ERR("Failed to update LED.");
 		return -EIO;
 	}
 
-	if (i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 			       prog_base_addr + (command_index << 1) + 1,
 			       command_lsb)) {
-		SYS_LOG_ERR("Failed to update LED.");
+		LOG_ERR("Failed to update LED.");
 		return -EIO;
 	}
 
@@ -674,7 +676,7 @@ static int lp5521_update_blinking_brightness(struct device *dev,
 
 	ret = lp5521_start_program_exec(dev, channel);
 	if (ret) {
-		SYS_LOG_ERR("Failed to execute program.");
+		LOG_ERR("Failed to execute program.");
 		return ret;
 	}
 
@@ -684,8 +686,6 @@ static int lp5521_update_blinking_brightness(struct device *dev,
 static int lp5521_led_blink(struct device *dev, u32_t led,
 			    u32_t delay_on, u32_t delay_off)
 {
-	struct lp5521_data *data = dev->driver_data;
-	struct led_data *dev_data = &data->dev_data;
 	int ret;
 	enum lp5521_led_channels channel = led;
 	u8_t command_index = 0;
@@ -728,7 +728,7 @@ static int lp5521_led_blink(struct device *dev, u32_t led,
 
 	ret = lp5521_start_program_exec(dev, channel);
 	if (ret) {
-		SYS_LOG_ERR("Failed to execute program.");
+		LOG_ERR("Failed to execute program.");
 		return ret;
 	}
 
@@ -769,9 +769,9 @@ static int lp5521_led_set_brightness(struct device *dev, u32_t led, u8_t value)
 		return ret;
 	}
 
-	if (i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 			       reg, val)) {
-		SYS_LOG_ERR("LED write failed");
+		LOG_ERR("LED write failed");
 		return -EIO;
 	}
 
@@ -807,7 +807,7 @@ static inline int lp5521_led_off(struct device *dev, u32_t led)
      
 	ret = lp5521_get_channel_op_mode(dev, led, &op_mode);
     if (ret) {
-        SYS_LOG_ERR("Failed to read channel op mode.");
+        LOG_ERR("Failed to read channel op mode.");
         return -EIO;
     }
     if(op_mode == LP5521_OP_MODE_RUN) {
@@ -825,23 +825,23 @@ static int lp5521_led_init(struct device *dev)
 	struct lp5521_data *data = dev->driver_data;
 	struct led_data *dev_data = &data->dev_data;
 
-#if defined(CONFIG_LP5521_GPIO_ENABLE)
-	data->gpio = device_get_binding(CONFIG_LP5521_GPIO_ENABLE_DEV_NAME);
+#if defined(DT_TI_LP5521_0_ENABLE_GPIOS)
+	data->gpio = device_get_binding(DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER);
 	if (data->gpio == NULL) {
-		SYS_LOG_ERR("Failed to get pointer to %s device!",
-			    CONFIG_LP5521_GPIO_ENABLE_DEV_NAME);
+		LOG_ERR("Failed to get pointer to %s device!",
+				DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER);
 		return -EINVAL;
 	}
-	gpio_pin_configure(data->gpio, CONFIG_LP5521_GPIO_ENABLE_PIN_NUM,
+	gpio_pin_configure(data->gpio, DT_TI_LP5521_0_ENABLE_GPIOS_PIN,
 			   GPIO_DIR_OUT);
-	gpio_pin_write(data->gpio, CONFIG_LP5521_GPIO_ENABLE_PIN_NUM, 1);
+	gpio_pin_write(data->gpio, DT_TI_LP5521_0_ENABLE_GPIOS_PIN, 1);
 
 	k_sleep(1);
 #endif
 
-	data->i2c = device_get_binding(CONFIG_LP5521_I2C_MASTER_DEV_NAME);
+	data->i2c = device_get_binding(DT_TI_LP5521_0_BUS_NAME);
 	if (data->i2c == NULL) {
-		SYS_LOG_ERR("Failed to get I2C device");
+		LOG_ERR("Failed to get I2C device");
 		return -EINVAL;
 	}
 
@@ -851,43 +851,43 @@ static int lp5521_led_init(struct device *dev)
 	dev_data->min_brightness = LP5521_MIN_BRIGHTNESS;
 	dev_data->max_brightness = LP5521_MAX_BRIGHTNESS;
 
-	if (i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 				LP5521_ENABLE,
 				LP5521_ENABLE_CHIP_EN)) {
-		SYS_LOG_ERR("Enabling LP5521 LED chip failed.");
+		LOG_ERR("Enabling LP5521 LED chip failed.");
 		return -EIO;
 	}
 
     k_sleep(1);
 
-	if (i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 				LP5521_CONFIG, 0x59)) {
-		SYS_LOG_ERR("Configuring LP5521 LED chip failed.");
+		LOG_ERR("Configuring LP5521 LED chip failed.");
 		return -EIO;
 	}
 
-	if (i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 				LP5521_OP_MODE, 0x3F)) {
-		SYS_LOG_ERR("Disabling all engines failed.");
+		LOG_ERR("Disabling all engines failed.");
 		return -EIO;
 	}
 
     /*
-    if(i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+    if(i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
                 LP5521_R_PWM, 128)) {
-        SYS_LOG_ERR("Failed to enable red channel");
+        LOG_ERR("Failed to enable red channel");
         return -EIO;
     }
 
-    if(i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+    if(i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
                 LP5521_G_PWM, 192)) {
-        SYS_LOG_ERR("Failed to enable green channel");
+        LOG_ERR("Failed to enable green channel");
         return -EIO;
     }
 
-    if(i2c_reg_write_byte(data->i2c, CONFIG_LP5521_I2C_ADDRESS,
+    if(i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
                 LP5521_B_PWM, 255)) {
-        SYS_LOG_ERR("Failed to enable blue channel");
+        LOG_ERR("Failed to enable blue channel");
         return -EIO;
     }
     */
@@ -905,7 +905,7 @@ static const struct led_driver_api lp5521_led_api = {
 	.off = lp5521_led_off,
 };
 
-DEVICE_AND_API_INIT(lp5521_led, CONFIG_LP5521_DEV_NAME,
+DEVICE_AND_API_INIT(lp5521_led, DT_TI_LP5521_0_LABEL,
 		&lp5521_led_init, &lp5521_led_data,
 		NULL, POST_KERNEL, CONFIG_LED_INIT_PRIORITY,
 		&lp5521_led_api);
