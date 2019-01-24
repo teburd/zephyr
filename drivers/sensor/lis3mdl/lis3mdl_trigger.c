@@ -57,7 +57,7 @@ static void lis3mdl_gpio_callback(struct device *dev,
 
 
 #if defined(CONFIG_LIS3MDL_TRIGGER_OWN_THREAD)
-	gpio_pin_disable_callback(dev, DT_ST_LIS3MDL_0_DRDY_GPIOS_PIN);
+	//gpio_pin_disable_callback(dev, DT_ST_LIS3MDL_0_DRDY_GPIOS_PIN);
 	k_sem_give(&drv_data->gpio_sem);
 #elif defined(CONFIG_LIS3MDL_TRIGGER_GLOBAL_THREAD)
 	gpio_pin_disable_callback(dev, DT_ST_LIS3MDL_0_DRDY_GPIOS_PIN);
@@ -82,7 +82,7 @@ static void lis3mdl_thread_cb(void *arg)
 					     &drv_data->data_ready_trigger);
 	}
 
-	gpio_pin_enable_callback(drv_data->gpio, DT_ST_LIS3MDL_0_DRDY_GPIOS_PIN);
+	//gpio_pin_enable_callback(drv_data->gpio, DT_ST_LIS3MDL_0_DRDY_GPIOS_PIN);
 }
 #endif
 
@@ -167,7 +167,7 @@ int lis3mdl_init_interrupt(struct device *dev)
 	drv_data->dev = dev;
 #endif
 
-	gpio_pin_enable_callback(drv_data->gpio, DT_ST_LIS3MDL_0_DRDY_GPIOS_PIN);
+	// don't bother enabling *until* a trigger function is set
 
 	return 0;
 }
