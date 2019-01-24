@@ -12,15 +12,13 @@ LOG_MODULE_REGISTER(ICM20649);
 #define SENSOR_DEG2RAD_DOUBLE			(SENSOR_PI_DOUBLE / 180)
 #define SENSOR_G_DOUBLE				(SENSOR_G / 1000000.0)
 
-#if defined(CONFIG_ICM20649_SPI_GPIO_CS)
 static struct spi_cs_control icm20649_cs_ctrl;
-#endif
-
 static struct spi_config icm20649_spi_conf = {
 	.frequency = DT_TDK_ICM20649_0_SPI_MAX_FREQUENCY,
 	.operation = (SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
 		      SPI_MODE_CPHA | SPI_WORD_SET(8) | SPI_LINES_SINGLE),
 	.slave     = DT_TDK_ICM20649_0_BASE_ADDRESS,
+	.cs = &icm20649_cs_ctrl,
 };
 
 
@@ -1113,26 +1111,18 @@ int icm20649_init(struct device *dev) {
 		return -EINVAL;
 	}
 
-#if defined(CONFIG_ICM20649_SPI_GPIO_CS)
-	/* handle SPI CS thru GPIO if it is the case */
-	if (IS_ENABLED(CONFIG_ICM20649_SPI_GPIO_CS)) {
-		icm20649_cs_ctrl.gpio_dev = device_get_binding(
-			CONFIG_ICM20649_SPI_GPIO_CS_DRV_NAME);
-		if (!icm20649_cs_ctrl.gpio_dev) {
-			LOG_ERR("Unable to get GPIO SPI CS device");
-			return -ENODEV;
-		}
-
-		icm20649_cs_ctrl.gpio_pin = CONFIG_ICM20649_SPI_GPIO_CS_PIN;
-		icm20649_cs_ctrl.delay = 0;
-
-		icm20649_spi_conf.cs = &icm20649_cs_ctrl;
-
-		LOG_DBG("SPI GPIO CS configured on %s:%u",
-			    CONFIG_ICM20649_SPI_GPIO_CS_DRV_NAME,
-			    CONFIG_ICM20649_SPI_GPIO_CS_PIN);
+	icm20649_cs_ctrl.gpio_dev = device_get_binding(DT_TDK_ICM20649_0_CS_GPIO_CONTROLLER);
+	icm20649_cs_ctrl.gpio_pin = DT_TDK_ICM20649_0_CS_GPIO_PIN;
+	icm20649_cs_ctrl.delay = 0;
+	if (!icm20649_cs_ctrl.gpio_dev) {
+		LOG_ERR("Unable to get GPIO SPI CS device");
+		return -ENODEV;
 	}
-#endif
+	icm20649_spi_conf.cs = &icm20649_cs_ctrl;
+
+	LOG_DBG("SPI GPIO CS configured on %s:%u",
+			DT_TDK_ICM20649_0_CS_GPIO_CONTROLLER,
+			DT_TDK_ICM20649_0_CS_GPIO_PIN);
 
 	if (icm20649_init_chip(dev) < 0) {
 		LOG_WRN("failed to initialize chip");
