@@ -7,7 +7,6 @@
 /dts-v1/;
 #include <nordic/nrf52840_qiaa.dtsi>
 
-
 / {
 	model = "Blerns";
 	compatible = "nordic,blerns", "nordic,nrf52840-qiaa",
@@ -39,7 +38,7 @@
 };
 
 &uart0 {
-	compatible = "nordic,nrf-uarte";
+	compatible = "nordic,nrf-uart";
 	current-speed = <115200>;
 	status = "ok";
 	tx-pin = <27>;
@@ -63,14 +62,14 @@
 };
 */
 
-&spi0 {
+&spi1 {
 	status = "ok";
 	sck-pin = <14>;
 	mosi-pin = <16>;
 	miso-pin = <21>;
 };
 
-&spi1 {
+&spi2 {
 	status = "ok";
 	sck-pin = <15>;
 	mosi-pin = <13>;

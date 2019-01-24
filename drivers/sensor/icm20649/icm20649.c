@@ -1,11 +1,12 @@
 #include <spi.h>
 #include <init.h>
 #include <sensor.h>
+#include <logging/log.h>
+
 #include "icm20649.h"
 
-#define SYS_LOG_DOMAIN "ICM20649"
-#define SYS_LOG_LEVEL CONFIG_SYS_LOG_SENSOR_LEVEL
-#include <logging/sys_log.h>
+#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
+LOG_MODULE_REGISTER(ICM20649);
 
 #define SENSOR_PI_DOUBLE			(SENSOR_PI / 1000000.0)
 #define SENSOR_DEG2RAD_DOUBLE			(SENSOR_PI_DOUBLE / 180)
@@ -138,7 +139,7 @@ static inline int icm20649_update_reg8(struct device *dev, u8_t addr, u8_t mask,
 	u8_t new_val;
 	ret |= icm20649_raw_read(data, addr, &new_val, 1);
 	if(new_val != tmp_val) {
-		SYS_LOG_DBG("failed to verify write for addr %x expected %x got %x", addr, tmp_val, new_val);
+		LOG_WRN("failed to verify write for addr %x expected %x got %x", addr, tmp_val, new_val);
 	}
 #endif
 	return ret;
@@ -150,29 +151,29 @@ static inline int icm20649_set_user_bank(struct device *dev, u8_t bank) {
 }
 
 static inline int icm20649_reset(struct device *dev) {
-	SYS_LOG_DBG("reset");
+	LOG_DBG("reset");
 	int ret = icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1, 
 			ICM20649_MASK_PWR_MGMT_1_DEVICE_RESET,
 			(1 << ICM20649_SHIFT_PWR_MGMT_1_DEVICE_RESET));
-	SYS_LOG_DBG("reset done");
+	LOG_DBG("reset done");
 	return ret;
 }
 
 static inline int icm20649_auto_clock(struct device *dev) {
-	SYS_LOG_DBG("auto clock");
+	LOG_DBG("auto clock");
 	int ret = icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1, 
 			ICM20649_MASK_PWR_MGMT_1_CLKSEL,
 			(1 << ICM20649_SHIFT_PWR_MGMT_1_CLKSEL));
-	SYS_LOG_DBG("auto clock done");
+	LOG_DBG("auto clock done");
 	return ret;
 }
 
 static inline int icm20649_wakeup(struct device *dev) {
-	SYS_LOG_DBG("wakeup");
+	LOG_DBG("wakeup");
 	int ret = icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1,
 			ICM20649_MASK_PWR_MGMT_1_SLEEP,
 			0 << ICM20649_SHIFT_PWR_MGMT_1_SLEEP);
-	SYS_LOG_DBG("wakeup done");
+	LOG_DBG("wakeup done");
 	return ret;
 }
 
@@ -261,7 +262,7 @@ static inline int icm20649_set_accel_decimator(struct device *dev, u8_t avg) {
 			dec2 = 3;
 			break;
 		default:
-			SYS_LOG_DBG("invalid number of samples to average, must be 4, 8, 16, or 32");
+			LOG_WRN("invalid number of samples to average, must be 4, 8, 16, or 32");
 			return -EINVAL;
 	}
 	return icm20649_update_reg8(dev, ICM20649_REG_ACCEL_CONFIG_2,
@@ -279,7 +280,7 @@ static inline int icm20649_set_accel_filter_choice(struct device *dev,
 
 static inline int icm20649_set_accel_lpf(struct device *dev, u8_t lpf_mode) {
 	if(lpf_mode > 7) {
-		SYS_LOG_DBG("invalid accelerometer low pass filter mode, must be 0 to 7");
+		LOG_WRN("invalid accelerometer low pass filter mode, must be 0 to 7");
 		return -EINVAL;
 	}
 	return icm20649_update_reg8(dev, ICM20649_REG_ACCEL_CONFIG,
@@ -290,7 +291,7 @@ static inline int icm20649_set_accel_lpf(struct device *dev, u8_t lpf_mode) {
 static int icm20649_set_accel_fs_sel(struct device *dev, u8_t fs) {
 	u8_t update = 0;
 	if(fs > 3) {
-		SYS_LOG_DBG("invalid accelerometer full-scale must be 0 to 3");
+		LOG_WRN("invalid accelerometer full-scale must be 0 to 3");
 		return -EINVAL;
 	}
 	update |= fs << ICM20649_SHIFT_ACCEL_CONFIG_ACCEL_FS_SEL;
@@ -300,7 +301,7 @@ static int icm20649_set_accel_fs_sel(struct device *dev, u8_t fs) {
 
 static inline int icm20649_set_gyro_filter_choice(struct device *dev, u8_t fchoice) {
 	if(fchoice > 3) {
-		SYS_LOG_DBG("invalid gyro filter choice, must be 0 to 3");
+		LOG_WRN("invalid gyro filter choice, must be 0 to 3");
 		return -EINVAL;
 	}
 	return icm20649_update_reg8(dev, ICM20649_REG_GYRO_CONFIG_1,
@@ -310,7 +311,7 @@ static inline int icm20649_set_gyro_filter_choice(struct device *dev, u8_t fchoi
 
 static inline int icm20649_set_gyro_lpf(struct device *dev, u8_t lpf_mode) {
 	if(lpf_mode > 7) {
-		SYS_LOG_DBG("invalid gyro low pass filter mode, must be 0 to 7");
+		LOG_WRN("invalid gyro low pass filter mode, must be 0 to 7");
 		return -EINVAL;
 	}
 	return icm20649_update_reg8(dev, ICM20649_REG_GYRO_CONFIG_1,
@@ -321,7 +322,7 @@ static inline int icm20649_set_gyro_lpf(struct device *dev, u8_t lpf_mode) {
 static int icm20649_set_gyro_fs_sel(struct device *dev, u8_t fs) {
 	u8_t update = 0;
 	if(fs > 3) {
-		SYS_LOG_DBG("invalid gyro full-scale must be 0 to 3");
+		LOG_WRN("invalid gyro full-scale must be 0 to 3");
 		return -EINVAL;
 	}
 	update |= fs << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_FS_SEL;
@@ -344,7 +345,7 @@ static int icm20649_attr_set(struct device *dev, enum sensor_channel chan,
 			   enum sensor_attribute attr,
 			   const struct sensor_value *val)
 {
-	SYS_LOG_WRN("attr_set() not supported on this channel.");
+	LOG_WRN("attr_set() not supported on this channel.");
 	return -ENOTSUP;
 }
 
@@ -353,15 +354,15 @@ static int icm20649_sample_fetch_accel(struct device *dev)
 	struct icm20649_data *data = dev->driver_data;
 
 	if (icm20649_read_s16(dev, ICM20649_REG_ACCEL_XOUT_L, ICM20649_REG_ACCEL_XOUT_H, &data->accel_sample_x) < 0) {
-		SYS_LOG_DBG("failed to fetch accel x sample");
+		LOG_WRN("failed to fetch accel x sample");
 		return -EIO;
 	}
 	if (icm20649_read_s16(dev, ICM20649_REG_ACCEL_YOUT_L, ICM20649_REG_ACCEL_YOUT_H, &data->accel_sample_y) < 0) {
-		SYS_LOG_DBG("failed to fetch accel y sample");
+		LOG_WRN("failed to fetch accel y sample");
 		return -EIO;
 	}
 	if (icm20649_read_s16(dev, ICM20649_REG_ACCEL_ZOUT_L, ICM20649_REG_ACCEL_ZOUT_H, &data->accel_sample_z) < 0) {
-		SYS_LOG_DBG("failed to fetch accel z sample");
+		LOG_WRN("failed to fetch accel z sample");
 		return -EIO;
 	}
 	return 0;
@@ -372,15 +373,15 @@ static int icm20649_sample_fetch_gyro(struct device *dev)
 	struct icm20649_data *data = dev->driver_data;
 
 	if (icm20649_read_s16(dev, ICM20649_REG_GYRO_XOUT_L, ICM20649_REG_GYRO_XOUT_H, &data->gyro_sample_x) < 0) {
-		SYS_LOG_DBG("failed to fetch gyro x sample");
+		LOG_WRN("failed to fetch gyro x sample");
 		return -EIO;
 	}
 	if (icm20649_read_s16(dev, ICM20649_REG_GYRO_YOUT_L, ICM20649_REG_GYRO_YOUT_H, &data->gyro_sample_y) < 0) {
-		SYS_LOG_DBG("failed to fetch gyro y sample");
+		LOG_WRN("failed to fetch gyro y sample");
 		return -EIO;
 	}
 	if (icm20649_read_s16(dev, ICM20649_REG_GYRO_ZOUT_L, ICM20649_REG_GYRO_ZOUT_H, &data->gyro_sample_z) < 0) {
-		SYS_LOG_DBG("failed to fetch gyro z sample");
+		LOG_WRN("failed to fetch gyro z sample");
 		return -EIO;
 	}
 	return 0;
@@ -392,7 +393,7 @@ static int icm20649_sample_fetch_temp(struct device *dev)
 	struct icm20649_data *data = dev->driver_data;
 
 	if (icm20649_read_s16(dev, ICM20649_REG_TEMP_OUT_L, ICM20649_REG_TEMP_OUT_H, &data->temp_sample) < 0) {
-		SYS_LOG_DBG("failed to fetch temperature");
+		LOG_WRN("failed to fetch temperature");
 		return -EIO;
 	}
 	return 0;
@@ -405,7 +406,7 @@ static int icm20649_sample_fetch_all(struct device *dev)
 	struct icm20649_data *data = dev->driver_data;
 
 	if (icm20649_raw_read(data, ICM20649_REG_ACCEL_XOUT_H, spi_buf, 14) < 0) {
-		SYS_LOG_DBG("failed to fetch all sensor values");
+		LOG_WRN("failed to fetch all sensor values");
 		return -EIO;
 	}
 	data->accel_sample_x = (s16_t)((((u16_t)spi_buf[0]) << 8) | (u16_t)spi_buf[1]);
@@ -559,46 +560,46 @@ static int icm20649_init_chip(struct device *dev) {
 	u8_t chip_id;
 
 	if(icm20649_set_user_bank(dev, 0) < 0) {
-		SYS_LOG_DBG("failed to set user bank to 0");
+		LOG_WRN("failed to set user bank to 0");
 		return -EIO;
 	}
 
 	if(icm20649_get_who_am_i(dev, &chip_id) < 0) {
-		SYS_LOG_DBG("failed reading chip id");
+		LOG_WRN("failed reading chip id");
 		return -EIO;
 	}
 
 	if(chip_id != ICM20649_VAL_WHO_AM_I) {
-		SYS_LOG_DBG("invalid chip id 0x%x", chip_id);
+		LOG_WRN("invalid chip id 0x%x", chip_id);
 		return -EIO;
 	}
 	
 	if(icm20649_reset(dev) < 0) {
-		SYS_LOG_DBG("failed to reset device");
+		LOG_WRN("failed to reset device");
 		return -EIO;
 	}
 
 	k_sleep(K_MSEC(10));
 
 	if(icm20649_auto_clock(dev) < 0) {
-		SYS_LOG_DBG("failed to auto clock");
+		LOG_WRN("failed to auto clock");
 		return -EIO;
 	}
 
 	if(icm20649_wakeup(dev) < 0) {
-		SYS_LOG_DBG("failed to power on device");
+		LOG_WRN("failed to power on device");
 		return -EIO;
 	}
 
 	if(icm20649_user_config(dev) < 0) {
-		SYS_LOG_DBG("failed to config device for usage");
+		LOG_WRN("failed to config device for usage");
 		return -EIO;
 	}
 
 	k_sleep(K_MSEC(10));
 
     if(icm20649_lp_disable(dev) < 0) {
-        SYS_LOG_DBG("failed to turn off low power mode for analog circuitry");
+        LOG_WRN("failed to turn off low power mode for analog circuitry");
         return -EIO;
     }
 
@@ -606,81 +607,81 @@ static int icm20649_init_chip(struct device *dev) {
 
 
     if(icm20649_accel_gyro_enable(dev) < 0 ) {
-        SYS_LOG_DBG("failed to enable accelerometer and gyroscope");
+        LOG_WRN("failed to enable accelerometer and gyroscope");
         return -EIO;
     }
 
 	if(icm20649_set_odr_align(dev, 1) < 0) {
-		SYS_LOG_DBG("failed to set odr align");
+		LOG_WRN("failed to set odr align");
 		return -EIO;
 	}
 
 	if(icm20649_set_user_bank(dev, 2) < 0) {
-		SYS_LOG_DBG("failed to set user bank to 2");
+		LOG_WRN("failed to set user bank to 2");
 		return -EIO;
 	}
 
 	if(icm20649_set_accel_filter_choice(dev, ICM20649_DEFAULT_ACCEL_LPF_ENABLE) < 0) {
-		SYS_LOG_DBG("failed to set accelerometer low-pass filter settings");
+		LOG_WRN("failed to set accelerometer low-pass filter settings");
 		return -EIO;
 	}
 
 	if(icm20649_set_accel_sample_rate_div(dev, ICM20649_DEFAULT_ACCEL_SAMPLE_RATE_DIV) < 0) {
-		SYS_LOG_DBG("failed to set accelerometer sample rate divider");
+		LOG_WRN("failed to set accelerometer sample rate divider");
 		return -EIO;
 	}
 
 	/*
 	if(icm20649_set_accel_decimator(dev, ICM20649_DEFAULT_ACCEL_DECIMATOR) < 0) {
-		SYS_LOG_DBG("failed to set accelerometer sample averaging decimator");
+		LOG_WRN("failed to set accelerometer sample averaging decimator");
 		return -EIO;
 	}
 	*/
 
 
 	if(icm20649_set_accel_lpf(dev, ICM20649_DEFAULT_ACCEL_LPF_CFG) < 0) {
-		SYS_LOG_DBG("failed to set accelerometer low-pass filter settings");
+		LOG_WRN("failed to set accelerometer low-pass filter settings");
 		return -EIO;
 	}
 	
 	if(icm20649_set_accel_fs_sel(dev, ICM20649_DEFAULT_ACCEL_FULLSCALE) < 0) {
-		SYS_LOG_DBG("failed to set accelerometer full-scale");
+		LOG_WRN("failed to set accelerometer full-scale");
 		return -EIO;
 	}
 
 	if(icm20649_set_gyro_sample_rate_div(dev, ICM20649_DEFAULT_GYRO_SAMPLE_RATE_DIV) < 0) {
-		SYS_LOG_DBG("failed to set gyro sample rate divider");
+		LOG_WRN("failed to set gyro sample rate divider");
 		return -EIO;
 	}
 
 	/*
 	if(icm20649_set_gyro_decimator(dev, ICM20649_DEFAULT_GYRO_DECIMATOR) < 0) {
-		SYS_LOG_DBG("failed to set accelerometer sample averaging decimator");
+		LOG_WRN("failed to set accelerometer sample averaging decimator");
 		return -EIO;
 	}
 	*/
 	
 	if(icm20649_set_gyro_filter_choice(dev, ICM20649_DEFAULT_GYRO_LPF_ENABLE) < 0) {
-		SYS_LOG_DBG("failed to set gyroscope low-pass filter settings");
+		LOG_WRN("failed to set gyroscope low-pass filter settings");
 		return -EIO;
 	}
 
 	if(icm20649_set_gyro_lpf(dev, ICM20649_DEFAULT_GYRO_LPF_CFG) < 0) {
-		SYS_LOG_DBG("failed to set gyroscope low-pass filter settings");
+		LOG_WRN("failed to set gyroscope low-pass filter settings");
 		return -EIO;
 	}
 
 	if(icm20649_set_gyro_fs_sel(dev, ICM20649_DEFAULT_GYRO_FULLSCALE) < 0) {
-		SYS_LOG_DBG("failed to set gyroscope full-scale");
+		LOG_WRN("failed to set gyroscope full-scale");
 		return -EIO;
 	}
 
 	if(icm20649_set_user_bank(dev, 0) < 0) {
-		SYS_LOG_DBG("failed to set user bank to 2");
+		LOG_WRN("failed to set user bank to 2");
 		return -EIO;
 	}
 	
-	SYS_LOG_DBG("Successfully initialized ICM20649");
+	LOG_DBG("Successfully initialized ICM20649");
 	return 0;
 }
 
@@ -808,11 +809,11 @@ int icm20649_fifo_count(struct device *dev, u16_t *cnt) {
 
 static inline int icm20649_fifo_disable(struct device *dev) {
 	if(icm20649_fifo_watermark_int_disable(dev) < 0) {
-		SYS_LOG_DBG("failed to enable FIFO watermark interrupt");
+		LOG_WRN("failed to enable FIFO watermark interrupt");
 		return -EIO;
 	}
 	if(icm20649_fifo_reset(dev) < 0) {
-		SYS_LOG_DBG("failed to reset FIFO");
+		LOG_WRN("failed to reset FIFO");
 		return -EIO;
 	}
 	return 0;
@@ -821,36 +822,36 @@ static inline int icm20649_fifo_disable(struct device *dev) {
 
 static inline int icm20649_fifo_enable(struct device *dev) {
 	if(icm20649_int_pin_init(dev) < 0) {
-		SYS_LOG_DBG("failed to configure interrupt pin");
+		LOG_WRN("failed to configure interrupt pin");
 		return -EIO;
 	}
 	if(icm20649_raw_data_ready_int_disable(dev) < 0) {
-		SYS_LOG_DBG("failed to disable raw data interrupt");
+		LOG_WRN("failed to disable raw data interrupt");
 		return -EIO;
 	}
 	if(icm20649_fifo_watermark_int_enable(dev) < 0) {
-		SYS_LOG_DBG("failed to enable FIFO watermark interrupt");
+		LOG_WRN("failed to enable FIFO watermark interrupt");
 		return -EIO;
 	}
 
 	/*
 	if(icm20649_fifo_reset(dev) < 0) {
-		SYS_LOG_DBG("failed to reset FIFO");
+		LOG_WRN("failed to reset FIFO");
 		return -EIO;
 	}
 	*/
 	
 	if(icm20649_fifo_overflow_int_enable(dev) < 0) {
-		SYS_LOG_DBG("failed to enable FIFO overflow interrupt");
+		LOG_WRN("failed to enable FIFO overflow interrupt");
 		return -EIO;
 	}
 	
 	if(icm20649_fifo_config(dev) < 0) {
-		SYS_LOG_DBG("failed to configure FIFO");
+		LOG_WRN("failed to configure FIFO");
 		return -EIO;
 	}
 	if(icm20649_fifo_reset(dev) < 0) {
-		SYS_LOG_DBG("failed to reset FIFO");
+		LOG_WRN("failed to reset FIFO");
 		return -EIO;
 	}
 	return 0;
@@ -863,18 +864,18 @@ int icm20649_trigger_set(struct device *dev,
 	struct icm20649_data *drv_data = dev->driver_data;
 
 	if(handler == NULL) {
-		SYS_LOG_DBG("Clearing trigger");
+		LOG_WRN("Clearing trigger");
 
 		gpio_pin_disable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 		/* enable fifo and watermark interrupt */
 		if(icm20649_fifo_disable(dev) < 0) {
-			SYS_LOG_ERR("Could not disable fifo watermark interrupt.");
+			LOG_ERR("Could not disable fifo watermark interrupt.");
 			return -EIO;
 		}
 
 	} else {
-		SYS_LOG_DBG("Setting trigger");
+		LOG_WRN("Setting trigger");
 		
 		__ASSERT_NO_MSG(trig->type == SENSOR_TRIG_DATA_READY);
 
@@ -887,7 +888,7 @@ int icm20649_trigger_set(struct device *dev,
 
 		/* enable fifo and watermark interrupt */
 		if(icm20649_fifo_enable(dev) < 0) {
-			SYS_LOG_ERR("Could not enable fifo watermark interrupt.");
+			LOG_ERR("Could not enable fifo watermark interrupt.");
 			return -EIO;
 		}
 
@@ -958,13 +959,13 @@ static void icm20649_work_cb(struct k_work *work)
 
 int icm20649_init_interrupt(struct device *dev)
 {
-    SYS_LOG_DBG("Enabling interrupt");
+    LOG_DBG("Enabling interrupt");
 	struct icm20649_data *drv_data = dev->driver_data;
 
 	/* setup data ready gpio interrupt */
 	drv_data->gpio = device_get_binding(DT_TDK_ICM20649_0_IRQ_GPIOS_CONTROLLER);
 	if (drv_data->gpio == NULL) {
-		SYS_LOG_ERR("Cannot get pointer to %s device.",
+		LOG_ERR("Cannot get pointer to %s device.",
 			    DT_TDK_ICM20649_0_IRQ_GPIOS_CONTROLLER);
 		return -EINVAL;
 	}
@@ -978,7 +979,7 @@ int icm20649_init_interrupt(struct device *dev)
 			   BIT(DT_TDK_ICM20649_0_IRQ_GPIOS_PIN));
 
 	if (gpio_add_callback(drv_data->gpio, &drv_data->gpio_cb) < 0) {
-		SYS_LOG_ERR("Could not set gpio callback.");
+		LOG_ERR("Could not set gpio callback.");
 		return -EIO;
 	}
 
@@ -1009,7 +1010,7 @@ u16_t icm20649_fifo_read(struct device *dev, u8_t *buf, u16_t len) {
 	while(read_len < len) {
 		u16_t n = min(ICM20649_MAX_SERIAL_READ, len-read_len);
 		if(icm20649_raw_read(data, ICM20649_REG_FIFO_R_W, &buf[read_len], n) < 0) {
-			SYS_LOG_DBG("failed to read fifo");
+			LOG_DBG("failed to read fifo");
 			return 0;
 		}
 		read_len += n;
@@ -1107,7 +1108,7 @@ int icm20649_init(struct device *dev) {
 
 	data->spi = device_get_binding(config->dev_name);
 	if (!data->spi) {
-		SYS_LOG_DBG("master not found: %s",
+		LOG_WRN("master not found: %s",
 			    config->dev_name);
 		return -EINVAL;
 	}
@@ -1118,7 +1119,7 @@ int icm20649_init(struct device *dev) {
 		icm20649_cs_ctrl.gpio_dev = device_get_binding(
 			CONFIG_ICM20649_SPI_GPIO_CS_DRV_NAME);
 		if (!icm20649_cs_ctrl.gpio_dev) {
-			SYS_LOG_ERR("Unable to get GPIO SPI CS device");
+			LOG_ERR("Unable to get GPIO SPI CS device");
 			return -ENODEV;
 		}
 
@@ -1127,20 +1128,20 @@ int icm20649_init(struct device *dev) {
 
 		icm20649_spi_conf.cs = &icm20649_cs_ctrl;
 
-		SYS_LOG_DBG("SPI GPIO CS configured on %s:%u",
+		LOG_DBG("SPI GPIO CS configured on %s:%u",
 			    CONFIG_ICM20649_SPI_GPIO_CS_DRV_NAME,
 			    CONFIG_ICM20649_SPI_GPIO_CS_PIN);
 	}
 #endif
 
 	if (icm20649_init_chip(dev) < 0) {
-		SYS_LOG_DBG("failed to initialize chip");
+		LOG_WRN("failed to initialize chip");
 		return -EIO;
 	}
 
 #ifdef CONFIG_ICM20649_TRIGGER
     if(icm20649_init_interrupt(dev) < 0 ) {
-        SYS_LOG_DBG("failed to initialize chip");
+        LOG_WRN("failed to initialize chip");
 		return -EIO;
     }
 #endif
