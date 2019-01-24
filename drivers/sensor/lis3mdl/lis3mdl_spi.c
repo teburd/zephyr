@@ -3,19 +3,22 @@
 
 #ifdef DT_ST_LIS3MDL_0_BUS_SPI
 
+#include <logging/log.h>
+#define LOG_LEVEL CONFIG_SENSOR_LOG_LEVEL
+LOG_MODULE_REGISTER(LIS3MDL_SPI);
+
 
 #define LIS3MDL_SPI_READ		(1 << 7)
 #define LIS3MDL_SPI_MS			(1 << 6)
 
-#if defined(CONFIG_LIS3MDL_SPI_GPIO_CS)
 static struct spi_cs_control lis3mdl_cs_ctrl;
-#endif
 
 static struct spi_config lis3mdl_spi_conf = {
 	.frequency = DT_ST_LIS3MDL_0_SPI_MAX_FREQUENCY,
 	.operation = (SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
 		      SPI_MODE_CPHA | SPI_WORD_SET(8) | SPI_LINES_SINGLE),
 	.slave     = DT_ST_LIS3MDL_0_BASE_ADDRESS,
+	.cs        = &lis3mdl_cs_ctrl,
 };
 
 
@@ -118,27 +121,18 @@ static struct lis3mdl_transfer_function lis3mdl_spi_tf = {
 int lis3mdl_spi_init(struct lis3mdl_data *drv_data) {
 	int res = 0;
 
-#if defined(CONFIG_LIS3MDL_SPI_GPIO_CS)
-	/* handle SPI CS thru GPIO if it is the case */
-	if (IS_ENABLED(CONFIG_LIS3MDL_SPI_GPIO_CS)) {
-		lis3mdl_cs_ctrl.gpio_dev = device_get_binding(
-			CONFIG_LIS3MDL_SPI_GPIO_CS_DRV_NAME);
-		if (!lis3mdl_cs_ctrl.gpio_dev) {
-			SYS_LOG_ERR("Unable to get GPIO SPI CS device");
-			return -ENODEV;
-		}
-
-		lis3mdl_cs_ctrl.gpio_pin = CONFIG_LIS3MDL_SPI_GPIO_CS_PIN;
-		lis3mdl_cs_ctrl.delay = 0;
-
-		lis3mdl_spi_conf.cs = &lis3mdl_cs_ctrl;
-
-		SYS_LOG_DBG("SPI GPIO CS configured on %s:%u",
-			    CONFIG_LIS3MDL_SPI_GPIO_CS_DRV_NAME,
-			    CONFIG_LIS3MDL_SPI_GPIO_CS_PIN);
+	lis3mdl_cs_ctrl.gpio_dev = device_get_binding(DT_ST_LIS3MDL_0_CS_GPIO_CONTROLLER);
+	lis3mdl_cs_ctrl.gpio_pin = DT_ST_LIS3MDL_0_CS_GPIO_PIN;
+	lis3mdl_cs_ctrl.delay = 0;
+	if(!lis3mdl_cs_ctrl.gpio_dev) {
+		LOG_ERR("Unable to get GPIO SPI CS device");
+		return -ENODEV;
 	}
-#endif
+	lis3mdl_spi_conf.cs = &lis3mdl_cs_ctrl;
 
+	LOG_DBG("SPI GPIO CS configured on %s:%u",
+			DT_ST_LIS3MDL_0_CS_GPIO_CONTROLLER,
+			DT_ST_LIS3MDL_0_CS_GPIO_PIN);
 
 	drv_data->hw_tf = &lis3mdl_spi_tf;
 
