@@ -720,6 +720,12 @@ static inline int icm20649_raw_data_ready_int_disable(struct device *dev) {
 			0 <<  ICM20649_SHIFT_INT_ENABLE_1_RAW_DATA_0_RDY_EN);
 }
 
+static inline int icm20649_raw_data_ready_int_enable(struct device *dev) {
+	return icm20649_update_reg8(dev, ICM20649_REG_INT_ENABLE_1,
+			ICM20649_MASK_INT_ENABLE_1_RAW_DATA_0_RDY_EN,
+			1 <<  ICM20649_SHIFT_INT_ENABLE_1_RAW_DATA_0_RDY_EN);
+}
+
 int icm20649_fifo_watermark_int_status(struct device *dev, u8_t *status) {
 	return icm20649_read_reg8(dev, ICM20649_REG_INT_STATUS_3, status);
 }
@@ -866,11 +872,12 @@ int icm20649_trigger_set(struct device *dev,
 
 		gpio_pin_disable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
+        
 		/* enable fifo and watermark interrupt */
-		if(icm20649_fifo_disable(dev) < 0) {
-			LOG_ERR("Could not disable fifo watermark interrupt.");
-			return -EIO;
-		}
+		//if(icm20649_fifo_disable(dev) < 0) {
+		//	LOG_ERR("Could not disable fifo watermark interrupt.");
+		//	return -EIO;
+		//}
 
 	} else {
 		LOG_WRN("Setting trigger");
@@ -885,10 +892,10 @@ int icm20649_trigger_set(struct device *dev,
 		gpio_pin_enable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 		/* enable fifo and watermark interrupt */
-		if(icm20649_fifo_enable(dev) < 0) {
-			LOG_ERR("Could not enable fifo watermark interrupt.");
-			return -EIO;
-		}
+		//if(icm20649_fifo_enable(dev) < 0) {
+		//	LOG_ERR("Could not enable fifo watermark interrupt.");
+		//	return -EIO;
+		//}
 
 	}
 
@@ -969,8 +976,8 @@ int icm20649_init_interrupt(struct device *dev)
 	}
 
 	gpio_pin_configure(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN,
-			   GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE |
-			   GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE);
+			   GPIO_DIR_IN | GPIO_INT | GPIO_INT_LEVEL |
+			   GPIO_INT_ACTIVE_HIGH);
 
 	gpio_init_callback(&drv_data->gpio_cb,
 			   icm20649_gpio_callback,
@@ -980,6 +987,11 @@ int icm20649_init_interrupt(struct device *dev)
 		LOG_ERR("Could not set gpio callback.");
 		return -EIO;
 	}
+
+    if(icm20649_raw_data_ready_int_enable(dev) < 0) {
+        LOG_ERR("failed to enable data ready interrupt");
+        return -EIO;
+    }
 
 #if defined(CONFIG_ICM20649_TRIGGER_OWN_THREAD)
 	k_sem_init(&drv_data->gpio_sem, 0, UINT_MAX);
@@ -993,8 +1005,6 @@ int icm20649_init_interrupt(struct device *dev)
 	drv_data->work.handler = icm20649_work_cb;
 	drv_data->dev = dev;
 #endif
-
-	gpio_pin_enable_callback(drv_data->gpio, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 	return 0;
 }
