@@ -32,7 +32,7 @@
 #include <device.h>
 #include <zephyr.h>
 
-#ifdef DT_TI_LP5521_ENABLE_GPIOS
+#ifdef DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER
 #include <gpio.h>
 #endif
 
@@ -144,7 +144,7 @@ enum lp5521_engine_fade_dirs {
 
 struct lp5521_data {
 	struct device *i2c;
-#ifdef DT_TI_LP5521_0_ENABLE_GPIOS
+#ifdef DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER
     struct device *gpio;
 #endif
 	struct led_data dev_data;
@@ -825,7 +825,7 @@ static int lp5521_led_init(struct device *dev)
 	struct lp5521_data *data = dev->driver_data;
 	struct led_data *dev_data = &data->dev_data;
 
-#if defined(DT_TI_LP5521_0_ENABLE_GPIOS)
+#if defined(DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER)
 	data->gpio = device_get_binding(DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER);
 	if (data->gpio == NULL) {
 		LOG_ERR("Failed to get pointer to %s device!",
