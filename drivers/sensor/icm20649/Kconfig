@@ -69,6 +69,12 @@ config ICM20649_TRIGGER_OWN_THREAD
 	depends on GPIO
 	select ICM20649_TRIGGER
 
+config ICM20649_TRIGGER_IRQ
+	bool
+	prompt "Use IRQ handler"
+	depends on GPIO
+	select ICM20649_TRIGGER
+
 endchoice
 
 config ICM20649_TRIGGER
