@@ -910,12 +910,18 @@ static void icm20649_gpio_callback(struct device *dev,
 
 	ARG_UNUSED(pins);
 
-	gpio_pin_disable_callback(dev, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 
 #if defined(CONFIG_ICM20649_TRIGGER_OWN_THREAD)
+	gpio_pin_disable_callback(dev, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 	k_sem_give(&drv_data->gpio_sem);
 #elif defined(CONFIG_ICM20649_TRIGGER_GLOBAL_THREAD)
+	gpio_pin_disable_callback(dev, DT_TDK_ICM20649_0_IRQ_GPIOS_PIN);
 	k_work_submit(&drv_data->work);
+#elif defined(CONFIG_ICM20649_TRIGGER_IRQ)
+	if (drv_data->data_ready_handler != NULL) {
+		drv_data->data_ready_handler(dev,
+					     &drv_data->data_ready_trigger);
+	}
 #endif
 }
 
