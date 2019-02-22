@@ -11,9 +11,9 @@
 #include <misc/util.h>
 #include <zephyr/types.h>
 #include <gpio.h>
+#include <sensor.h>
 
-#define LIS3MDL_I2C_ADDR_BASE           0x1C
-#define LIS3MDL_I2C_ADDR_MASK           (~BIT(1))
+
 
 #define LIS3MDL_REG_WHO_AM_I            0x0F
 #define LIS3MDL_CHIP_ID                 0x3D
@@ -110,8 +110,19 @@ static const u16_t lis3mdl_magn_gain[] = {
 	6842, 3421, 2281, 1711
 };
 
+struct lis3mdl_data;
+
+struct lis3mdl_transfer_function {
+	int (*read_data)(struct lis3mdl_data *data, u8_t reg_addr,
+                   u8_t *value, u8_t len);
+	int (*write_data)(struct lis3mdl_data *data, u8_t reg_addr,
+                    u8_t *value, u8_t len);
+	int (*read_reg)(struct lis3mdl_data *data, u8_t reg_addr,
+                  u8_t *value);
+};
+
 struct lis3mdl_data {
-	struct device *i2c;
+	struct device *comm_master;
 	s16_t x_sample;
 	s16_t y_sample;
 	s16_t z_sample;
@@ -132,15 +143,19 @@ struct lis3mdl_data {
 	struct k_work work;
 	struct device *dev;
 #endif
-
 #endif /* CONFIG_LIS3MDL_TRIGGER */
+
+	const struct lis3mdl_transfer_function *hw_tf;
 };
 
+int lis3mdl_spi_init(struct lis3mdl_data *drv_data);
+int lis3mdl_i2c_init(struct lis3mdl_data *drv_data);
 #ifdef CONFIG_LIS3MDL_TRIGGER
 int lis3mdl_trigger_set(struct device *dev,
 			const struct sensor_trigger *trig,
 			sensor_trigger_handler_t handler);
 
+int lis3mdl_sample_fetch_drv(struct lis3mdl_data *drv_data, enum sensor_channel chan);
 int lis3mdl_sample_fetch(struct device *dev, enum sensor_channel chan);
 
 int lis3mdl_init_interrupt(struct device *dev);

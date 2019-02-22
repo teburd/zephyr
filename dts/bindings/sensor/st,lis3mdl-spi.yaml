@@ -1,0 +1,30 @@
+#
+# Copyright (c) 2018, Linaro Limited
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+title: STMicroelectronics MEMS sensors LIS3MDL SPI
+version: 0.1
+
+description: >
+    This binding gives a base representation of LIS3MDL 3-axis magnetometer
+
+inherits:
+    !include spi-device.yaml
+
+properties:
+    compatible:
+        constraint: "st,lis3mdl"
+
+    drdy-gpios:
+      type: compound
+      category: optional
+      generation: define, use-prop-name
+
+    irq-gpios:
+      type: compound
+      category: required
+      generation: define, use-prop-name
+
+...

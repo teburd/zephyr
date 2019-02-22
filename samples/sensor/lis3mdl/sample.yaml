@@ -1,0 +1,7 @@
+sample:
+  name: LIS3MDL magnetometer sensor
+tests:
+  test:
+    harness: console
+    tags: sensors
+    depends_on: lis3mdl
