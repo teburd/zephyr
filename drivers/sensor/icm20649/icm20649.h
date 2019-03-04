@@ -417,8 +417,6 @@ int icm20649_init_interrupt(struct device *dev);
 #endif
 
 int icm20649_get_who_am_i(struct device *dev, u8_t *whoami);
-typedef void(*icm20649_fifo_stream_cb)(s16_t *samples);
-void icm20649_fifo_stream(struct device *dev, icm20649_fifo_stream_cb stream_cb);
 int icm20649_fifo_count(struct device *dev, u16_t *cnt);
 u16_t icm20649_fifo_read(struct device *dev, u8_t *buf, u16_t len);
 int icm20649_fifo_overflow_int_status(struct device *dev, u8_t *reg);

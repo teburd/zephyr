@@ -171,6 +171,31 @@ int lis3mdl_init(struct device *dev)
 	return 0;
 }
 
+int lis3mdl_wakeup(struct device *dev)
+{
+  struct lis3mdl_data *drv_data = dev->driver_data;
+	u8_t mode = LIS3MDL_MD_CONTINUOUS;
+	if(drv_data->hw_tf->write_data(drv_data, LIS3MDL_REG_CTRL3, &mode, 1) < 0)
+	{
+		LOG_DBG("Failed to wakeup.");
+		return -EIO;
+	}
+	return 0;
+}
+
+int lis3mdl_sleep(struct device *dev)
+{
+	struct lis3mdl_data *drv_data = dev->driver_data;
+	u8_t mode = LIS3MDL_MD_POWER_DOWN;
+	if(drv_data->hw_tf->write_data(drv_data, LIS3MDL_REG_CTRL3, &mode, 1) < 0)
+	{
+		LOG_DBG("Failed to sleep.");
+		return -EIO;
+	}
+	return 0;
+}
+
+
 struct lis3mdl_data lis3mdl_driver;
 
 DEVICE_AND_API_INIT(lis3mdl, DT_ST_LIS3MDL_0_LABEL, lis3mdl_init,
