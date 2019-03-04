@@ -166,7 +166,7 @@ static inline int icm20649_auto_clock(struct device *dev) {
 	return ret;
 }
 
-static inline int icm20649_wakeup(struct device *dev) {
+int icm20649_wakeup(struct device *dev) {
 	LOG_DBG("wakeup");
 	int ret = icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1,
 			ICM20649_MASK_PWR_MGMT_1_SLEEP,
@@ -186,18 +186,17 @@ static inline int icm20649_user_config(struct device *dev) {
 			);
 }
 
-static inline int icm20649_sleep(struct device *dev) {
-	return icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1, 
+int icm20649_sleep(struct device *dev) {
+	LOG_DBG("sleep");
+	int ret = icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1, 
 			ICM20649_MASK_PWR_MGMT_1_SLEEP,
 			(1 << ICM20649_SHIFT_PWR_MGMT_1_SLEEP));
+	LOG_DBG("sleep done");
+	return ret;
 }
 
 int icm20649_get_who_am_i(struct device *dev, u8_t *whoami) {
 	return icm20649_read_reg8(dev, ICM20649_REG_WHO_AM_I, whoami);
-}
-
-void icm20649_fifo_stream(struct device *dev, icm20649_fifo_stream_cb stream_cb)
-{
 }
 
 static inline int icm20649_lp_enable(struct device *dev) {
