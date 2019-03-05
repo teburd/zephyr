@@ -819,7 +819,6 @@ static inline int lp5521_led_off(struct device *dev, u32_t led)
 
 	return lp5521_led_set_brightness(dev, led, dev_data->min_brightness);
 }
-
 static int lp5521_led_init(struct device *dev)
 {
 	struct lp5521_data *data = dev->driver_data;
@@ -895,6 +894,17 @@ static int lp5521_led_init(struct device *dev)
 
 	return 0;
 }
+
+extern int lp5521_sleep(struct device *dev) {
+	struct lp5521_data *data = dev->driver_data;
+	return gpio_pin_write(data->gpio, DT_TI_LP5521_0_ENABLE_GPIOS_PIN, 0);
+}
+
+extern int lp5521_wakeup(struct device *dev) {
+	return lp5521_led_init(dev);
+}
+
+
 
 static struct lp5521_data lp5521_led_data;
 
