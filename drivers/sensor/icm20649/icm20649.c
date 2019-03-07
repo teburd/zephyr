@@ -166,12 +166,10 @@ static inline int icm20649_auto_clock(struct device *dev) {
 	return ret;
 }
 
-int icm20649_wakeup(struct device *dev) {
-	LOG_DBG("wakeup");
+static inline int _icm20649_wakeup(struct device *dev) {
 	int ret = icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1,
 			ICM20649_MASK_PWR_MGMT_1_SLEEP,
 			0 << ICM20649_SHIFT_PWR_MGMT_1_SLEEP);
-	LOG_DBG("wakeup done");
 	return ret;
 }
 
@@ -181,17 +179,15 @@ static inline int icm20649_user_config(struct device *dev) {
 			ICM20649_MASK_USER_CTRL_FIFO_EN |
 			ICM20649_MASK_USER_CTRL_I2C_IF_DIS ,
 			0 << ICM20649_SHIFT_USER_CTRL_DMP_EN |
-			1 << ICM20649_SHIFT_USER_CTRL_FIFO_EN |
+			0 << ICM20649_SHIFT_USER_CTRL_FIFO_EN |
 			1 << ICM20649_SHIFT_USER_CTRL_I2C_IF_DIS
 			);
 }
 
-int icm20649_sleep(struct device *dev) {
-	LOG_DBG("sleep");
+static inline int _icm20649_sleep(struct device *dev) {
 	int ret = icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1, 
 			ICM20649_MASK_PWR_MGMT_1_SLEEP,
 			(1 << ICM20649_SHIFT_PWR_MGMT_1_SLEEP));
-	LOG_DBG("sleep done");
 	return ret;
 }
 
@@ -208,7 +204,7 @@ static inline int icm20649_lp_enable(struct device *dev) {
             );
 	ret |= icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_1,
 			ICM20649_MASK_PWR_MGMT_1_LP_EN,
-			0 << ICM20649_SHIFT_PWR_MGMT_1_LP_EN);
+			1 << ICM20649_SHIFT_PWR_MGMT_1_LP_EN);
 	return ret;
 }
 
@@ -235,6 +231,16 @@ static inline int icm20649_accel_gyro_enable(struct device *dev) {
             );
 
 }
+
+static inline int icm20649_accel_gyro_disable(struct device *dev) {
+    return icm20649_update_reg8(dev, ICM20649_REG_PWR_MGMT_2,
+            ICM20649_MASK_PWR_MGMT_2_DISABLE_ACCEL | 
+            ICM20649_MASK_PWR_MGMT_2_DISABLE_GYRO,
+            1 << ICM20649_SHIFT_PWR_MGMT_2_DISABLE_ACCEL |
+            1 << ICM20649_SHIFT_PWR_MGMT_2_DISABLE_GYRO
+            );
+}
+
 
 static inline int icm20649_set_accel_sample_rate_div(struct device *dev,
 		u16_t rate_div) {
@@ -583,7 +589,7 @@ static int icm20649_init_chip(struct device *dev) {
 		return -EIO;
 	}
 
-	if(icm20649_wakeup(dev) < 0) {
+	if(_icm20649_wakeup(dev) < 0) {
 		LOG_WRN("failed to power on device");
 		return -EIO;
 	}
@@ -1154,6 +1160,21 @@ int icm20649_init(struct device *dev) {
 	return 0;
 }
 
+int icm20649_sleep(struct device *dev) {
+	int ret = icm20649_reset(dev);
+	//int ret =  icm20649_accel_gyro_disable(dev);
+	//ret |= icm20649_lp_enable(dev);
+	//ret |= icm20649_sleep(dev);
+	return ret;
+}
+
+int icm20649_wakeup(struct device *dev) {
+	//int ret = _icm20649_wakeup(dev);
+	//ret |= icm20649_lp_disable(dev);
+	//ret |= icm20649_accel_gyro_enable(dev);
+	int ret = icm20649_init_chip(dev);
+	return ret;
+}
 
 static struct icm20649_data icm20649_driver;
 

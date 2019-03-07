@@ -173,7 +173,7 @@ int lis3mdl_init(struct device *dev)
 
 int lis3mdl_wakeup(struct device *dev)
 {
-  struct lis3mdl_data *drv_data = dev->driver_data;
+	struct lis3mdl_data *drv_data = dev->driver_data;
 	u8_t mode = LIS3MDL_MD_CONTINUOUS;
 	if(drv_data->hw_tf->write_data(drv_data, LIS3MDL_REG_CTRL3, &mode, 1) < 0)
 	{
