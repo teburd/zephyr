@@ -40,6 +40,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(lp5562);
 
+extern int lp5521_sleep(struct device *dev);
 
 #include "led_context.h"
 
@@ -835,7 +836,7 @@ static int lp5521_led_init(struct device *dev)
 			   GPIO_DIR_OUT);
 	gpio_pin_write(data->gpio, DT_TI_LP5521_0_ENABLE_GPIOS_PIN, 1);
 
-	k_sleep(1);
+	k_sleep(K_MSEC(1));
 #endif
 
 	data->i2c = device_get_binding(DT_TI_LP5521_0_BUS_NAME);
@@ -857,10 +858,10 @@ static int lp5521_led_init(struct device *dev)
 		return -EIO;
 	}
 
-    k_sleep(1);
+    k_sleep(K_MSEC(1));
 
 	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
-				LP5521_CONFIG, 0x59)) {
+				LP5521_CONFIG, 0x79)) {
 		LOG_ERR("Configuring LP5521 LED chip failed.");
 		return -EIO;
 	}
@@ -870,33 +871,18 @@ static int lp5521_led_init(struct device *dev)
 		LOG_ERR("Disabling all engines failed.");
 		return -EIO;
 	}
-
-    /*
-    if(i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
-                LP5521_R_PWM, 128)) {
-        LOG_ERR("Failed to enable red channel");
-        return -EIO;
-    }
-
-    if(i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
-                LP5521_G_PWM, 192)) {
-        LOG_ERR("Failed to enable green channel");
-        return -EIO;
-    }
-
-    if(i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
-                LP5521_B_PWM, 255)) {
-        LOG_ERR("Failed to enable blue channel");
-        return -EIO;
-    }
-    */
-
-
+	
 	return 0;
 }
 
 extern int lp5521_sleep(struct device *dev) {
 	struct lp5521_data *data = dev->driver_data;
+	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
+				LP5521_RESET,
+				0xFF)) {
+		LOG_ERR("Reseting LP5521 LED chip failed.");
+		return -EIO;
+	}
 	return gpio_pin_write(data->gpio, DT_TI_LP5521_0_ENABLE_GPIOS_PIN, 0);
 }
 
