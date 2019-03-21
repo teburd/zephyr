@@ -853,7 +853,7 @@ static int lp5521_led_init(struct device *dev)
 
 	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
 				LP5521_ENABLE,
-				LP5521_ENABLE_CHIP_EN)) {
+				LP5521_ENABLE_CHIP_EN | LP5521_ENABLE_LOG_EN)) {
 		LOG_ERR("Enabling LP5521 LED chip failed.");
 		return -EIO;
 	}
@@ -861,13 +861,13 @@ static int lp5521_led_init(struct device *dev)
     k_sleep(K_MSEC(1));
 
 	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
-				LP5521_CONFIG, 0x79)) {
+				LP5521_CONFIG, LP5521_CONFIG_PWRSAVE_EN | LP5521_CONFIG_INTERNAL_CLOCK)) {
 		LOG_ERR("Configuring LP5521 LED chip failed.");
 		return -EIO;
 	}
 
 	if (i2c_reg_write_byte(data->i2c, DT_TI_LP5521_0_BASE_ADDRESS,
-				LP5521_OP_MODE, 0x3F)) {
+				LP5521_OP_MODE, 0x00)) {
 		LOG_ERR("Disabling all engines failed.");
 		return -EIO;
 	}
