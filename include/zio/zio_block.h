@@ -5,108 +5,18 @@
  */
 
 /**
- * @file zio_buf.h
+ * @file zio_block.h
  *
- * @brief ZIO Buffer provides a pollable interface to a FIFO like buffer
- *
- * Device drivers implement this interface using either a software or
- * hardware FIFO.
- *
- * The format of the buffer is device dependent and thus a device must
- * implement part of the API by describing the layout of the buffer. Each
- * device is responsible for self describing the position, byte size, byte
- * order, bit precision, and bit shift each value provides in a static
- * array of struct zio_chan values.
- *
- * Changing enabled/disabled channels while using the same zio_buf isn't
- * supported for that reason.
- *
- * In addition to the data itself a 32 bit trigger timestamp corresponding to
- * k_cycle_get_32() may be placed as the last set of bytes of each datum
- * pulled.
- *
- * The buffer is pollable using k_poll where the pollable event becomes
- * available when the zio_buf contains at least the designated watermark
- * number of datums. It will cease to become pollable once it contains
- * less than the designated watermark number of datums.
- *
- * Adjusting the watermark value may or may not be implemented depending
- * on the FIFO implementation.
- *
- * The ability to poll one or more buffers allows an application designer
- * to decide how to deal with incoming streams of data from one or more
- * sensors.
- *
- * This is heavily inspired by the fantastic work in Linux's IIO subsystem,
- * with a microcontroller focused RTOS in mind.
- *
- * As an example in the case of a 9 DoF IMU sensor where each channel
- * produces a 16 bit value the buffer after each trigger without timestamps
- * would contain 18 bytes of data, 22 bytes with the 32bit cycle counter
- * timestamp.
+ * @brief ZIO Block provides an interface to reference into a zio_buf a block
+ * of memory with some common metadata.
  */
 
-#ifndef ZEPHYR_INCLUDE_ZIO_BUF_H_
-#define ZEPHYR_INCLUDE_ZIO_BUF_H_
+#ifndef ZEPHYR_INCLUDE_ZIO_BLOCK_H_
+#define ZEPHYR_INCLUDE_ZIO_BLOCK_H_
 
 #include <zephyr/types.h>
 #include <kernel.h>
-#include <zio/zio_dev.h>
 #include <misc/__assert.h>
-
-struct zio_buf;
-
-/**
- * @brief Function to pull from the zio_buf a block of samples
- *
- * The block of samples is self describing in terms of its type and byte length.
- */
-typedef int (*zio_buf_pull_t)(struct zio_buf *buf, struct zio_block *block);
-
-/**
- * @brief Function to set watermark of zio_buf
- *
- * Optional function for a driver if watermark manipulation is possible
- */
-typedef int (*zio_buf_set_watermark_t)(struct zio_buf *buf, u32_t watermark);
-
-/**
- * @brief Function to get watermark of zio_buf
- *
- * Optional function for a driver to return the known watermark
- */
-typedef u32_t (*zio_buf_get_watermark_t)(struct zio_buf *buf);
-
-/**
- * @brief Function to get length of zio_buf
- *
- * Optional function for a driver to return the known length
- */
-typedef u32_t (*zio_buf_get_length_t)(struct zio_buf *buf);
-
-/**
- * @brief Function to get the capacity of a zio_buf
- *
- * Optional function for a driver to return the known length
- */
-typedef u32_t (*zio_buf_get_capacity_t)(struct zio_buf *buf);
-
-/**
- * @brief A pollable buffer interface for reading and writing to streams of data
- *
- * Most devices will want to simply use a fifo backed zio_buf but optionally
- * devices may provide a hardware fifo backed zio_buf.
- *
- * The interface should support either. In the case of a fifo backed zio_buf
- * devices should make a best effort to use DMA transfers rather than memcpy
- */
-struct zio_buf_api {
-	zio_buf_pull_t pull;
-	zio_buf_set_watermark_t set_watermark;
-	zio_buf_get_watermark_t get_watermark;
-	zio_buf_get_length_t get_length;
-	zio_buf_get_capacity_t get_capacity;
-};
 
 /**
  * @brief A pollable fifo-like buffer for reading and writing to streams of data
@@ -114,13 +24,21 @@ struct zio_buf_api {
  * An implementation should implement the api above statically and provide an
  * attach/detach function pair to attach a zio_buf struct to it.
  */
-struct zio_buf {
-	struct device *device;
-	struct zio_buf_api *api;
-	void *api_data;
-	struct k_sem sem;
+struct zio_block {
+    atomic_t refs;
+    u32_t configuration;
+    u32_t length;
+    u8_t *memory;
 };
 
+
+/**
+ * @brief Block pool
+ */
+
+struct zio_block_pool {
+
+}
 
 /**
  * @private
