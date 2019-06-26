@@ -343,6 +343,7 @@
 /drivers/disk/sdmmc_stm32.c               @anthonybrandon
 /drivers/net/                             @rlubos @tbursztyka
 /drivers/ptp_clock/                       @tbursztyka
+/drivers/rtio/                            @bfrog
 /drivers/spi/                             @tbursztyka
 /drivers/spi/*b91*                        @yurvyn
 /drivers/spi/spi_rv32m1_lpspi*            @karstenkoenig
@@ -478,6 +479,7 @@
 /include/drivers/hwinfo.h                 @alexanderwachter
 /include/drivers/led.h                    @Mani-Sadhasivam
 /include/drivers/led_strip.h              @mbolivar-nordic
+/include/drivers/rtio.h                   @bfrog
 /include/drivers/sensor.h                 @MaureenHelm
 /include/drivers/spi.h                    @tbursztyka
 /include/drivers/lora.h                   @Mani-Sadhasivam
@@ -710,6 +712,7 @@
 /tests/drivers/flash_simulator/           @nvlsianpu
 /tests/drivers/gpio/                      @mnkp
 /tests/drivers/hwinfo/                    @alexanderwachter
+/tests/drivers/rtio/                      @bfrog
 /tests/drivers/spi/                       @tbursztyka
 /tests/drivers/uart/uart_async_api/       @Mierunski
 /tests/kernel/                            @dcpleung @andyross @nashif
@@ -727,6 +730,7 @@
 /tests/subsys/fs/                         @nashif @nvlsianpu @de-nordic
 /tests/subsys/settings/                   @nvlsianpu
 /tests/subsys/shell/                      @jakub-uC @nordic-krch
+
 # Get all docs reviewed
 *.rst                                     @nashif
 /doc/reference/kernel/                    @andyross @nashif
