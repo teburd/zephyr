@@ -89,4 +89,6 @@ source "drivers/hwinfo/Kconfig"
 
 source "drivers/espi/Kconfig"
 
+source "drivers/rtio/Kconfig"
+
 endmenu
