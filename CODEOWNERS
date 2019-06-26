@@ -255,6 +255,7 @@
 /drivers/ptp_clock/                       @jukkar
 /drivers/pwm/*rv32m1*                     @henrikbrixandersen
 /drivers/pwm/pwm_shell.c                  @henrikbrixandersen
+/drivers/rtio/                            @bfrog
 /drivers/spi/                             @tbursztyka
 /drivers/spi/spi_ll_stm32.*               @superna9999
 /drivers/spi/spi_rv32m1_lpspi*            @karstenkoenig
@@ -348,6 +349,7 @@
 /include/drivers/hwinfo.h                 @alexanderwachter
 /include/drivers/led.h                    @Mani-Sadhasivam
 /include/drivers/led_strip.h              @mbolivar-nordic
+/include/drivers/rtio.h                   @bfrog
 /include/drivers/sensor.h                 @MaureenHelm
 /include/drivers/spi.h                    @tbursztyka
 /include/drivers/lora.h                   @Mani-Sadhasivam
@@ -546,6 +548,7 @@
 /tests/drivers/flash_simulator/           @nvlsianpu
 /tests/drivers/gpio/                      @mnkp @pabigot
 /tests/drivers/hwinfo/                    @alexanderwachter
+/tests/drivers/rtio/                      @bfrog
 /tests/drivers/spi/                       @tbursztyka
 /tests/drivers/uart/uart_async_api/       @Mierunski
 /tests/kernel/                            @andrewboie @andyross @nashif
@@ -563,6 +566,7 @@
 /tests/subsys/fs/                         @nashif @wentongwu
 /tests/subsys/settings/                   @nvlsianpu
 /tests/subsys/shell/                      @jakub-uC @nordic-krch
+
 # Get all docs reviewed
 *.rst                                     @nashif
 *posix*.rst                               @aescolar @daor-oti
