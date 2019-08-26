@@ -1,0 +1,50 @@
+# Kconfig - nRF52 PCA10040 board configuration
+#
+# Copyright (c) 2016 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+if BOARD_BOSS3
+
+config BOARD
+	default "boss3"
+
+if ADC
+
+config ADC_0
+	default y
+
+endif # ADC
+
+if I2C
+
+config I2C_0
+	default y
+
+endif # I2C
+
+if SPI
+
+config SPI_1
+	default y
+
+endif # SPI
+
+if USB
+
+config USB_NRF52840
+	default y
+
+config USB_DEVICE_STACK
+	default y
+
+endif # USB
+
+if IEEE802154
+
+config IEEE802154_NRF5
+	default y
+
+endif # IEEE802154
+
+endif # BOARD_BOSS3

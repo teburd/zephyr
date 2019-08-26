@@ -168,7 +168,7 @@ enum lp5562_engine_fade_dirs {
 
 struct lp5562_data {
 	struct device *i2c;
-#ifdef DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER
+#ifdef DT_TI_LP5562_0_ENABLE_GPIOS_CONTROLLER
     struct device *gpio;
 #endif
 	struct led_data dev_data;
