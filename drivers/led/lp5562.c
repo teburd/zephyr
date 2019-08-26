@@ -33,6 +33,11 @@
 #include <device.h>
 #include <zephyr.h>
 
+#ifdef DT_TI_LP5562_0_ENABLE_GPIOS_CONTROLLER
+#include <gpio.h>
+#endif
+
+
 #define LOG_LEVEL CONFIG_LED_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(lp5562);
@@ -163,6 +168,9 @@ enum lp5562_engine_fade_dirs {
 
 struct lp5562_data {
 	struct device *i2c;
+#ifdef DT_TI_LP5521_0_ENABLE_GPIOS_CONTROLLER
+    struct device *gpio;
+#endif
 	struct led_data dev_data;
 };
 
@@ -895,6 +903,20 @@ static int lp5562_led_init(struct device *dev)
 {
 	struct lp5562_data *data = dev->driver_data;
 	struct led_data *dev_data = &data->dev_data;
+
+#if defined(DT_TI_LP5562_0_ENABLE_GPIOS_CONTROLLER)
+	data->gpio = device_get_binding(DT_TI_LP5562_0_ENABLE_GPIOS_CONTROLLER);
+	if (data->gpio == NULL) {
+		LOG_ERR("Failed to get pointer to %s device!",
+				DT_TI_LP5562_0_ENABLE_GPIOS_CONTROLLER);
+		return -EINVAL;
+	}
+	gpio_pin_configure(data->gpio, DT_TI_LP5562_0_ENABLE_GPIOS_PIN,
+			   GPIO_DIR_OUT);
+	gpio_pin_write(data->gpio, DT_TI_LP5562_0_ENABLE_GPIOS_PIN, 1);
+
+	k_sleep(1);
+#endif
 
 	data->i2c = device_get_binding(CONFIG_LP5562_I2C_MASTER_DEV_NAME);
 	if (data->i2c == NULL) {

@@ -13,4 +13,8 @@ properties:
       category: required
       description: compatible strings
       constraint: "ti,lp5562"
+    enable-gpios:
+      type: compound
+      category: optional
+      generation: define, use-prop-name
 ...
