@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef ZEPHYR_INCLUDE_RTIO_H_
-#define ZEPHYR_INCLUDE_RTIO_H_
+#ifndef ZEPHYR_INCLUDE_DRIVERS_RTIO_H_
+#define ZEPHYR_INCLUDE_DRIVERS_RTIO_H_
 /**
  * @brief RTIO Interface
  * @defgroup rtio_interface RTIO Interface
@@ -31,12 +31,12 @@ extern "C" {
  */
 
 /**
- * @brief Chunk of memory with ownership and byte format versioning
+ * @brief Block of memory
+ *
+ * This block of memory has important metadata commonly useful such as
+ * byte layout, and timestamps of when a read or write began and ended.
  */
 struct rtio_block {
-	/* Mem block from k_mem_pool */
-	struct k_mem_block_id mem_block_id;
-
 	/** Timestamp in cycles from k_cycle_get_32() marking when a read or
 	 * write began
 	 */
@@ -65,15 +65,8 @@ struct rtio_block {
 /**
  * @brief Initialize an rtio_block
  */
-__syscall void rtio_block_init(struct rtio_block *block,
-				   struct k_mem_block_id mem_block_id,
-			       u8_t *data, u32_t size);
-
-static inline void z_impl_rtio_block_init(struct rtio_block *block,
-				   struct k_mem_block_id mem_block_id,
-				   u8_t *data, u32_t size)
+static inline void rtio_block_init(struct rtio_block *block, u8_t *data, u32_t size)
 {
-	block->mem_block_id = mem_block_id;
 	block->layout = 0;
 	block->begin_tstamp = 0;
 	block->end_tstamp = 0;
@@ -85,9 +78,7 @@ static inline void z_impl_rtio_block_init(struct rtio_block *block,
 /**
  * @brief Begin a block read or write
  */
-__syscall void rtio_block_begin(struct rtio_block *block);
-
-static inline void z_impl_rtio_block_begin(struct rtio_block *block)
+static inline void rtio_block_begin(struct rtio_block *block)
 {
 	block->len = 0;
 	block->begin_tstamp = k_cycle_get_32();
@@ -96,9 +87,7 @@ static inline void z_impl_rtio_block_begin(struct rtio_block *block)
 /**
  * @brief End a block read or write.
  */
-__syscall void rtio_block_end(struct rtio_block *block);
-
-static inline void z_impl_rtio_block_end(struct rtio_block *block)
+static inline void rtio_block_end(struct rtio_block *block)
 {
 	block->end_tstamp = k_cycle_get_32();
 }
@@ -107,9 +96,7 @@ static inline void z_impl_rtio_block_end(struct rtio_block *block)
 /**
  * @brief Unused number of bytes in the buffer
  */
-__syscall u16_t rtio_block_available(struct rtio_block *block);
-
-static inline u16_t z_impl_rtio_block_available(struct rtio_block *block)
+static inline u16_t rtio_block_available(struct rtio_block *block)
 {
 	return block->size - block->len;
 }
@@ -129,7 +116,7 @@ static inline u16_t z_impl_rtio_block_available(struct rtio_block *block)
 			memcpy(&block->_data[block->len], &val,		\
 			       sizeof(_type));				\
 			block->len += sizeof(_type);			\
-			return 0;				        \
+			return 0;					\
 		} else {						\
 			return -ENOMEM;					\
 		}							\
@@ -153,28 +140,96 @@ static inline u16_t z_impl_rtio_block_available(struct rtio_block *block)
  * Implementations for common data types you might wish to
  * store in a rtio_block
  */
-Z_RTIO_BLOCK_PUSH_PULL_IMPL(u8_t)
-Z_RTIO_BLOCK_PUSH_PULL_IMPL(u16_t)
-Z_RTIO_BLOCK_PUSH_PULL_IMPL(u32_t)
-Z_RTIO_BLOCK_PUSH_PULL_IMPL(s8_t)
-Z_RTIO_BLOCK_PUSH_PULL_IMPL(s16_t)
-Z_RTIO_BLOCK_PUSH_PULL_IMPL(s32_t)
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(u8_t);
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(u16_t);
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(u32_t);
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(u64_t);
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(s8_t);
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(s16_t);
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(s32_t);
+Z_RTIO_BLOCK_PUSH_PULL_IMPL(s64_t);
+
+struct rtio_block_allocator;
 
 /**
- * @brief An rtio pool
+ * @private
+ * @brief Function definition for allocating rtio blocks from a given allocator
  */
-struct rtio_pool {
+typedef int (*rtio_block_alloc_t)(struct rtio_block_allocator *allocator, struct rtio_block **block, u32_t size, u32_t timeout);
+
+/**
+ * @private
+ * @brief Function definition for freeing rtio blocks
+ */
+typedef void (*rtio_block_free_t)(struct rtio_block_allocator *allocator, struct rtio_block *block);
+
+/**
+ * @brief An rtio block allocator interface
+ */
+struct rtio_block_allocator {
+	rtio_block_alloc_t alloc;
+	rtio_block_free_t free;
+};
+
+/**
+ * @brief An rtio mempool block allocator
+ */
+struct rtio_mempool_block_allocator {
+	struct rtio_block_allocator allocator;
 	struct k_mem_pool *mempool;
 };
 
 /**
- * @brief Define an rtio block pool
+ * @brief An rtio_block allocated from a mempool
  */
-#define RTIO_POOL_DEFINE(_name, _maxsz, _nmax) \
-	K_MEM_POOL_DEFINE(rtio_pool_mempool_##_name, 64, _maxsz, _nmax, 4); \
-	struct rtio_pool _name = { \
-		.mempool = &rtio_pool_mempool_##_name \
+struct rtio_mempool_block {
+	struct rtio_block block;
+	struct k_mem_block_id id;
+};
+
+/**
+ * @brief Allocate a block from a mempool
+ */
+static inline int rtio_mempool_block_alloc(struct rtio_block_allocator *allocator,
+					   struct rtio_block **block, u32_t size, u32_t timeout)
+{
+	struct rtio_mempool_block_allocator *mempool_allocator = (struct rtio_mempool_block_allocator *)allocator;
+	struct k_mem_block memblock;
+	size_t block_size = size + sizeof(struct rtio_block);
+
+	int res = k_mem_pool_alloc(mempool_allocator->mempool, &memblock, block_size,
+				   timeout);
+	if (res == 0) {
+		struct rtio_mempool_block *mempool_block = (struct rtio_mempool_block *)(memblock.data);
+		size_t struct_size = sizeof(struct rtio_block);
+		u8_t *dataptr = &((u8_t *)memblock.data)[struct_size];
+
+		mempool_block->id = memblock.id;
+		*block = (struct rtio_block *)mempool_block;
+		rtio_block_init((struct rtio_block *)*block, dataptr, size);
 	}
+	return res;
+}
+
+static inline void rtio_mempool_block_free(struct rtio_block_allocator *allocator,
+					   struct rtio_block *block)
+{
+	struct rtio_mempool_block *mempool_block = (struct rtio_mempool_block *)block;
+	k_mem_pool_free_id(&mempool_block->id);
+}
+
+/**
+ * @brief Define an rtio block mempool allocator
+ */
+#define RTIO_MEMPOOL_ALLOCATOR_DEFINE(_name, _minsz, _maxsz, _nmax)	\
+	K_MEM_POOL_DEFINE(rtio_pool_mempool_##_name, sizeof(struct rtio_block) + _minsz, sizeof(struct rtio_block) + _maxsz, _nmax, 4); \
+	struct rtio_mempool_block_allocator _name = {			\
+	.allocator = {							\
+	.alloc = rtio_mempool_block_alloc,				\
+	.free = rtio_mempool_block_free					\
+},									\
+	.mempool = &rtio_pool_mempool_##_name				\
+}
 
 
 /**
@@ -182,101 +237,30 @@ struct rtio_pool {
  *
  * This call is not safe to do with a timeout other than K_NO_WAIT
  * in an interrupt handler.
- */
-__syscall int rtio_block_alloc(struct rtio_pool *pool,
-			       struct rtio_block **block,
-			       u32_t size,
-			       u32_t timeout);
-
-static inline int
-z_impl_rtio_block_alloc(struct rtio_pool *pool,
-			struct rtio_block **block,
-			u32_t size,
-			u32_t timeout) {
-	struct k_mem_block memblock;
-	size_t block_size = size + sizeof(struct rtio_block);
-
-	int res = k_mem_pool_alloc(pool->mempool, &memblock, block_size,
-				   timeout);
-	if (res == 0) {
-		*block = (struct rtio_block *)(memblock.data);
-		size_t struct_size = sizeof(struct rtio_block);
-		u8_t *dataptr = &((u8_t *)memblock.data)[struct_size];
-
-		rtio_block_init(*block, memblock.id, dataptr, size);
-	}
-	return res;
-}
-
-/**
- * @brief Free a rtio_block back to the pipe
- */
-__syscall void rtio_block_free(struct rtio_block *block);
-
-static inline void
-z_impl_rtio_block_free(struct rtio_block *block) {
-	k_mem_pool_free_id(&block->mem_block_id);
-}
-/**
- * @brief An rtio pipe provides a FIFO of rtio events (blocks, triggers, etc)
- */
-struct rtio_pipe {
-	struct k_fifo *queue;
-};
-
-/**
- * @brief Initialize a rtio pipe
- */
-__syscall void rtio_pipe_init(struct rtio_pipe *pipe);
-
-static inline void z_impl_rtio_pipe_init(struct rtio_pipe *pipe)
-{
-	k_fifo_init(pipe->queue);
-}
-
-/**
- * @brief Pull a block from the pipe with a timeout
  *
- * This call pulls a rtio_block from the rtio_pipe with a timeout.
- * If K_NO_WAIT is given results are immediate.
- * If K_FOREVER is given this call will wait until a rtio_block is ready.
+ * The allocator *must* have a layout equivalent to the struct rtio_block_allocator
  */
-__syscall struct rtio_block *rtio_pipe_pull_block(
-	struct rtio_pipe *pipe, u32_t timeout);
+static inline int rtio_block_alloc(void *allocatorv,
+				   struct rtio_block **block,
+				   u32_t size,
+				   u32_t timeout) {
+	struct rtio_block_allocator *allocator = (struct rtio_block_allocator *)allocatorv;
+	return allocator->alloc(allocator, block, size, timeout);
 
-static inline struct rtio_block *
-z_impl_rtio_pipe_pull_block(struct rtio_pipe *pipe, u32_t timeout) {
-	return k_fifo_get(pipe->queue, timeout);
 }
 
 /**
- * @brief Push a block into the pipe
- *
- * This call pushes a rtio_block from the rtio_pipe making itavailable to be
- * pulled.
+ * @brief Free a rtio_block back to the allocator
  */
-__syscall void rtio_pipe_push_block(struct rtio_pipe *pipe,
-				    struct rtio_block *block);
-
-static inline void
-z_impl_rtio_pipe_push_block(struct rtio_pipe *pipe, struct rtio_block *block) {
-	return k_fifo_put(pipe->queue, block);
+static inline void rtio_block_free(void *allocatorv, struct rtio_block *block) {
+	struct rtio_block_allocator *allocator = (struct rtio_block_allocator *)allocatorv;
+	allocator->free(allocator, block);
 }
-
-
-/**
- * @brief Define an rtio pipe
- */
-#define RTIO_PIPE_DEFINE(_name)			\
-	K_FIFO_DEFINE(rtio_blocks_queue_##_name);	\
-	static struct rtio_pipe _name = {		\
-		.queue = &rtio_blocks_queue_##_name	\
-	}
 
 /**
  * @brief Output config describing where and when to push a blocks
  *
- * Output config should at least have a valid pool and pipe pointer given
+ * Output config should at least have a valid allocator and k_fifo pointer given
  *
  * Drivers should make a best attempt at fulfilling the policy of when
  * to return and notify the caller the block is ready by pushing it
@@ -292,14 +276,14 @@ z_impl_rtio_pipe_push_block(struct rtio_pipe *pipe, struct rtio_block *block) {
  */
 struct rtio_output_config {
 	/**
-	 * Pool to allocate blocks from
+	 * Allocator for rtio_blocks
 	 */
-	struct rtio_pool *pool;
+	struct rtio_allocator *allocator;
 
 	/**
-	 * Pipe to output to
+	 * Fifo to output blocks to
 	 */
-	struct rtio_pipe *pipe;
+	struct k_fifo *fifo;
 
 	/** Time in cycles to read before making the block ready
 	 *
@@ -318,14 +302,14 @@ struct rtio_output_config {
  * @brief Common trigger sources
  */
 enum rtio_trigger_source {
-	GPIO_IRQ,
-	COUNTER_IRQ,
-	FUNCTION_CALL,
+GPIO_IRQ,
+COUNTER_IRQ,
+FUNCTION_CALL,
 
-	/* All driver specific sources should use this plus an additive value
-	 * to label the trigger source
-	 */
-	RTIO_TRIGGER_SOURCE_COUNT
+/* All driver specific sources should use this plus an additive value
+ * to label the trigger source
+ */
+RTIO_TRIGGER_SOURCE_COUNT
 };
 
 /**
@@ -361,12 +345,9 @@ struct rtio_trigger_event {
  *
  * @return true if the policy has been met, false otherwise
  */
-__syscall bool rtio_output_policy_check(struct rtio_output_config *cfg,
-					struct rtio_block *block);
-
 static inline bool
-z_impl_rtio_output_policy_check(struct rtio_output_config *cfg,
-				struct rtio_block *block)
+rtio_output_policy_check(struct rtio_output_config *cfg,
+			 struct rtio_block *block)
 {
 	if (k_cycle_get_32() - block->begin_tstamp > cfg->time) {
 		return true;
@@ -381,13 +362,13 @@ z_impl_rtio_output_policy_check(struct rtio_output_config *cfg,
  * @brief A rtio configuration
  */
 struct rtio_config {
-	/* output configuration if applicable */
+	/** output configuration if applicable */
 	struct rtio_output_config *output_config;
 
-	/* trigger configuration if applicable */
+	/** trigger configuration if applicable */
 	struct rtio_trigger_config *trigger_config;
 
-	/* driver specific configuration */
+	/** driver specific configuration */
 	void *driver_config;
 };
 
@@ -396,8 +377,8 @@ struct rtio_config {
  * @brief Function definition for configuring a RTIO device
  */
 typedef int (*rtio_configure_t)(struct device *dev,
-				  struct rtio_config *config,
-				  u32_t *version);
+				struct rtio_config *config,
+				u32_t *version);
 
 /**
  * @private
@@ -409,10 +390,10 @@ typedef int (*rtio_trigger_t)(struct device *dev);
  * @brief Real-Time IO API
  */
 struct rtio_api {
-	/* Configuration function pointer *must* be implemented */
+	/** Configuration function pointer *must* be implemented */
 	rtio_configure_t configure;
 
-	/* Trigger function pointer *must* be implemented and IRQ safe */
+	/** Trigger function pointer *must* be implemented and IRQ safe */
 	rtio_trigger_t trigger;
 };
 
@@ -451,6 +432,14 @@ static inline int z_impl_rtio_configure(struct device *dev,
  * @brief Trigger a device read or write
  *
  * Triggers a read or write to be done by the device.
+ *
+ * If the configuration specifies a GPIO or timer trigger
+ * then the driver should setup an appropriate interrupt
+ * call that in turns calls rtio_trigger on the device.
+ *
+ * The cause of the GPIO trigger may further be defined by the
+ * driver config. For example a data ready or fifo full level
+ * or edge trigger would be very common scenarios.
  *
  * @param dev RTIO device to trigger
  */
