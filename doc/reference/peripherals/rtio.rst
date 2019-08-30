@@ -10,17 +10,13 @@ a Zephyr application and external I2C or SPI devices (such as sensors).
 Overview
 ********
 
-RTIO provides two significant C structures and APIs for moving bytes around
-efficiently, pipes and blocks.
-
-Pipes, defined by :c:type:`struct rtio_pipe`, are used to move blocks in a
-pollable manner from a source to a sink of data. A pipe is effectively a
-single-input single-output queue of blocks.
+RTIO provides an API for allocating and describing continguous blocks of
+memory as well as an API for sourcing these blocks from a physical device.
 
 Blocks, defined by :c:type:`struct rtio_block`, provide the unit of data
-being transferred through a pipe. These blocks contain a byte layout
-identifier provided by the source of the block, timestamps for when the block
-began and finished being created, as well as length and size in bytes.
+being transferred. These blocks contain a byte layout identifier provided by
+the source of the block, timestamps for when the block
+began and finished being created, as well as the length and size in bytes.
 
 Blocks are used to allow for simple DMA transfers as well as controlling the
 latency between a source and sink.
@@ -31,7 +27,7 @@ encoded in the sensors native format which is often times the most compact
 representation.
 
 Intermediary processing steps representing both sinks and sources of data are
-also possible. One common task is taking the raw byte layout coming from a
+also possible. One possible task is taking the raw byte layout coming from a
 device such as a 9-DoF intertial motion sensors and converting it to SI units
 with common numerical formats for that sensor kind. Several processing steps
 might be connected together. Taking the above example of getting a common
