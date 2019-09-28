@@ -394,10 +394,12 @@ static inline int
 rtio_output_policy_check(struct rtio_output_config *cfg,
 			 struct rtio_block *block)
 {
+	/*
 	if (k_cycle_get_32() - block->begin_tstamp > cfg->timeout) {
 		return true;
 	}
-	if (block->len > cfg->byte_size) {
+	*/
+	if (rtio_block_used(block) >= cfg->byte_size) {
 		return 1;
 	}
 	return 0;
@@ -473,17 +475,6 @@ static inline int rtio_configure(struct device *dev,
  * Begins the work of reading from the device into the
  * configured output.
  *
-<<<<<<< HEAD
-=======
- * If the configuration specifies a GPIO or timer trigger
- * then the driver should setup an appropriate interrupt
- * call that in turns calls rtio_read on the device.
- *
- * The cause of the GPIO trigger may further be defined by the
- * driver config. For example a data ready or fifo full level
- * or edge trigger would be very common scenarios.
- *
->>>>>>> 5eca5621cc... rtio: Better return value doc comments
  * This is safe to call in an ISR and will not block the calling
  * context if timeout is K_NO_WAIT. The timeout will be used
  * to wait for any device semaphores or needed memory allocation.
@@ -658,7 +649,7 @@ static inline int rtio_output_block(struct rtio_driver_data *data)
 {
 	struct rtio_output_config *out_cfg = &data->config.output_config;
 
-	if (rtio_output_policy_check(out_cfg, data->block)) {
+	if (rtio_output_policy_check(out_cfg, data->block) == 1) {
 		k_fifo_put(out_cfg->fifo, data->block);
 		data->block = NULL;
 		return 1;

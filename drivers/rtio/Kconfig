@@ -29,4 +29,11 @@ config RTIO_DRIVER
 	help
 		RTIO common driver functionality
 
+config RTIO_RAMP
+	bool "RTIO ramp driver"
+	default false
+	select RTIO_DRIVER
+	help
+		RTIO ramp driver
+
 endif # RTIO

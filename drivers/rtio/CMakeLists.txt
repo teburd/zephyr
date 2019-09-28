@@ -2,4 +2,5 @@
 
 zephyr_library()
 
-zephyr_library_sources_ifdef(CONFIG_RTIO_DRIVER		rtio_driver.c)
+zephyr_library_sources_ifdef(CONFIG_RTIO_DRIVER rtio_driver.c)
+zephyr_library_sources_ifdef(CONFIG_RTIO_RAMP rtio_ramp.c)

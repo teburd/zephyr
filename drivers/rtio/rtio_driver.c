@@ -14,10 +14,11 @@
 #include <kernel.h>
 #include <drivers/rtio.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
+#define LOG_DOMAIN "rtio_driver"
+#define LOG_LEVEL CONFIG_RTIO_LOG_LEVEL
+#include <logging/log.h>
+LOG_MODULE_REGISTER(rtio_driver);
 
 void rtio_output_config_init(struct rtio_output_config *cfg)
 {
@@ -125,8 +126,3 @@ void rtio_output_timeout(struct k_timer *timer)
 		k_sem_give(&data->sem);
 	}
 }
-
-
-#ifdef __cplusplus
-}
-#endif
