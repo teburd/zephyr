@@ -540,19 +540,6 @@ struct rtio_driver_data {
 	 * @brief Timer if needed by the output policy
 	 */
 	struct k_timer output_timer;
-
-	/**
-	 * @brief Counter of read triggers that failed
-	 *
-	 * This can be useful in providing a metric of potentially missed data.
-	 */
-	atomic_t read_trigger_error_count;
-
-
-	/**
-	 * @brief Total count of read triggers
-	 */
-	atomic_t read_trigger_count;
 };
 
 

@@ -23,4 +23,10 @@ config RTIO_INIT_PRIORITY
 	help
 	  RTIO initialization priority.
 
+config RTIO_DRIVER
+	bool "RTIO common driver functionality"
+	default false
+	help
+		RTIO common driver functionality
+
 endif # RTIO
