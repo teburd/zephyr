@@ -402,6 +402,7 @@ tbs	TBS Technologies
 tbs-biometrics	Touchless Biometric Systems AG
 tcg	Trusted Computing Group
 tcl	Toby Churchill Ltd.
+tdk	TDK Corporation
 technexion	TechNexion
 technologic	Technologic Systems
 tempo	Tempo Semiconductor

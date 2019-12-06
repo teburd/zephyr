@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2019 LeanUp Design
+# Copyright (c) 2019 Tom Burdick <tom.burdick@electromatic.us>
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+title: TDK MEMS Sensors ICM20649 SPI
+version: 0.1
+
+description: >
+    This binding gives a base representation of ICM20649 6-axis accelerometer
+    and gyrometer accessed through SPI bus
+
+inherits:
+    !include spi-device.yaml
+
+properties:
+    compatible:
+        constraint: "tdk,icm20649"
+
+    irq-gpios:
+      type: compound
+      category: required
+      generation: define, use-prop-name
+...
