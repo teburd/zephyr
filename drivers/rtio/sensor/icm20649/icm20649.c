@@ -596,16 +596,13 @@ static int icm20649_configure(struct device *dev, struct rtio_config *cfg)
 	int res = 0;
 
 	/** TODO use a common rtio_driver_data struct and configuration call */
-	/* res = rtio_begin_configure(dev, data->rtio_drv_data);
-	 * if(res != 0) {
-	 * return -EINVA;
-	 * }
-	 */
+	res = rtio_context_begin_configure(rtio_ctx);
+	if(res != 0) {
+		return -EINVA;
+	}
 	struct icm20649_config *cfg = cfg->driver_config;
 	res = icm20649_configure_device(dev, cfg);
-	/**
-	 * rtio_end_configure(dev, data->rtio_drv_data);
-	 */
+	rtio_context_end_configure(rtio_ctx, rtio_cfg);
 	return res;
 }
 

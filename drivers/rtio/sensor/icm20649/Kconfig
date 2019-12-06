@@ -3,12 +3,12 @@
 
 #
 # Copyright (c) 2018 LeanUp
-# Copyright (c) 2019 Thomas Burdick <thomas.burdick@gmail.com>
+# Copyright (c) 2019 Tom Burdick <tom.burdick@electromatic.us>
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
-menuconfig ICM20649
+menuconfig RTIO_SENSOR_ICM20649
 	bool "ICM20649 SPI accelerometer and gyroscope Chip"
 	depends on SENSOR && SPI
 	default n
@@ -16,10 +16,12 @@ menuconfig ICM20649
 	  Enable driver for ICM20649 accelerometer and gyroscope
 	  sensor.
 
+if RTIO_SENSOR_ICM20649
+
 config ICM20649_VERIFY_WRITE
 	bool "ICM20649 Verify register writes by reading back the register value"
 	default n
-	depends on ICM20649
 	help
 	  This option is meant to be used to debug register setup.
 
+endif # RTIO_SENSOR

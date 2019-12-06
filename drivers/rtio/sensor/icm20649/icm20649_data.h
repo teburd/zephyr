@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019 LeanUp Design
+ * Copyright (c) 2019 Tom Burdick <tom.burdick@electromatic.us>
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,8 +14,9 @@
 #ifndef ZEPHYR_RTIO_SENSOR_ICM20649_DATA_H
 #define ZEPHYR_RTIO_SENSOR_ICM20649_DATA_H
 
-#include <drivers/rtio_sensor.h>
-#include <drivers/rtio_sensor/icm20649.h>
+#include <drivers/rtio.h>
+#include <drivers/rtio/sensor/icm20649.h>
+#include "../../rtio_context.h"
 #include <zephyr/types.h>
 #include <gpio.h>
 
@@ -31,6 +33,8 @@ struct icm20649_drv_config {
  * @brief Driver data struct
  */
 struct icm20649_drv_data {
+    struct rtio_context context;
+    struct rtio_icm20649_config config;
 	struct device *spi;
 	struct device *gpio;
 	struct rtio_config config;
