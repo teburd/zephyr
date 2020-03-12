@@ -35,6 +35,6 @@ config RTIO_RAMP
 	help
 	  RTIO ramp driver
 
-source "sensor/Kconfig"
+source "drivers/rtio/sensor/Kconfig"
 
 endif # RTIO

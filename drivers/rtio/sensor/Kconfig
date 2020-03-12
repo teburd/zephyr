@@ -13,8 +13,8 @@ menuconfig RTIO_SENSOR
 
 if RTIO_SENSOR
 
-module = RTIO
-module-str = rtio
+module = RTIO_SENSOR
+module-str = rtio_sensor
 source "subsys/logging/Kconfig.template.log_config"
 
 config RTIO_SENSOR_INIT_PRIORITY
