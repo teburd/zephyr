@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Tom Burdick <tom.burdick@electromatic.us>
+ * Copyright (c) 2020 Tom Burdick <tom.burdick@electromatic.us>
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,12 +7,12 @@
 #include <zephyr.h>
 #include <device.h>
 #include <drivers/rtio.h>
-#include <drivers/rtio/ramp.h>
+#include <drivers/rtio/sensor/icm20649.h>
 #include <stdio.h>
 #include <sys/printk.h>
 #include <sys/__assert.h>
 
-#define LOG_DOMAIN "ramp_reader"
+#define LOG_DOMAIN "icm20649_reader"
 #define LOG_LEVEL CONFIG_RTIO_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(ramp_reader);
@@ -22,7 +22,7 @@ LOG_MODULE_REGISTER(ramp_reader);
 #define MAX_BLOCKS 4
 
 RTIO_MEMPOOL_ALLOCATOR_DEFINE(blockalloc, 64, MAX_BLOCK_SIZE, MAX_BLOCKS, 4);
-K_FIFO_DEFINE(ramp_out_fifo);
+K_FIFO_DEFINE(icm20649_out_fifo);
 
 volatile static u32_t triggers, ebusy, enomem, eagain;
 
@@ -59,14 +59,37 @@ struct k_thread trigger_read_thread;
 
 int main(void)
 {
-	printk("RTIO Throughput Sample\n");
+	printk("RTIO ICM20649 Sample\n");
 
-	struct device *ramp_dev = device_get_binding("RTIO_RAMP");
+	struct device *icm20649_dev  = device_get_binding("RTIO_SENSOR_ICM20649");
+	__ASSERT_NO_MSG(icm20649_dev != NULL);
 
-	/* effectively the same as a stereo CD quality audio stream */
-	struct rtio_ramp_config ramp_dev_cfg = {
-		.sample_rate = 100000000,
-		.max_value = 2 << 16,
+	/** Maximum range and rate with fifo configuration for icm20649 */
+	struct icm20649_config icm20649_cfg = {
+		.reset = true,
+		.accel_config = {
+			.enabled = true,
+			.self_test = false,
+			.low_power_mode = false,
+			.filter = ICM20649_ACCEL_LPF_473_0_HZ,
+			.scale = ICM20649_30_G,
+			.sample_rate_div = 0,
+
+		},
+		.gyro_config = {
+			.enabled = true,
+			.self_test = false,
+			.low_power_mode = false,
+			.filter = ICM20649_GYRO_LPF_376_5_HZ,
+			.scale = ICM20649_4000_DPS,
+			.sample_rate_div = 0,
+
+		},
+		.temp_config = {
+			.enabled = true,
+			.filter = ICM20649_TEMP_LPF_217_9_HZ,
+		},
+		.fifo_enabled = true,
 	};
 
 	struct rtio_config config =  {
@@ -76,7 +99,7 @@ int main(void)
 			.timeout = K_FOREVER,
 			.byte_size = MAX_BLOCK_SIZE
 		},
-		.driver_config = &ramp_dev_cfg
+		.driver_config = &icm20649_cfg
 	};
 
 	triggers = 0;
@@ -84,7 +107,7 @@ int main(void)
 	enomem = 0;
 	eagain = 0;
 
-	int res = rtio_configure(ramp_dev, &config);
+	int res = rtio_configure(icm20649_dev, &config);
 
 	__ASSERT_NO_MSG(res == 0);
 
@@ -98,17 +121,17 @@ int main(void)
 	u32_t blocks = 0;
 	u32_t samples = 0;
 	u32_t bytes = 0;
-	u64_t tstamp = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
+	u32_t tstamp = k_cycle_get_32();
 	u64_t last_print = tstamp;
 
 	while (true) {
-		struct rtio_block *block = k_fifo_get(&ramp_out_fifo, K_FOREVER);
+		struct rtio_block *block = k_fifo_get(&icm20649_out_fifo, K_FOREVER);
 		blocks += 1;
 		bytes += rtio_block_used(block);
 		samples += rtio_block_used(block)/sizeof(u32_t);
 
-		u64_t now = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
-		u64_t last_print_diff = now - last_print;
+		u32_t now = k_cycle_get_32();
+		u64_t last_print_diff = k_cyc_to_ns_floor64(now - last_print);
 		if (last_print_diff > 1000000000) {
 			float tdiff = last_print_diff/1000000000.0;
 			float block_rate = blocks/tdiff;
