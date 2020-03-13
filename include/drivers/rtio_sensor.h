@@ -266,8 +266,24 @@ typedef int (*rtio_sensor_reader_next_t)(struct rtio_sensor_reader *reader);
 
 /**
  * @brief RTIO Sensor Reader
+ *
+ * The intention of this struct is to be filled out by the device driver
+ * for each block read. The reader then allows iterating over sample sets
+ * providing access to them with the sensor channels.
+ *
+ * The driver may implement sample_sets and next however it best determines
+ * to do so. In some instances that might include multiple implementations
+ * for different configurations, or one implementation with branching.
+ *
+ * Branch statements in the next and sample_sets is frowned upon but not
+ * denied. The preferred method is to select appropriate functions when
+ * initializing the reader per block that do not need branch statements
+ * to improve performance.
  */
 struct rtio_sensor_reader {
+    /* pointer to device, useful for dynamically implemented sample_sets and next */
+    struct device *device;
+
 	rtio_sensor_reader_sample_sets_t sample_sets;
 	rtio_sensor_reader_next_t next;
 

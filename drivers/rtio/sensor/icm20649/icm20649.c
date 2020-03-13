@@ -474,8 +474,6 @@ static inline int icm20649_fifo_reset(struct device *dev) {
 static int icm20649_configure_device(struct device *dev,
 			      struct rtio_sensor_icm20649_config *cfg) {
 
-	u8_t chip_id;
-
 	if(icm20649_set_user_bank(dev, 0) < 0) {
 		LOG_ERR("Failed to set user bank to 0");
 		return -EIO;
@@ -626,23 +624,58 @@ static int icm20649_configure(struct device *dev, struct rtio_config *cfg)
 	/** TODO use a common rtio_driver_data struct and configuration call */
 	res = rtio_context_configure_begin(&data->rtio_ctx);
 	if(res != 0) {
-		return -EINVA;
+		return -EINVAL;
 	}
-	struct rtio_sensor_icm20649_config *cfg = cfg->driver_config;
-	res = icm20649_configure_device(dev, cfg);
+	struct rtio_sensor_icm20649_config *dev_cfg = cfg->driver_config;
+	res = icm20649_configure_device(dev, dev_cfg);
 	rtio_context_configure_end(rtio_ctx, cfg);
 	return res;
+}
+
+/*
+ * @private
+ */
+static ssize_t icm20649_sensor_reader_sample_sets(
+		const struct rtio_sensor_reader *reader)
+{
+	return 0;
+}
+
+/*
+ * @private
+ */
+static ssize_t icm20649_sensor_reader_next(
+		const struct rtio_sensor_reader *reader)
+{
+	return 0;
+}
+
+/**
+ * @private
+ */
+int icm20649_sensor_reader(struct device *dev,
+		       struct rtio_block *block,
+		       struct rtio_sensor_reader *reader,
+		       struct rtio_sensor_channel *channels,
+		       size_t num_channels)
+{
+	reader->device = dev;
+	reader->sample_sets = icm20649_sensor_reader_sample_sets;
+	reader->next = icm20649_sensor_reader_next;
+	reader->channels = channels;
+	reader->num_channels = num_channels;
+	reader->block = block;
+	reader->position = 0;
+	return 0;
 }
 
 static const struct rtio_sensor_api icm20649_api_funcs = {
 	.rtio_api = {
 		.configure = icm20649_configure,
 		.trigger = icm20649_trigger
-},
+	},
 	.sensor_reader = icm20649_sensor_reader,
 };
-
-
 
 static struct icm20649_drv_data icm20649_drv_data;
 
