@@ -33,13 +33,10 @@ struct icm20649_drv_config {
  * @brief Driver data struct
  */
 struct icm20649_drv_data {
-    struct rtio_context context;
-    struct rtio_icm20649_config config;
+    struct rtio_context rtio_ctx;
+	struct rtio_config rtio_cfg;
 	struct device *spi;
 	struct device *gpio;
-	struct rtio_config config;
-	struct gpio_callback gpio_cb;
-	struct counter_callback counter_cb;
 };
 
 #endif /* ZEPHYR_RTIO_SENSOR_ICM20649_DATA_H */

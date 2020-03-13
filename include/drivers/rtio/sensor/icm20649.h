@@ -26,7 +26,7 @@ extern "C" {
 /**
  * @brief Gyro scale options
  */
-enum icm20649_gyro_scale {
+enum rtio_sensor_icm20649_gyro_scale {
 	ICM20649_500_DPS,
 	ICM20649_1000_DPS,
 	ICM20649_2000_DPS,
@@ -36,7 +36,7 @@ enum icm20649_gyro_scale {
 /**
  * @brief Accelerometer scale options
  */
-enum icm20649_accel_scale {
+enum rtio_sensor_icm20649_accel_scale {
 	ICM20649_2_G,
 	ICM20649_4_G,
 	ICM20649_8_G,
@@ -52,7 +52,7 @@ enum icm20649_accel_scale {
  * Sets the filter enable (FCHOICE in data sheet) flag and
  * DLPF value.
  */
-enum icm20649_accel_filter {
+enum rtio_sensor_icm20649_accel_filter {
 	ICM20649_ACCEL_LPF_265_0_HZ,
 	ICM20649_ACCEL_LPF_111_4_HZ,
 	ICM20649_ACCEL_LPF_50_4_HZ,
@@ -71,7 +71,7 @@ enum icm20649_accel_filter {
  * Sets the filter enable (FCHOICE in data sheet) flag and
  * DLPF value.
  */
-enum icm20649_gyro_filter {
+enum rtio_sensor_icm20649_gyro_filter {
 	ICM20649_GYRO_LPF_229_8_HZ,
 	ICM20649_GYRO_LPF_187_6_HZ,
 	ICM20649_GYRO_LPF_154_3_HZ,
@@ -90,7 +90,7 @@ enum icm20649_gyro_filter {
  *
  * Sets the TEMP_DLPF value.
  */
-enum icm20649_temp_filter {
+enum rtio_sensor_icm20649_temp_filter {
 	ICM20649_TEMP_LPF_7932_0_HZ,
 	ICM20649_TEMP_LPF_217_9_HZ,
 	ICM20649_TEMP_LPF_123_5_HZ,
@@ -104,7 +104,7 @@ enum icm20649_temp_filter {
 /**
  * @brief Accelerometer configuration
  */
-struct icm20649_accel_config {
+struct rtio_sensor_icm20649_accel_config {
 	/**
 	 * @brief Enabled state turns on power to this part of the sensor
 	 */
@@ -132,12 +132,12 @@ struct icm20649_accel_config {
 	/**
 	 * @brief Digital low pass filtering of the sensor
 	 */
-	enum icm20649_accel_filter filter;
+	enum rtio_sensor_icm20649_accel_filter filter;
 
 	/**
 	 * @brief Full scale of the sensor samples
 	 */
-	enum icm20649_accel_scale scale;
+	enum rtio_sensor_icm20649_accel_scale scale;
 
 	/**
 	 * @brief Sample rate divider
@@ -159,7 +159,7 @@ struct icm20649_accel_config {
 /**
  * @brief Gyro configuration
  */
-struct icm20649_gyro_config {
+struct rtio_sensor_icm20649_gyro_config {
 	/**
 	 * @brief Enabled state turns on power to this sensor
 	 *
@@ -190,12 +190,12 @@ struct icm20649_gyro_config {
 	/**
 	 * @brief Digital low pass filtering of the sensor
 	 */
-	enum icm20649_gyro_filter filter;
+	enum rtio_sensor_icm20649_gyro_filter filter;
 
 	/**
 	 * @brief Full scale of the sensor samples
 	 */
-	enum icm20649_gyro_scale scale;
+	enum rtio_sensor_icm20649_gyro_scale scale;
 
 	/**
 	 * @brief Sample rate divider
@@ -216,7 +216,7 @@ struct icm20649_gyro_config {
 /**
  * @brief Temp configuration
  */
-struct icm20649_temp_config {
+struct rtio_sensor_icm20649_temp_config {
 	/**
 	 * @brief Enabled state turns on power to this sensor
 	 */
@@ -225,7 +225,7 @@ struct icm20649_temp_config {
 	/**
 	 * @brief Digital low pass filtering of the sensor
 	 */
-	enum icm20649_temp_filter filter;
+	enum rtio_sensor_icm20649_temp_filter filter;
 };
 
 /**
@@ -233,7 +233,7 @@ struct icm20649_temp_config {
  *
  * To be used in rtio_config struct as the driver_config member
  */
-struct icm20649_config {
+struct rtio_sensor_icm20649_config {
 	/**
 	 * @brief Reset device before doing configuration.
 	 *
@@ -257,17 +257,17 @@ struct icm20649_config {
 	/**
 	 * @brief Accelerometer configuration
 	 */
-	struct icm20649_accel_config accel_config;
+	struct rtio_sensor_icm20649_accel_config accel_config;
 
 	/**
 	 * @brief Gyro configuration
 	 */
-	struct icm20649_gyro_config gyro_config;
+	struct rtio_sensor_icm20649_gyro_config gyro_config;
 
 	/**
 	 * @brief Temp configuration
 	 */
-	struct icm20649_temp_config temp_config;
+	struct rtio_sensor_icm20649_temp_config temp_config;
 
 	/**
 	 * @brief Enable the hardware fifo
@@ -285,7 +285,7 @@ struct icm20649_config {
 	 * Is not used if fifo_enabled is true.
 	 */
 	bool data_ready_enabled;
-}
+};
 
 
 #ifdef __cplusplus

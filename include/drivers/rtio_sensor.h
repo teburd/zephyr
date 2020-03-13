@@ -13,6 +13,7 @@
  * @{
  */
 
+#include <sys/types.h>
 #include <kernel.h>
 #include <device.h>
 #include <drivers/rtio.h>
@@ -74,7 +75,7 @@ struct rtio_sensor_channel;
  * @retval 0 Value unavailable
  * @retval 1 Value read
  */
-typedef int (*rtio_sensor_channel_read)(
+typedef int (*rtio_sensor_channel_read_t)(
 	const struct rtio_sensor_reader *reader,
 	struct rtio_sensor_channel *channel);
 
@@ -159,7 +160,7 @@ enum rtio_sensor_numerical_format {
 
 /**
  * @define Common Z Axis channel index
- *
+ */
 #define RTIO_SENSOR_Z_AXIS_INDEX 2
 
 /**
@@ -236,7 +237,7 @@ struct rtio_sensor_channel {
 	 * where, what, which, and into what format to read.
 	 */
 	rtio_sensor_channel_read_t _read_fn;
-}
+};
 
 /**
  * @private
@@ -267,10 +268,10 @@ typedef int (*rtio_sensor_reader_next_t)(struct rtio_sensor_reader *reader);
  * @brief RTIO Sensor Reader
  */
 struct rtio_sensor_reader {
-	rtio_sensor_sample_sets_t sample_sets;
+	rtio_sensor_reader_sample_sets_t sample_sets;
 	rtio_sensor_reader_next_t next;
 
-	rtio_sensor_channel *channels;
+	struct rtio_sensor_channel *channels;
 	size_t num_channels;
 
 	struct rtio_block *block;

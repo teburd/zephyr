@@ -6,33 +6,27 @@
 
 #include <zephyr.h>
 #include <device.h>
-#include <drivers/rtio.h>
-#include <drivers/rtio/sensor/icm20649.h>
-#include <stdio.h>
 #include <sys/printk.h>
 #include <sys/__assert.h>
-
-#define LOG_DOMAIN "icm20649_reader"
-#define LOG_LEVEL CONFIG_RTIO_LOG_LEVEL
-#include <logging/log.h>
-LOG_MODULE_REGISTER(ramp_reader);
-
+#include <drivers/rtio.h>
+#include <drivers/rtio/sensor/icm20649.h>
 
 #define MAX_BLOCK_SIZE 4096
 #define MAX_BLOCKS 4
 
 RTIO_MEMPOOL_ALLOCATOR_DEFINE(blockalloc, 64, MAX_BLOCK_SIZE, MAX_BLOCKS, 4);
+
 K_FIFO_DEFINE(icm20649_out_fifo);
 
 volatile static u32_t triggers, ebusy, enomem, eagain;
 
 void trigger_read(void *s1, void *s2, void *s3)
 {
-	struct device *ramp_dev = (struct device *)s1;
+	struct device *icm20649_dev = (struct device *)s1;
 	int res = 0;
 
 	while (true) {
-		res = rtio_trigger_read(ramp_dev, K_NO_WAIT);
+		res = rtio_trigger_read(icm20649_dev, K_NO_WAIT);
 		triggers += 1;
 		switch (res) {
 		case -EBUSY:
@@ -65,7 +59,7 @@ int main(void)
 	__ASSERT_NO_MSG(icm20649_dev != NULL);
 
 	/** Maximum range and rate with fifo configuration for icm20649 */
-	struct icm20649_config icm20649_cfg = {
+	struct rtio_sensor_icm20649_config icm20649_cfg = {
 		.reset = true,
 		.accel_config = {
 			.enabled = true,
@@ -95,7 +89,7 @@ int main(void)
 	struct rtio_config config =  {
 		.output_config = {
 			.allocator = blockalloc,
-			.fifo = &ramp_out_fifo,
+			.fifo = &icm20649_out_fifo,
 			.timeout = K_FOREVER,
 			.byte_size = MAX_BLOCK_SIZE
 		},
@@ -115,7 +109,7 @@ int main(void)
 					      trigger_read_stack,
 					      K_THREAD_STACK_SIZEOF(trigger_read_stack),
 					      trigger_read,
-					      ramp_dev, NULL, NULL,
+					      icm20649_dev, NULL, NULL,
 					      0, 0, K_NO_WAIT);
 
 	u32_t blocks = 0;
@@ -133,12 +127,9 @@ int main(void)
 		u32_t now = k_cycle_get_32();
 		u64_t last_print_diff = k_cyc_to_ns_floor64(now - last_print);
 		if (last_print_diff > 1000000000) {
-			float tdiff = last_print_diff/1000000000.0;
-			float block_rate = blocks/tdiff;
-			float byte_rate = bytes/tdiff;
-			float sample_rate = samples/tdiff;
-			printf("time delta %f, %d blocks, %f blocks/sec, %d bytes, %f bytes/sec, %d samples, %f samples/sec\n", tdiff, blocks, block_rate, bytes, byte_rate, samples, sample_rate);
-			printf("read triggers %d, ebusy %d, enomem %d, eagain %d\n", triggers, ebusy, enomem, eagain);
+			u32_t tdiff = last_print_diff/1000000;
+			printk("time delta %d ms, %d blocks, %d bytes, %d samples, \n", tdiff, blocks, bytes, samples);
+			printk("read triggers %d, ebusy %d, enomem %d, eagain %d\n", triggers, ebusy, enomem, eagain);
 			last_print = now;
 			blocks = 0;
 			samples = 0;
