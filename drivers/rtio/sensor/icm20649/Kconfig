@@ -10,8 +10,7 @@
 
 menuconfig RTIO_SENSOR_ICM20649
 	bool "ICM20649 SPI accelerometer and gyroscope Chip"
-	depends on RTIO_SENSOR && SPI
-    select RTIO_CONTEXT
+	depends on SENSOR && SPI
 	default n
 	help
 	  Enable driver for ICM20649 accelerometer and gyroscope
@@ -19,7 +18,7 @@ menuconfig RTIO_SENSOR_ICM20649
 
 if RTIO_SENSOR_ICM20649
 
-config RTIO_SENSOR_ICM20649_VERIFY_WRITE
+config ICM20649_VERIFY_WRITE
 	bool "ICM20649 Verify register writes by reading back the register value"
 	default n
 	help

@@ -1,4 +1,4 @@
-#include "icm20649_defs.h"
+#include "icm20649_regs.h"
 #include "icm20649_data.h"
 
 #include <spi.h>
@@ -28,11 +28,11 @@ static struct spi_config icm20649_spi_conf = {
 
 #define ICM20649_MAX_SERIAL_READ 16
 
-static int icm20649_spi_read(struct icm20649_drv_data *data, u8_t reg,
+static int icm20649_spi_read(struct icm20649_data *data, u8_t reg,
 			     u8_t *val, u8_t len)
 {
 	struct spi_config *spi_cfg = &icm20649_spi_conf;
-	u8_t buffer_tx[2] = { reg | ICM20649_SPI_READ, 0};
+	u8_t buffer_tx[2] = { reg_addr | ICM20649_SPI_READ, 0};
 
 	const struct spi_buf tx_buf = {
 			.buf = buffer_tx,
@@ -48,7 +48,7 @@ static int icm20649_spi_read(struct icm20649_drv_data *data, u8_t reg,
 			.len = 1,
 		},
 		{
-			.buf = val,
+			.buf = value,
 			.len = len,
 		}
 	};
@@ -68,18 +68,18 @@ static int icm20649_spi_read(struct icm20649_drv_data *data, u8_t reg,
 	return 0;
 }
 
-static int icm20649_spi_write(struct icm20649_drv_data *data, u8_t reg,
-		u8_t *val, u8_t len)
+static int icm20649_spi_write(struct icm20649_data *data, u8_t reg_addr,
+		u8_t *value, u8_t len)
 {
 	struct spi_config *spi_cfg = &icm20649_spi_conf;
-	u8_t buffer_tx[1] = { reg & ~ICM20649_SPI_READ };
+	u8_t buffer_tx[1] = { reg_addr & ~ICM20649_SPI_READ };
 	const struct spi_buf tx_buf[2] = {
 		{
 			.buf = buffer_tx,
 			.len = 1,
 		},
 		{
-			.buf = val,
+			.buf = value,
 			.len = len,
 		}
 	};
@@ -100,12 +100,12 @@ static int icm20649_spi_write(struct icm20649_drv_data *data, u8_t reg,
 }
 
 static inline int icm20649_write_reg8(struct device *dev, u8_t addr, u8_t val) {
-	struct icm20649_drv_data *data = dev->driver_data;
+	struct icm20649_data *data = dev->driver_data;
 	return icm20649_spi_write(data, addr, &val, 1);
 }
 
 static inline int icm20649_read_reg8(struct device *dev, u8_t addr, u8_t *val) {
-	struct icm20649_drv_data *data = dev->driver_data;
+	struct icm20649_data *data = dev->driver_data;
 	return icm20649_spi_read(data, addr, val, 1);
 }
 
@@ -129,14 +129,14 @@ static inline int icm20649_read_u16(struct device *dev, u8_t addr_h, u8_t addr_l
 
 static inline int icm20649_update_reg8(struct device *dev, u8_t addr, u8_t mask,
 		u8_t val) {
-	struct icm20649_drv_data *data = dev->driver_data;
+	struct icm20649_data *data = dev->driver_data;
 
 	u8_t tmp_val;
 
 	int ret = icm20649_spi_read(data, addr, &tmp_val, 1);
 	tmp_val = (tmp_val & ~mask) | (val & mask);
 
-	ret |= icm20649_spi_write(data, addr, &tmp_val, 1);
+	ret |= icm20649_raw_write(data, addr, &tmp_val, 1);
 
 #ifdef CONFIG_ICM20649_VERIFY_WRITE
 	u8_t new_val;
@@ -177,22 +177,8 @@ static inline int icm20649_set_sleep(struct device *dev, bool sleep) {
 				    sleep << ICM20649_SHIFT_PWR_MGMT_1_SLEEP);
 }
 
-static inline int icm20649_set_pwr_mgmt_1(struct device *dev,
-		struct rtio_sensor_icm20649_config *cfg) {
-	/* TODO set low power and temperature disable bits here */
-	return 0;
-}
-
-
-static inline int icm20649_set_pwr_mgmt_2(struct device *dev,
-		struct rtio_sensor_icm20649_config *cfg) {
-	/* TODO set accel and gyro disable bits here */
-	return 0;
-}
-
-
 static inline int icm20649_set_user_ctrl(struct device *dev,
-					 struct rtio_sensor_icm20649_config *cfg) {
+					 struct icm20649_config *cfg) {
 	return icm20649_update_reg8(dev, ICM20649_REG_USER_CTRL,
 			ICM20649_MASK_USER_CTRL_DMP_EN |
 			ICM20649_MASK_USER_CTRL_FIFO_EN |
@@ -205,45 +191,43 @@ static inline int icm20649_set_user_ctrl(struct device *dev,
 
 
 static inline int icm20649_set_accel_smplrt_div_1(struct device *dev,
-						  struct rtio_sensor_icm20649_config *cfg)
+						  struct icm20649_config *cfg)
 {
 
 	return icm20649_write_reg8(dev, ICM20649_REG_ACCEL_SMPLRT_DIV_1,
-				   (u8_t)(cfg->accel_config.sample_rate_div >> 8 & ICM20649_MASK_ACCEL_SMPLRT_DIV_1));
+				   (u8_t)(cfg->accel->sample_rate_div >> 8 & ICM20649_MASK_ACCEL_SMPLRT_DIV_1));
 }
 
 static inline int icm20649_set_accel_smplrt_div_2(struct device *dev,
-						  struct rtio_sensor_icm20649_config *cfg)
+						  struct icm20649_config *cfg)
 {
 	return icm20649_write_reg8(dev, ICM20649_REG_ACCEL_SMPLRT_DIV_2,
-				   (u8_t)(cfg->accel_config.sample_rate_div & 0x00FF));
+				   (u8_t)(cfg->accel->sample_rate_div & 0x00FF));
 }
 
 static inline int icm20649_set_accel_config(struct device *dev,
-		struct rtio_sensor_icm20649_config *cfg)
+		struct icm20649_config *cfg)
 {
-	u8_t mask = ICM20649_MASK_ACCEL_CONFIG_ACCEL_FCHOICE
-		| ICM20649_MASK_ACCEL_CONFIG_ACCEL_DLPFCFG
-		| ICM20649_MASK_ACCEL_CONFIG_ACCEL_FS_SEL;
+	u8_t mask = ICM20649_MASK_GYRO_CONFIG_1_GYRO_FCHOICE
+		| ICM20649_MASK_GYRO_CONFIG_1_GYRO_DLPFCFG
+		| ICM20649_MASK_GYRO_CONFIG_1_GYRO_FS_SEL;
 	u8_t fchoice = 0;
 	u8_t dlpfcfg = 0;
-	if(cfg->accel_config.filter != ICM20649_ACCEL_LPF_DISABLED) {
-		fchoice = 1 << ICM20649_SHIFT_ACCEL_CONFIG_ACCEL_FCHOICE;
-		dlpfcfg = cfg->accel_config.filter << ICM20649_SHIFT_ACCEL_CONFIG_ACCEL_DLPFCFG;
+	if(cfg->gyro->filter != ICM20649_GYRO_LPF_DISABLED) {
+		fchoice = 1 << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_FCHOICE;
+		dlpfcfg = cfg->gyro->filter << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_DLPFCFG;
 	}
-	u8_t fs = cfg->accel_config.scale << ICM20649_SHIFT_ACCEL_CONFIG_ACCEL_FS_SEL;
+	u8_t fs = cfg->gyro->scale << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_FS_SEL;
 	u8_t val = fchoice | dlpfcfg | fs;
-	return icm20649_update_reg8(dev, ICM20649_REG_ACCEL_CONFIG,
+	return icm20649_update_reg8(dev, ICM20649_REG_GYRO_CONFIG_1,
 			mask,
 			val);
 }
 
-static inline int icm20649_set_temp_config(struct device *dev,
-		struct rtio_sensor_icm20649_config *cfg)
-{
-	/* TODO set temp configuration here */
-	return 0;
+static inline int icm20649_set_accel_lpf(struct device *dev, u8_t lpf_mode) {
+
 }
+
 
 static inline int icm20649_set_gyro_sample_rate_div(struct device *dev,
 		u8_t rate_div) {
@@ -291,15 +275,15 @@ static int icm20649_reset(struct device *dev) {
 		return -EIO;
 	}
 
-	if(icm20649_set_clock(dev) < 0) {
-		LOG_ERR("failed to clock");
+	if(icm20649_set_auto_clock(dev) < 0) {
+		LOG_ERR("failed to auto clock");
 		return -EIO;
 	}
 
 }
 
 static inline int icm20649_set_int_pin_cfg(struct device *dev,
-					   struct rtio_sensor_icm20649_config *cfg)
+					   struct icm20649_config *cfg)
 {
 	return icm20649_update_reg8(dev, ICM20649_REG_INT_PIN_CFG,
 			ICM20649_MASK_INT_PIN_CFG_INT1_ACTL |
@@ -311,14 +295,23 @@ static inline int icm20649_set_int_pin_cfg(struct device *dev,
 			);
 }
 
-static inline int icm20649_set_int_enable(struct device *dev, 
-			struct rtio_sensor_icm20649_config *cfg) {
-	//TODO support wake-on-motion interrupt
-	return 0;
+static inline int icm20649_set_int_enable_3(struct device *dev,
+					    struct icm20649_config *cfg)
+{
+	return icm20649_update_reg8(dev, ICM20649_REG_INT_ENABLE_3,
+			ICM20649_MASK_INT_ENABLE_3_FIFO_WM_EN,
+			cfg->fifo_enabled << ICM20649_SHIFT_INT_ENABLE_3_FIFO_WM_EN);
 }
 
-static inline int icm20649_set_int_enable_1(struct device *dev, 
-			struct rtio_sensor_icm20649_config *cfg) {
+static inline int icm20649_set_int_enable_2(struct device *dev,
+					    struct icm20649_config *cfg)
+{
+	return icm20649_update_reg8(dev, ICM20649_REG_INT_ENABLE_2,
+			ICM20649_MASK_INT_ENABLE_2_FIFO_OVERFLOW_EN,
+			cfg->fifo_enabled << ICM20649_SHIFT_INT_ENABLE_2_FIFO_OVERFLOW_EN);
+}
+
+static inline int icm20649_set_int_enable_1(struct device *dev) {
 	u8_t val = 0;
 	if(!cfg->fifo_enabled) {
 		val = cfg->data_ready_enabled <<
@@ -328,24 +321,6 @@ static inline int icm20649_set_int_enable_1(struct device *dev,
 				    ICM20649_MASK_INT_ENABLE_1_RAW_DATA_0_RDY_EN,
 				    val);
 }
-
-static inline int icm20649_set_int_enable_2(struct device *dev,
-					    struct rtio_sensor_icm20649_config *cfg)
-{
-	return icm20649_update_reg8(dev, ICM20649_REG_INT_ENABLE_2,
-			ICM20649_MASK_INT_ENABLE_2_FIFO_OVERFLOW_EN,
-			cfg->fifo_enabled << ICM20649_SHIFT_INT_ENABLE_2_FIFO_OVERFLOW_EN);
-}
-
-static inline int icm20649_set_int_enable_3(struct device *dev,
-					    struct rtio_sensor_icm20649_config *cfg)
-{
-	return icm20649_update_reg8(dev, ICM20649_REG_INT_ENABLE_3,
-			ICM20649_MASK_INT_ENABLE_3_FIFO_WM_EN,
-			cfg->fifo_enabled << ICM20649_SHIFT_INT_ENABLE_3_FIFO_WM_EN);
-}
-
-
 
 static inline int icm20649_fifo_watermark_int_status(struct device *dev,
 						     u8_t *status)
@@ -368,11 +343,10 @@ static inline int icm20649_fifo_overflow_int_clear(struct device *dev)
 	return icm20649_write_reg8(dev, ICM20649_REG_INT_STATUS_2, 0);
 }
 
-static inline int icm20649_set_fifo_en_2(struct device *dev,
-		struct rtio_sensor_icm20649_config *cfg) {
-	u8_t accel_en = cfg->fifo_enabled && cfg->accel_config.enabled ? 1 : 0;
-	u8_t gyro_en = cfg->fifo_enabled && cfg->gyro_config.enabled ? 1 : 0;
-	u8_t temp_en = cfg->fifo_enabled && cfg->temp_config.enabled ? 1 : 0;
+static inline int icm20649_set_fifo_en_2(struct device *dev) {
+	u8_t accel_en = cfg->fifo_enabled && cfg->accel_config->enabled ? 1 : 0;
+	u8_t gyro_en = cfg->fifo_enabled && cfg->gyro_config->enabled ? 1 : 0;
+	u8_t temp_en = cfg->fifo_enabled && cfg->temp_config->enabled ? 1 : 0;
 	u8_t mask = ICM20649_MASK_FIFO_EN_2_ACCEL_FIFO_EN |
 		ICM20649_MASK_FIFO_EN_2_GYRO_Z_FIFO_EN |
 		ICM20649_MASK_FIFO_EN_2_GYRO_Y_FIFO_EN |
@@ -382,12 +356,12 @@ static inline int icm20649_set_fifo_en_2(struct device *dev,
 		gyro_en << ICM20649_SHIFT_FIFO_EN_2_GYRO_Z_FIFO_EN |
 		gyro_en << ICM20649_SHIFT_FIFO_EN_2_GYRO_Y_FIFO_EN |
 		gyro_en << ICM20649_SHIFT_FIFO_EN_2_GYRO_X_FIFO_EN |
-		temp_en << ICM20649_SHIFT_FIFO_EN_2_TEMP_FIFO_EN;
+		temp_en << ICM20649_SHIFT_FIFO_EN_2_TEMP_FIFO_EN
 	return icm20649_update_reg8(dev, ICM20649_REG_FIFO_EN_2, mask, val);
 }
 
 static inline int icm20649_set_fifo_en_1(struct device *dev,
-					 struct rtio_sensor_icm20649_config *cfg) {
+					 struct icm20649_config *cfg) {
 	return icm20649_update_reg8(dev, ICM20649_REG_FIFO_EN_1,
 				    ICM20649_MASK_FIFO_EN_SLV_3_FIFO_EN |
 				    ICM20649_MASK_FIFO_EN_SLV_2_FIFO_EN |
@@ -402,7 +376,7 @@ static inline int icm20649_set_fifo_en_1(struct device *dev,
 
 
 static inline int icm20649_set_fifo_mode(struct device *dev,
-					 struct rtio_sensor_icm20649_config *cfg)
+					 struct icm20649_config *cfg)
 {
 	return icm20649_update_reg8(dev, ICM20649_REG_FIFO_MODE,
 			ICM20649_MASK_FIFO_MODE,
@@ -411,32 +385,22 @@ static inline int icm20649_set_fifo_mode(struct device *dev,
 
 
 static inline int icm20649_set_gyro_config_1(struct device *dev,
-					     struct rtio_sensor_icm20649_config *cfg) {
+					     struct icm20649_config *cfg) {
 	u8_t mask = ICM20649_MASK_GYRO_CONFIG_1_GYRO_FCHOICE
 		| ICM20649_MASK_GYRO_CONFIG_1_GYRO_DLPFCFG
 		| ICM20649_MASK_GYRO_CONFIG_1_GYRO_FS_SEL;
 	u8_t fchoice = 0;
 	u8_t dlpfcfg = 0;
-	if(cfg->gyro_config.filter != ICM20649_GYRO_LPF_DISABLED) {
+	if(cfg->gyro->filter != ICM20649_GYRO_LPF_DISABLED) {
 		fchoice = 1 << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_FCHOICE;
-		dlpfcfg = cfg->gyro_config.filter << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_DLPFCFG;
+		dlpfcfg = cfg->gyro->filter << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_DLPFCFG;
 	}
-	u8_t fs = cfg->gyro_config.scale << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_FS_SEL;
+	u8_t fs = cfg->gyro->scale << ICM20649_SHIFT_GYRO_CONFIG_1_GYRO_FS_SEL;
 	u8_t val = fchoice | dlpfcfg | fs;
 	return icm20649_update_reg8(dev, ICM20649_REG_GYRO_CONFIG_1,
 			mask,
 			val);
 }
-
-
-static inline int icm20649_fifo_count(struct device *dev, u16_t *cnt) {
-	struct icm20649_drv_data *data = dev->driver_data;
-	u8_t read_buf[2];
-    int ret = icm20649_spi_read(data, ICM20649_REG_FIFO_COUNTH, read_buf, 2);
-	*cnt = ((u16_t)read_buf[0] << 8) + (u16_t)read_buf[1];
-	return ret;
-}
-
 
 static inline int icm20649_fifo_reset(struct device *dev) {
 	u16_t len = ICM20649_FIFO_SIZE;
@@ -470,9 +434,19 @@ static inline int icm20649_fifo_reset(struct device *dev) {
 	return ret;
 }
 
+static inline int icm20649_fifo_count(struct device *dev, u16_t *cnt) {
+	struct icm20649_data *data = dev->driver_data;
+	u8_t read_buf[2];
+    int ret = icm20649_spi_read(data, ICM20649_REG_FIFO_COUNTH, read_buf, 2);
+	*cnt = ((u16_t)read_buf[0] << 8) + (u16_t)read_buf[1];
+	return ret;
+}
+
 
 static int icm20649_configure_device(struct device *dev,
-			      struct rtio_sensor_icm20649_config *cfg) {
+			      struct icm20649_config *cfg) {
+
+	u8_t chip_id;
 
 	if(icm20649_set_user_bank(dev, 0) < 0) {
 		LOG_ERR("Failed to set user bank to 0");
@@ -584,7 +558,7 @@ static struct icm20649_drv_config icm20649_drv_config = {
 
 
 int icm20649_init(struct device *dev) {
-	const struct icm20649_drv_config * const config = &icm20649_drv_config;
+	const struct icm20649_drv_config * const config = &icm20649_config;
 	struct icm20649_drv_data *data = dev->driver_data;
 
 	data->spi = device_get_binding(config->dev_name);
@@ -622,60 +596,25 @@ static int icm20649_configure(struct device *dev, struct rtio_config *cfg)
 	int res = 0;
 
 	/** TODO use a common rtio_driver_data struct and configuration call */
-	res = rtio_context_configure_begin(&data->rtio_ctx);
+	res = rtio_context_begin_configure(rtio_ctx);
 	if(res != 0) {
-		return -EINVAL;
+		return -EINVA;
 	}
-	struct rtio_sensor_icm20649_config *dev_cfg = cfg->driver_config;
-	res = icm20649_configure_device(dev, dev_cfg);
-	rtio_context_configure_end(rtio_ctx, cfg);
+	struct icm20649_config *cfg = cfg->driver_config;
+	res = icm20649_configure_device(dev, cfg);
+	rtio_context_end_configure(rtio_ctx, rtio_cfg);
 	return res;
-}
-
-/*
- * @private
- */
-static ssize_t icm20649_sensor_reader_sample_sets(
-		const struct rtio_sensor_reader *reader)
-{
-	return 0;
-}
-
-/*
- * @private
- */
-static ssize_t icm20649_sensor_reader_next(
-		const struct rtio_sensor_reader *reader)
-{
-	return 0;
-}
-
-/**
- * @private
- */
-int icm20649_sensor_reader(struct device *dev,
-		       struct rtio_block *block,
-		       struct rtio_sensor_reader *reader,
-		       struct rtio_sensor_channel *channels,
-		       size_t num_channels)
-{
-	reader->device = dev;
-	reader->sample_sets = icm20649_sensor_reader_sample_sets;
-	reader->next = icm20649_sensor_reader_next;
-	reader->channels = channels;
-	reader->num_channels = num_channels;
-	reader->block = block;
-	reader->position = 0;
-	return 0;
 }
 
 static const struct rtio_sensor_api icm20649_api_funcs = {
 	.rtio_api = {
 		.configure = icm20649_configure,
 		.trigger = icm20649_trigger
-	},
+},
 	.sensor_reader = icm20649_sensor_reader,
 };
+
+
 
 static struct icm20649_drv_data icm20649_drv_data;
 

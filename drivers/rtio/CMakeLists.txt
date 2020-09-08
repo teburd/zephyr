@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-add_subdirectory_ifdef(CONFIG_RTIO_SENSOR sensor)
+add_subdirectory(sensor)
 
 zephyr_library()
 
