@@ -69,7 +69,7 @@ int main(void)
 	while (true) {
 		struct rtio_block *block = k_fifo_get(&ramp_out_fifo, K_FOREVER);
 
-		while (block->buf.len > sizeof(u32_t)) {
+		while (block->buf.len > sizeof(uint32_t)) {
 			printk("%d ", rtio_block_pull_le32(block));
 		}
 		printk("\n");

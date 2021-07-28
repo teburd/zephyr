@@ -24,10 +24,10 @@ LOG_MODULE_REGISTER(rtio_ramp);
 struct rtio_ramp_data {
 	struct rtio_context context;
 	struct rtio_ramp_config ramp_config;
-	u32_t last_timestamp;
-	u32_t cur_value;
-	u32_t deltat_ns;
-	u32_t remainder_ns;
+	uint32_t last_timestamp;
+	uint32_t cur_value;
+	uint32_t deltat_ns;
+	uint32_t remainder_ns;
 };
 
 
@@ -59,7 +59,7 @@ int rtio_ramp_configure(struct device *dev, struct rtio_config *config)
 	return res;
 }
 
-int rtio_ramp_trigger_read(struct device *dev, s32_t timeout)
+int rtio_ramp_trigger_read(struct device *dev, int32_t timeout)
 {
 	struct rtio_ramp_data *dev_data = get_dev_data(dev);
 	struct rtio_context *ctx = &dev_data->context;
@@ -71,9 +71,9 @@ int rtio_ramp_trigger_read(struct device *dev, s32_t timeout)
 		return res;
 	}
 
-	u32_t now = k_cycle_get_32();
-	u32_t tstamp_diff = now - dev_data->last_timestamp;
-	u32_t sampling_time = SYS_CLOCK_HW_CYCLES_TO_NS(tstamp_diff)
+	uint32_t now = k_cycle_get_32();
+	uint32_t tstamp_diff = now - dev_data->last_timestamp;
+	uint32_t sampling_time = SYS_CLOCK_HW_CYCLES_TO_NS(tstamp_diff)
 		+ dev_data->remainder_ns;
 
 	LOG_DBG("Last cycle count %d, current cycle count %d, "
@@ -83,7 +83,7 @@ int rtio_ramp_trigger_read(struct device *dev, s32_t timeout)
 		dev_data->remainder_ns, sampling_time, block,
 		rtio_block_available(block));
 
-	u32_t n = 0;
+	uint32_t n = 0;
 	while (sampling_time > dev_data->deltat_ns
 			&& rtio_block_available(block) >= 4) {
 		rtio_block_add_le32(block, dev_data->cur_value);

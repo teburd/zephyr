@@ -51,17 +51,17 @@ struct rtio_block {
 	/** Timestamp in cycles from k_cycle_get_32() marking when a read or
 	 * write began
 	 */
-	u32_t begin_tstamp;
+	uint32_t begin_tstamp;
 
 	/** Timestamp in cycles from k_cycle_get_32() marking when a read or
 	 * write was complete
 	 */
-	u32_t end_tstamp;
+	uint32_t end_tstamp;
 
 	/** Byte layout designator given by each driver to specify
 	 * the layout of the contained buffer
 	 */
-	u32_t layout;
+	uint32_t layout;
 
 	/** Contiguous buffer to store data in
 	 */
@@ -71,14 +71,14 @@ struct rtio_block {
 /**
  * @brief Initialize an rtio_block
  */
-static inline void rtio_block_init(struct rtio_block *block, u8_t *data,
+static inline void rtio_block_init(struct rtio_block *block, uint8_t *data,
 				   size_t size)
 {
 	block->layout = 0;
 	block->begin_tstamp = 0;
 	block->end_tstamp = 0;
 	block->buf.len = 0;
-	block->buf.size = (u16_t)size;
+	block->buf.size = (uint16_t)size;
 	block->buf.__buf = data;
 	block->buf.data = block->buf.__buf;
 }
@@ -104,7 +104,7 @@ static inline void rtio_block_end(struct rtio_block *block)
 /**
  * @brief Unused number of bytes in the buffer
  */
-static inline u16_t rtio_block_available(struct rtio_block *block)
+static inline uint16_t rtio_block_available(struct rtio_block *block)
 {
 	return block->buf.size - block->buf.len;
 }
@@ -402,7 +402,7 @@ static inline u16_t rtio_block_available(struct rtio_block *block)
  *
  * @return Used bytes in the buffer
  */
-static inline u16_t rtio_block_used(struct rtio_block *blk)
+static inline uint16_t rtio_block_used(struct rtio_block *blk)
 {
 	return blk->buf.len;
 }
@@ -419,7 +419,7 @@ struct rtio_block_allocator;
  */
 typedef int (*rtio_block_alloc_t)(struct rtio_block_allocator *allocator,
 				  struct rtio_block **block, size_t size,
-				  u32_t timeout);
+				  uint32_t timeout);
 
 /**
  * @private
@@ -439,97 +439,97 @@ struct rtio_block_allocator {
 
 /**
  * @private
- * @brief An rtio mempool block allocator
+ * @brief An rtio pool block allocator
  */
-struct rtio_mempool_block_allocator {
+struct rtio_pool_block_allocator {
 	struct rtio_block_allocator allocator;
-	struct k_mem_pool *mempool;
+	struct k_mem_pool *pool;
 };
 
 /**
  * @private
- * @brief An rtio_block allocated from a mempool
+ * @brief An rtio_block allocated from a pool
  */
-struct rtio_mempool_block {
+struct rtio_pool_block {
 	struct rtio_block block;
-	struct k_mem_block_id id;
+	struct k_mem_block _mem_block;
 };
 
 /**
  * @private
- * @brief Allocate a block from a mempool
+ * @brief Allocate a block from a slab
  *
  * @retval 0 on success
  * @retval -ENOMEM if the allocation can't be completed
  */
-static inline int rtio_mempool_block_alloc(
+static inline int rtio_slab_block_alloc(
 	struct rtio_block_allocator *allocator, struct rtio_block **block,
-	size_t size, u32_t timeout)
+	size_t size, uint32_t timeout)
 {
-	struct rtio_mempool_block_allocator *mempool_allocator =
-		(struct rtio_mempool_block_allocator *)allocator;
+	struct rtio_slab_block_allocator *slab_allocator =
+		(struct rtio_slab_block_allocator *)allocator;
 	struct k_mem_block memblock;
-	size_t block_size = size + sizeof(struct rtio_mempool_block);
+	size_t block_size = size + sizeof(struct rtio_slab_block);
 
-	int res = k_mem_pool_alloc(mempool_allocator->mempool,
+	int res = k_mem_slab_alloc(slab_allocator->slab,
 				   &memblock, block_size,
 				   timeout);
 	if (res == 0) {
-		struct rtio_mempool_block *mempool_block =
-			(struct rtio_mempool_block *)(memblock.data);
-		u8_t *dataptr = (u8_t *)memblock.data + sizeof(*mempool_block);
+		struct rtio_slab_block *slab_block =
+			(struct rtio_slab_block *)(memblock.data);
+		uint8_t *dataptr = (uint8_t *)memblock.data + sizeof(*slab_block);
 
-		mempool_block->id = memblock.id;
-		*block = (struct rtio_block *)mempool_block;
+		slab_block->id = memblock.id;
+		*block = (struct rtio_block *)slab_block;
 		rtio_block_init(*block, dataptr, size);
 	}
 	return res;
 }
 
-static inline void rtio_mempool_block_free(
+static inline void rtio_slab_block_free(
 	struct rtio_block_allocator *allocator,
 	struct rtio_block *block)
 {
-	struct rtio_mempool_block *mempool_block =
-		(struct rtio_mempool_block *)block;
+	struct rtio_slab_block *slab_block =
+		(struct rtio_slab_block *)block;
 
-	k_mem_pool_free_id(&mempool_block->id);
+	k_mem_slab_free(&slab_block->id);
 }
 
 /**
- * @brief Define an rtio block mempool allocator
+ * @brief Define an rtio block slab allocator
  *
  * Note that the sizeof the block metadata is taken to account
  * for the caller, only the block buffer size needs to be specified.
  *
- * @param name Name of the mempool allocator
+ * @param name Name of the slab allocator
  * @param minsz Minimum buffer size to be allocatable
  * @param maxsz Maximum buffer size to be allocatable
  * @param nmax Number of maximum sized buffers to be allocatable
- * @param align Alignment of the pool's buffer (power of 2).
+ * @param align Alignment of the slab's buffer (power of 2).
  *
- * @ref K_MEM_POOL_DEFINE
+ * @ref K_MEM_SLAB_DEFINE
  */
-#define RTIO_MEMPOOL_ALLOCATOR_DEFINE(name, minsz, maxsz, nmax, align) \
-	K_MEM_POOL_DEFINE(rtio_pool_mempool_##name,			\
-			  sizeof(struct rtio_mempool_block) + minsz,	\
-			  sizeof(struct rtio_mempool_block) + maxsz,	\
+#define RTIO_SLAB_ALLOCATOR_DEFINE(name, minsz, maxsz, nmax, align) \
+	K_MEM_SLAB_DEFINE(rtio_slab_slab_##name,			\
+			  sizeof(struct rtio_slab_block) + minsz,	\
+			  sizeof(struct rtio_slab_block) + maxsz,	\
 			  nmax,					\
 			  align);						\
 									\
-	struct rtio_mempool_block_allocator _mempool_##name = {	\
+	struct rtio_slab_block_allocator _slab_##name = {	\
 		.allocator = {						\
-			.alloc = rtio_mempool_block_alloc,		\
-			.free = rtio_mempool_block_free			\
+			.alloc = rtio_slab_block_alloc,		\
+			.free = rtio_slab_block_free			\
 		},								\
-		.mempool = &rtio_pool_mempool_##name			\
+		.slab = &rtio_slab_slab_##name			\
 	};									\
 	struct rtio_block_allocator *name = \
-		(struct rtio_block_allocator *)&_mempool_##name;
+		(struct rtio_block_allocator *)&_slab_##name;
 
 
 /**
- * @brief Allocate a rtio_block from an rtio_pool with a timeout
+ * @brief Allocate a rtio_block from an rtio_slab with a timeout
  *
  * This call is not safe to do with a timeout other than K_NO_WAIT
  * in an interrupt handler.
@@ -552,7 +552,7 @@ static inline void rtio_mempool_block_free(
 static inline int rtio_block_alloc(struct rtio_block_allocator *allocator,
 				   struct rtio_block **block,
 				   size_t size,
-				   u32_t timeout)
+				   uint32_t timeout)
 {
 	if (allocator != NULL) {
 		return allocator->alloc(allocator, block, size, timeout);
@@ -625,7 +625,7 @@ struct rtio_output_config {
 	 *
 	 * If set to K_FOREVER no k_timeout is started.
 	 */
-	s32_t timeout;
+	int32_t timeout;
 
 	/**
 	 * @brief The number of bytes to read before making the block ready
@@ -683,7 +683,7 @@ typedef int (*rtio_configure_t)(struct device *dev,
  * @private
  * @brief Function definition for triggering a device read or write
  */
-typedef int (*rtio_trigger_t)(struct device *dev, s32_t timeout);
+typedef int (*rtio_trigger_t)(struct device *dev, int32_t timeout);
 
 /**
  * @brief Real-Time IO API
@@ -743,7 +743,7 @@ static inline int rtio_configure(struct device *dev,
  * @retval -EAGAIN Waiting period timed out.
  * @retval -ENOMEM No memory left to allocate.
  */
-static inline int rtio_trigger_read(struct device *dev, s32_t timeout)
+static inline int rtio_trigger_read(struct device *dev, int32_t timeout)
 {
 	const struct rtio_api *api = dev->driver_api;
 
