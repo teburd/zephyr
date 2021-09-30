@@ -27,7 +27,7 @@ extern "C" {
  * @brief Real-Time IO device API for moving bytes around fast
  *
  * Each Real-Time IO device provides a way to read and/or write
- * blocks of memory allocated from an rtio_block_allocator given by
+ * blocks of memory allocated from an slab given by
  * the application. The layout of each block is identified in the
  * block metadata. Each device may provide functionality to safely encode
  * or decode blocks of memory.
@@ -58,8 +58,8 @@ struct rtio_block {
 	 */
 	uint32_t end_tstamp;
 
-	/** Byte layout designator given by each driver to specify
-	 * the layout of the contained buffer
+	/** Layout designator given by the stream source to describe
+	 * the contents of the buffer.
 	 */
 	uint32_t layout;
 
@@ -439,48 +439,36 @@ struct rtio_block_allocator {
 
 /**
  * @private
- * @brief An rtio pool block allocator
+ * @brief An rtio slab block allocator
  */
-struct rtio_pool_block_allocator {
+struct rtio_slab_block_allocator {
 	struct rtio_block_allocator allocator;
-	struct k_mem_pool *pool;
-};
-
-/**
- * @private
- * @brief An rtio_block allocated from a pool
- */
-struct rtio_pool_block {
-	struct rtio_block block;
-	struct k_mem_block _mem_block;
+	struct k_mem_slab *slab;
+	size_t block_size;
 };
 
 /**
  * @private
  * @brief Allocate a block from a slab
  *
+ * The size parameter is ignored. The size of the block to allocate is determined
+ * instead by the slab allocator.
+ *
  * @retval 0 on success
  * @retval -ENOMEM if the allocation can't be completed
  */
 static inline int rtio_slab_block_alloc(
 	struct rtio_block_allocator *allocator, struct rtio_block **block,
-	size_t size, uint32_t timeout)
+	size_t _size, uint32_t timeout)
 {
 	struct rtio_slab_block_allocator *slab_allocator =
 		(struct rtio_slab_block_allocator *)allocator;
-	struct k_mem_block memblock;
-	size_t block_size = size + sizeof(struct rtio_slab_block);
 
 	int res = k_mem_slab_alloc(slab_allocator->slab,
-				   &memblock, block_size,
-				   timeout);
+				   block, timeout);
 	if (res == 0) {
-		struct rtio_slab_block *slab_block =
-			(struct rtio_slab_block *)(memblock.data);
-		uint8_t *dataptr = (uint8_t *)memblock.data + sizeof(*slab_block);
-
-		slab_block->id = memblock.id;
-		*block = (struct rtio_block *)slab_block;
+		size_t size = slab_allocator->block_size - sizeof(struct rtio_block);
+		void* dataptr = *block + sizeof(struct rtio_block);
 		rtio_block_init(*block, dataptr, size);
 	}
 	return res;

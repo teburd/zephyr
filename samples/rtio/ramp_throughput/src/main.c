@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(ramp_reader);
 RTIO_MEMPOOL_ALLOCATOR_DEFINE(blockalloc, 64, MAX_BLOCK_SIZE, MAX_BLOCKS, 4);
 K_FIFO_DEFINE(ramp_out_fifo);
 
-volatile static u32_t triggers, ebusy, enomem, eagain;
+volatile static uint32_t triggers, ebusy, enomem, eagain;
 
 void trigger_read(void *s1, void *s2, void *s3)
 {
@@ -95,20 +95,20 @@ int main(void)
 					      ramp_dev, NULL, NULL,
 					      0, 0, K_NO_WAIT);
 
-	u32_t blocks = 0;
-	u32_t samples = 0;
-	u32_t bytes = 0;
-	u64_t tstamp = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
-	u64_t last_print = tstamp;
+	uint32_t blocks = 0;
+	uint32_t samples = 0;
+	uint32_t bytes = 0;
+	uint64_t tstamp = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
+	uint64_t last_print = tstamp;
 
 	while (true) {
 		struct rtio_block *block = k_fifo_get(&ramp_out_fifo, K_FOREVER);
 		blocks += 1;
 		bytes += rtio_block_used(block);
-		samples += rtio_block_used(block)/sizeof(u32_t);
+		samples += rtio_block_used(block)/sizeof(uint32_t);
 
-		u64_t now = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
-		u64_t last_print_diff = now - last_print;
+		uint64_t now = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
+		uint64_t last_print_diff = now - last_print;
 		if (last_print_diff > 1000000000) {
 			float tdiff = last_print_diff/1000000000.0;
 			float block_rate = blocks/tdiff;
@@ -123,9 +123,9 @@ int main(void)
 		}
 
 		/*
-		for (size_t i = 0; i < rtio_block_used(block); i += sizeof(u32_t)) {
-			printk("%d", *((u32_t *)(block->data + i)));
-			if ((i % 128 == 0 && i > 0) || i + sizeof(u32_t) >= rtio_block_used(block)) {
+		for (size_t i = 0; i < rtio_block_used(block); i += sizeof(uint32_t)) {
+			printk("%d", *((uint32_t *)(block->data + i)));
+			if ((i % 128 == 0 && i > 0) || i + sizeof(uint32_t) >= rtio_block_used(block)) {
 				printk("\n\t");
 			} else {
 				printk(", ");
