@@ -54,14 +54,14 @@ int rtio_context_configure_begin(struct rtio_context *ctx)
 void rtio_context_configure_end(struct rtio_context *ctx,
 				struct rtio_config *config)
 {
-	s32_t timeout;
+	k_timeout_t timeout;
 
 	memcpy(&ctx->config, config, sizeof(struct rtio_config));
 
 	/* Setup timer if needed */
 	k_timer_stop(&ctx->output_timer);
 	timeout = ctx->config.output_config.timeout;
-	if (timeout != K_FOREVER && timeout != K_NO_WAIT) {
+	if (!K_TIMEOUT_EQ(timeout, K_FOREVER) && !K_TIMEOUT_EQ(timeout, K_NO_WAIT)) {
 		k_timer_start(&ctx->output_timer, timeout, timeout);
 	}
 
@@ -70,7 +70,7 @@ void rtio_context_configure_end(struct rtio_context *ctx,
 
 int rtio_context_trigger_read_begin(struct rtio_context *ctx,
 				    struct rtio_block **block,
-				    s32_t timeout)
+				    k_timeout_t timeout)
 {
 	int res = 0;
 

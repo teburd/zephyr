@@ -17,11 +17,11 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(ramp_reader);
 
+#define BLOCK_SIZE 4096
+#define BLOCK_NUM 4
+#define BLOCK_ALIGN 4
+RTIO_SLAB_ALLOCATOR_DEFINE(blockalloc, BLOCK_SIZE, BLOCK_NUM, BLOCK_ALIGN);
 
-#define MAX_BLOCK_SIZE 4096
-#define MAX_BLOCKS 4
-
-RTIO_MEMPOOL_ALLOCATOR_DEFINE(blockalloc, 64, MAX_BLOCK_SIZE, MAX_BLOCKS, 4);
 K_FIFO_DEFINE(ramp_out_fifo);
 
 volatile static uint32_t triggers, ebusy, enomem, eagain;
@@ -61,7 +61,7 @@ int main(void)
 {
 	printk("RTIO Throughput Sample\n");
 
-	struct device *ramp_dev = device_get_binding("RTIO_RAMP");
+	const struct device *ramp_dev = device_get_binding("RTIO_RAMP");
 
 	/* effectively the same as a stereo CD quality audio stream */
 	struct rtio_ramp_config ramp_dev_cfg = {
@@ -74,7 +74,7 @@ int main(void)
 			.allocator = blockalloc,
 			.fifo = &ramp_out_fifo,
 			.timeout = K_FOREVER,
-			.byte_size = MAX_BLOCK_SIZE
+			.byte_size = BLOCK_SIZE
 		},
 		.driver_config = &ramp_dev_cfg
 	};
@@ -92,13 +92,13 @@ int main(void)
 					      trigger_read_stack,
 					      K_THREAD_STACK_SIZEOF(trigger_read_stack),
 					      trigger_read,
-					      ramp_dev, NULL, NULL,
+					      (void*)ramp_dev, NULL, NULL,
 					      0, 0, K_NO_WAIT);
 
 	uint32_t blocks = 0;
 	uint32_t samples = 0;
 	uint32_t bytes = 0;
-	uint64_t tstamp = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
+	uint64_t tstamp = k_cyc_to_ns_near64(k_cycle_get_32());
 	uint64_t last_print = tstamp;
 
 	while (true) {
@@ -107,7 +107,7 @@ int main(void)
 		bytes += rtio_block_used(block);
 		samples += rtio_block_used(block)/sizeof(uint32_t);
 
-		uint64_t now = SYS_CLOCK_HW_CYCLES_TO_NS64(k_cycle_get_32());
+		uint64_t now = k_cyc_to_ns_near64(k_cycle_get_32());
 		uint64_t last_print_diff = now - last_print;
 		if (last_print_diff > 1000000000) {
 			float tdiff = last_print_diff/1000000000.0;

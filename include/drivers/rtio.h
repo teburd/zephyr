@@ -419,7 +419,7 @@ struct rtio_block_allocator;
  */
 typedef int (*rtio_block_alloc_t)(struct rtio_block_allocator *allocator,
 				  struct rtio_block **block, size_t size,
-				  uint32_t timeout);
+				  k_timeout_t timeout);
 
 /**
  * @private
@@ -431,6 +431,9 @@ typedef void (*rtio_block_free_t)(struct rtio_block_allocator *allocator,
 /**
  * @private
  * @brief An rtio block allocator interface
+ *
+ * An interface is used here to allow custom allocators to be provided. A slab allocator implementation
+ * is provided below as a sane default to choose.
  */
 struct rtio_block_allocator {
 	rtio_block_alloc_t alloc;
@@ -459,13 +462,13 @@ struct rtio_slab_block_allocator {
  */
 static inline int rtio_slab_block_alloc(
 	struct rtio_block_allocator *allocator, struct rtio_block **block,
-	size_t _size, uint32_t timeout)
+	size_t _size, k_timeout_t timeout)
 {
 	struct rtio_slab_block_allocator *slab_allocator =
 		(struct rtio_slab_block_allocator *)allocator;
 
 	int res = k_mem_slab_alloc(slab_allocator->slab,
-				   block, timeout);
+				   (void**)block, timeout);
 	if (res == 0) {
 		size_t size = slab_allocator->block_size - sizeof(struct rtio_block);
 		void* dataptr = *block + sizeof(struct rtio_block);
@@ -478,32 +481,30 @@ static inline void rtio_slab_block_free(
 	struct rtio_block_allocator *allocator,
 	struct rtio_block *block)
 {
-	struct rtio_slab_block *slab_block =
-		(struct rtio_slab_block *)block;
+	struct rtio_slab_block_allocator *slab_allocator =
+		(struct rtio_slab_block_allocator *)allocator;
 
-	k_mem_slab_free(&slab_block->id);
+	k_mem_slab_free(slab_allocator->slab, (void**)&block);
 }
 
 /**
  * @brief Define an rtio block slab allocator
  *
- * Note that the sizeof the block metadata is taken to account
+ * Note that the size of the rtio_block struct metadata is taken to account
  * for the caller, only the block buffer size needs to be specified.
  *
  * @param name Name of the slab allocator
- * @param minsz Minimum buffer size to be allocatable
- * @param maxsz Maximum buffer size to be allocatable
- * @param nmax Number of maximum sized buffers to be allocatable
- * @param align Alignment of the slab's buffer (power of 2).
+ * @param slab_block_size Buffer size to be allocate
+ * @param slab_num_blocks Number of maximum buffers to be allocatable
+ * @param slab_align Alignment of the slab's buffer (power of 2).
  *
  * @ref K_MEM_SLAB_DEFINE
  */
-#define RTIO_SLAB_ALLOCATOR_DEFINE(name, minsz, maxsz, nmax, align) \
+#define RTIO_SLAB_ALLOCATOR_DEFINE(name, slab_block_size, slab_num_blocks, slab_align) \
 	K_MEM_SLAB_DEFINE(rtio_slab_slab_##name,			\
-			  sizeof(struct rtio_slab_block) + minsz,	\
-			  sizeof(struct rtio_slab_block) + maxsz,	\
-			  nmax,					\
-			  align);						\
+			  sizeof(struct rtio_block) + slab_block_size, \
+			  slab_num_blocks,						\
+			  slab_align);					\
 									\
 	struct rtio_slab_block_allocator _slab_##name = {	\
 		.allocator = {						\
@@ -522,8 +523,9 @@ static inline void rtio_slab_block_free(
  * This call is not safe to do with a timeout other than K_NO_WAIT
  * in an interrupt handler.
  *
- * The allocator *must* have a memory layout equivalent to
- * struct rtio_block_allocator
+ * With a slab allocator, assuming a block exists, the time to allocate
+ * should be O(N) where N is the number of blocks in the slab. Since N is likely
+ * small the time should be *negligble*.
  *
  * @param allocator Address of allocator implementation.
  * @param block Pointer which will be assigned the address of allocated memory
@@ -540,7 +542,7 @@ static inline void rtio_slab_block_free(
 static inline int rtio_block_alloc(struct rtio_block_allocator *allocator,
 				   struct rtio_block **block,
 				   size_t size,
-				   uint32_t timeout)
+				   k_timeout_t timeout)
 {
 	if (allocator != NULL) {
 		return allocator->alloc(allocator, block, size, timeout);
@@ -613,7 +615,7 @@ struct rtio_output_config {
 	 *
 	 * If set to K_FOREVER no k_timeout is started.
 	 */
-	int32_t timeout;
+	k_timeout_t timeout;
 
 	/**
 	 * @brief The number of bytes to read before making the block ready
@@ -645,7 +647,7 @@ static inline void rtio_output_config_init(struct rtio_output_config *out_cfg)
 {
 	out_cfg->allocator = NULL;
 	out_cfg->fifo = NULL;
-	out_cfg->timeout = 0;
+	out_cfg->timeout = K_NO_WAIT;
 	out_cfg->byte_size = 0;
 }
 
@@ -664,14 +666,14 @@ static inline void rtio_config_init(struct rtio_config *cfg)
  * @private
  * @brief Function definition for configuring a RTIO device
  */
-typedef int (*rtio_configure_t)(struct device *dev,
+typedef int (*rtio_configure_t)(const struct device *dev,
 				struct rtio_config *config);
 
 /**
  * @private
  * @brief Function definition for triggering a device read or write
  */
-typedef int (*rtio_trigger_t)(struct device *dev, int32_t timeout);
+typedef int (*rtio_trigger_t)(struct device *dev, k_timeout_t timeout);
 
 /**
  * @brief Real-Time IO API
@@ -705,10 +707,10 @@ struct rtio_api {
  * @retval 0 Configuration succeeded.
  * @retval -EINVAL Invalid configuration.
  */
-static inline int rtio_configure(struct device *dev,
+static inline int rtio_configure(const struct device *dev,
 				 struct rtio_config *config)
 {
-	const struct rtio_api *api = dev->driver_api;
+	const struct rtio_api *api = dev->api;
 
 	return api->configure(dev, config);
 }
@@ -731,9 +733,9 @@ static inline int rtio_configure(struct device *dev,
  * @retval -EAGAIN Waiting period timed out.
  * @retval -ENOMEM No memory left to allocate.
  */
-static inline int rtio_trigger_read(struct device *dev, int32_t timeout)
+static inline int rtio_trigger_read(struct device *dev, k_timeout_t timeout)
 {
-	const struct rtio_api *api = dev->driver_api;
+	const struct rtio_api *api = dev->api;
 
 	return api->trigger_read(dev, timeout);
 }

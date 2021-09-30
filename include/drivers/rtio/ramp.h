@@ -16,12 +16,12 @@ struct rtio_ramp_config {
 	/**
 	 * @brief Sample rate in Hz that the ramp to sample at
 	 */
-	u32_t sample_rate;
+	uint32_t sample_rate;
 
 	/**
 	 * @brief Value ramp generator should reset at.
 	 */
-	u32_t max_value;
+	uint32_t max_value;
 };
 
 

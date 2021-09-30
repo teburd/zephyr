@@ -33,7 +33,7 @@ struct rtio_ramp_data {
 
 static inline struct rtio_ramp_data *get_dev_data(struct device *dev)
 {
-	return dev->driver_data;
+	return dev->data;
 }
 
 int rtio_ramp_configure(struct device *dev, struct rtio_config *config)
@@ -59,7 +59,7 @@ int rtio_ramp_configure(struct device *dev, struct rtio_config *config)
 	return res;
 }
 
-int rtio_ramp_trigger_read(struct device *dev, int32_t timeout)
+int rtio_ramp_trigger_read(struct device *dev, k_timeout_t timeout)
 {
 	struct rtio_ramp_data *dev_data = get_dev_data(dev);
 	struct rtio_context *ctx = &dev_data->context;
@@ -73,7 +73,7 @@ int rtio_ramp_trigger_read(struct device *dev, int32_t timeout)
 
 	uint32_t now = k_cycle_get_32();
 	uint32_t tstamp_diff = now - dev_data->last_timestamp;
-	uint32_t sampling_time = SYS_CLOCK_HW_CYCLES_TO_NS(tstamp_diff)
+	uint32_t sampling_time = k_cyc_to_ns_near32(tstamp_diff)
 		+ dev_data->remainder_ns;
 
 	LOG_DBG("Last cycle count %d, current cycle count %d, "
@@ -111,12 +111,12 @@ static const struct rtio_api rtio_ramp_driver_api = {
 };
 
 
-int rtio_ramp_init(struct device *dev)
+int rtio_ramp_init(const struct device *dev)
 {
 	/* statically initialized, so nothing to do yet but set the timestamp
 	 * and add an appropriate counter callback to generate samples
 	 */
-	struct rtio_ramp_data *drv_data = dev->driver_data;
+	struct rtio_ramp_data *drv_data = dev->data;
 
 	drv_data->last_timestamp = k_cycle_get_32();
 	drv_data->cur_value = 0;
@@ -128,6 +128,6 @@ int rtio_ramp_init(struct device *dev)
 
 static struct rtio_ramp_data rtio_ramp_data;
 
-DEVICE_AND_API_INIT(ramp, "RTIO_RAMP", rtio_ramp_init,
+DEVICE_DEFINE(ramp, "RTIO_RAMP", rtio_ramp_init, NULL,
 		    &rtio_ramp_data, NULL, POST_KERNEL,
 		    CONFIG_RTIO_INIT_PRIORITY, &rtio_ramp_driver_api);

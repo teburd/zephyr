@@ -117,7 +117,7 @@ void rtio_context_configure_end(struct rtio_context *ctx,
  */
 int rtio_context_trigger_read_begin(struct rtio_context *ctx,
 				    struct rtio_block **block,
-				    int32_t timeout);
+				    k_timeout_t timeout);
 
 /**
  * @brief End trigger read call
