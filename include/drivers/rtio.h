@@ -27,7 +27,7 @@ extern "C" {
  * @brief Real-Time IO device API for moving bytes around fast
  *
  * Each Real-Time IO device provides a way to read and/or write
- * blocks of memory allocated from an slab given by
+ * blocks of memory allocated from an allocator given by
  * the application. The layout of each block is identified in the
  * block metadata. Each device may provide functionality to safely encode
  * or decode blocks of memory.
@@ -470,7 +470,7 @@ static inline int rtio_slab_block_alloc(
 	int res = k_mem_slab_alloc(slab_allocator->slab,
 				   (void**)block, timeout);
 	if (res == 0) {
-		size_t size = slab_allocator->block_size - sizeof(struct rtio_block);
+		size_t size = slab_allocator->block_size;
 		void* dataptr = *block + sizeof(struct rtio_block);
 		rtio_block_init(*block, dataptr, size);
 	}
@@ -502,18 +502,19 @@ static inline void rtio_slab_block_free(
  */
 #define RTIO_SLAB_ALLOCATOR_DEFINE(name, slab_block_size, slab_num_blocks, slab_align) \
 	K_MEM_SLAB_DEFINE(rtio_slab_slab_##name,			\
-			  sizeof(struct rtio_block) + slab_block_size, \
-			  slab_num_blocks,						\
+			  sizeof(struct rtio_block) + slab_block_size,	\
+			  slab_num_blocks,				\
 			  slab_align);					\
 									\
-	struct rtio_slab_block_allocator _slab_##name = {	\
-		.allocator = {						\
-			.alloc = rtio_slab_block_alloc,		\
-			.free = rtio_slab_block_free			\
-		},								\
-		.slab = &rtio_slab_slab_##name			\
-	};									\
-	struct rtio_block_allocator *name = \
+	struct rtio_slab_block_allocator _slab_##name = {		\
+	.allocator = {							\
+	.alloc = rtio_slab_block_alloc,					\
+	.free = rtio_slab_block_free					\
+},									\
+	.slab = &rtio_slab_slab_##name,					\
+	.block_size = slab_block_size					\
+};									\
+	struct rtio_block_allocator *name =				\
 		(struct rtio_block_allocator *)&_slab_##name;
 
 

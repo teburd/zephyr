@@ -13,14 +13,14 @@
 
 #include <ztest.h>
 
-extern void test_rtio_mempool_allocator(void);
+extern void test_rtio_slab_allocator(void);
 extern void test_rtio_source_sink(void);
 
 void test_main(void)
 {
 	ztest_test_suite(rtio_basic_api_test,
-			 ztest_unit_test(test_rtio_mempool_allocator),
+			 ztest_unit_test(test_rtio_slab_allocator),
 			 ztest_unit_test(test_rtio_source_sink)
-			 );
+	);
 	ztest_run_test_suite(rtio_basic_api_test);
 }
