@@ -5,6 +5,8 @@
 
 menu "Device Drivers"
 
+source "drivers/battery/Kconfig"
+
 source "drivers/bluetooth/Kconfig"
 
 source "drivers/ieee802154/Kconfig"

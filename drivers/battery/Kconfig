@@ -1,0 +1,27 @@
+# Battery configuration options
+
+# Copyright (c) 2021 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig BATTERY
+	bool "Battery Drivers"
+	help
+	  Include battery drivers in system config
+
+if BATTERY
+
+module = BATTERY
+module-str = battery
+source "subsys/logging/Kconfig.template.log_config"
+
+config BATTERY_INIT_PRIORITY
+	int "Battery init priority"
+	default 90
+	help
+	  Battery initialization priority.
+
+comment "Device Drivers"
+
+source "drivers/battery/max17055/Kconfig"
+
+endif # BATTERY

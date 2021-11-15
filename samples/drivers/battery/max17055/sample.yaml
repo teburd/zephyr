@@ -1,0 +1,16 @@
+sample:
+  name: MAX17055 battery fuel gauge
+tests:
+  sample.battery.max17055:
+    harness: console
+    tags: battery
+    depends_on: max17055
+    timeout: 15
+    harness_config:
+      type: multi_line
+      ordered: true
+      regex:
+        - "voltage: [-.0-9]* uV current: [-.0-9]* uA"
+        - "charge: [-.0-9]* uAh capacity: [-.0-9]* uAh"
+        - "soc: [.0-9]* %"
+        - "loop:[0-9]* trig_cnt:[0-9]*"

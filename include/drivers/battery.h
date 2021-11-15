@@ -73,7 +73,7 @@ enum battery_measurement {
 	/* Design Capacity in uAh */
 	BATTERY_DESIGN_CAPACITY,
 	/* Design Voltage in uV */
-	BATTERY_DESIGN_VOLTAGE
+	BATTERY_DESIGN_VOLTAGE,
 	/* Absolute SoC in tenths of a percent, (CHARGE*1000)/DESIGN_CAPACITY  */
 	BATTERY_ABSOLUTE_SOC
 };
@@ -131,8 +131,9 @@ struct battery_policy {
  *
  * See battery_measurement() for usage
  */
-typedef int32_t (*battery_measurement_t)(const struct device *dev,
-					 const enum battery_measurement measurement);
+typedef int (*battery_measurement_t)(const struct device *dev,
+				     const enum battery_measurement measurement,
+				     int32_t *value);
 
 /**
  * @typedef battery_set_policy_t
@@ -164,16 +165,23 @@ __subsystem struct battery_driver_api {
  * @brief Get a measurement from the battery
  *
  * Reads an integer measurement from the battery.
+ *
+ * @param dev Device to read from
+ * @param measurement Which measurement to read
+ * @param value Value to read into
  */
-__syscall int32_t battery_measurement(const struct device *dev,
-				      const enum battery_measurement measurement);
+__syscall int battery_measurement(const struct device *dev,
+				  const enum battery_measurement measurement,
+				  int32_t *value);
 
-static inline int32_t z_impl_battery_measurement(const struct device *dev)
+static inline int z_impl_battery_measurement(const struct device *dev,
+					     const enum battery_measurement measurement,
+					     int32_t *value)
 {
 	const struct battery_driver_api *api =
 		(const struct battery_driver_api *)dev->api;
 
-	return api->measurement(dev, measurement);
+	return api->measurement(dev, measurement, value);
 }
 
 /**
@@ -228,11 +236,11 @@ static inline struct k_event *z_impl_battery_status(const struct device *dev)
  * depending on the state of the battery. It is always
  * positive.
  *
- * @return voltage on success, -ENOSUP if unsupported
+ * @return 0 success, -ENOSUP if unsupported
  */
-static inline int32_t battery_voltage(const struct device *dev)
+static inline int battery_voltage(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_VOLTAGE);
+	return battery_measurement(dev, BATTERY_VOLTAGE, val);
 }
 
 /**
@@ -242,21 +250,21 @@ static inline int32_t battery_voltage(const struct device *dev)
  * depending on the state of the battery. It is always
  * positive.
  *
- * @return current on success, -ENOSUP if unsupported
+ * @return 0 success, -ENOSUP if unsupported
  */
-static inline int32_t battery_current(const struct device *dev)
+static inline int battery_current(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_CURRENT);
+	return battery_measurement(dev, BATTERY_CURRENT, val);
 }
 
 /**
  * @brief Get the battery charge in uAh
  *
- * @return charge on success, -ENOSUP if unsupported
+ * @return 0 success, -ENOSUP if unsupported
  */
-static inline int32_t battery_charge(const struct device *dev)
+static inline int battery_charge(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_CHARGE);
+	return battery_measurement(dev, BATTERY_CHARGE, val);
 }
 
 /**
@@ -264,9 +272,9 @@ static inline int32_t battery_charge(const struct device *dev)
  *
  * @return power on success, -ENOSUP if unsupported
  */
-static inline battery_power(const struct device *dev)
+static inline int battery_power(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_POWER);
+	return battery_measurement(dev, BATTERY_POWER, val);
 }
 
 /**
@@ -275,32 +283,31 @@ static inline battery_power(const struct device *dev)
  * This is meant to represent the current capacity of the battery
  * if known, or the design capacity if not.
  *
- * @return capacity on success, -ENOSUP if unsupported
+ * @return 0 on success, -ENOSUP if unsupported
  */
-static inline int32_t battery_capacity(const struct device *dev)
+static inline int battery_capacity(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_CAPACITY);
+	return battery_measurement(dev, BATTERY_CAPACITY, val);
 }
 
 /**
  * @brief Get the battery temperature in centikelvin (0.01*K)
  *
- * @return temperature on success, -ENOSUP if unsupported
+ * @return 0 on success, -ENOSUP if unsupported
  */
-static inline int32_t battery_temp(const struct device *dev)
+static inline int32_t battery_temp(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_TEMP);
+	return battery_measurement(dev, BATTERY_TEMP, val);
 }
 
 /**
  * @brief Get the battery cycle count if available
  *
- * @return The number of charge/discharge cycles the battery
- * has gone through. -ENOSUP if unsupported.
+ * @return 0 on success, -ENOSUP if unsupported.
  */
-static inline int32_t battery_cycles(const struct device *dev)
+static inline int32_t battery_cycles(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_CYCLES);
+	return battery_measurement(dev, BATTERY_CYCLES, val);
 }
 
 /**
@@ -312,11 +319,11 @@ static inline int32_t battery_cycles(const struct device *dev)
  *
  * To get SoC as a percentage as a float: float fsoc = (float)soc/10.0f;
  *
- * @return Percentage state of charge or -ENOSUP if unsupported
+ * @return 0 on success, -ENOSUP if unsupported
  */
-static inline int32_t battery_soc(const struct device *dev)
+static inline int battery_soc(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_SOC);
+	return battery_measurement(dev, BATTERY_SOC, val);
 }
 
 /**
@@ -325,11 +332,11 @@ static inline int32_t battery_soc(const struct device *dev)
  * The estimated number of minutes remaining to discharge
  * the battery.
  *
- * @return Estimated time or -ENOSUP if unsupported.
+ * @return 0 on success, -ENOSUP if unsupported.
  */
-static inline int32_t battery_discharge_time(const struct device *dev)
+static inline int battery_discharge_time(const struct device *dev, int32_t *val)
 {
-	return battery_measurement(dev, BATTERY_DISCHARGE_TIME);
+	return battery_measurement(dev, BATTERY_DISCHARGE_TIME, val);
 }
 
 #ifdef __cplusplus
