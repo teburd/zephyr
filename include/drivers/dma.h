@@ -239,6 +239,8 @@ typedef int (*dma_api_start)(const struct device *dev, uint32_t channel);
 
 typedef int (*dma_api_stop)(const struct device *dev, uint32_t channel);
 
+typedef int (*dma_api_pause)(const struct device *dev, uint32_t channel);
+
 typedef int (*dma_api_get_status)(const struct device *dev, uint32_t channel,
 				  struct dma_status *status);
 
@@ -263,6 +265,7 @@ __subsystem struct dma_driver_api {
 	dma_api_reload reload;
 	dma_api_start start;
 	dma_api_stop stop;
+	dma_api_pause pause;
 	dma_api_get_status get_status;
 	dma_api_chan_filter chan_filter;
 };
@@ -343,6 +346,35 @@ static inline int z_impl_dma_start(const struct device *dev, uint32_t channel)
 		(const struct dma_driver_api *)dev->api;
 
 	return api->start(dev, channel);
+}
+
+/**
+ * @brief Pause a DMA channel
+ *
+ * The channel may be resumed by calling dma_start or fully stopped with
+ * dma_stop.
+ *
+ * Implementations must check the validity of the channel ID passed in and
+ * return -EINVAL if it is invalid.
+ *
+ * @param dev     Pointer to the device structure for the driver instance.
+ * @param channel Numeric identification of the channel where the transfer was
+ *                being processed
+ *
+ * @retval 0 if successful.
+ * @retval Negative errno code if failure.
+ */
+__syscall int dma_pause(const struct device *dev, uint32_t channel);
+
+static inline int z_impl_dma_pause(const struct device *dev, uint32_t channel)
+{
+	const struct dma_driver_api *api =
+		(const struct dma_driver_api *)dev->api;
+
+	if (api->pause == NULL) {
+		return -ENOSYS;
+	}
+	return api->pause(dev, channel);
 }
 
 /**
