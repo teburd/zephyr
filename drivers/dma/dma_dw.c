@@ -302,14 +302,18 @@ static void dw_dma_setup(const struct device *dev)
 	struct dw_drv_plat_data *dp = dev_data->channel_data;
 	int i;
 
+	printk("checking if dma is enabled by host by reading DW_DMA_CFG, base addr %x, offset %x\n", dev_cfg->base, DW_DMA_CFG);
 	/* we cannot config DMAC if DMAC has been already enabled by host */
 	if (dw_read(dev_cfg->base, DW_DMA_CFG) != 0) {
+		printk("writing to DW_DMA_CFG 0x0\n");
 		dw_write(dev_cfg->base, DW_DMA_CFG, 0x0);
 	}
 
 	/* now check that it's 0 */
+	printk("looping waiting for DW_DMA_CFG to be 0\n");
 	for (i = DW_DMA_CFG_TRIES; i > 0; i--) {
 		if (dw_read(dev_cfg->base, DW_DMA_CFG) == 0) {
+			printk("DW_DMA_CFG is 0, %d retries done\n", i);
 			goto found;
 		}
 	}
@@ -318,13 +322,16 @@ static void dw_dma_setup(const struct device *dev)
 
 found:
 	for (i = 0; i <  DW_MAX_CHAN; i++) {
+		printk("reading each chanenel enable register\n");
 		dw_read(dev_cfg->base, DW_DMA_CHAN_EN);
 	}
 
 	/* enable the DMA controller */
+	printk("enabling dma\n");
 	dw_write(dev_cfg->base, DW_DMA_CFG, 1);
 
 	/* mask all interrupts for all 8 channels */
+	printk("mask all interrupts for all channels\n");
 	dw_write(dev_cfg->base, DW_MASK_TFR, INT_MASK_ALL);
 	dw_write(dev_cfg->base, DW_MASK_BLOCK, INT_MASK_ALL);
 	dw_write(dev_cfg->base, DW_MASK_SRC_TRAN, INT_MASK_ALL);
@@ -332,6 +339,7 @@ found:
 	dw_write(dev_cfg->base, DW_MASK_ERR, INT_MASK_ALL);
 
 	/* set channel priorities */
+	printk("set channel priorities\n");
 	for (i = 0; i <  DW_MAX_CHAN; i++) {
 		dw_write(dev_cfg->base, DW_CTRL_HIGH(i),
 		DW_CFG_CLASS(dp->chan[i].class));
@@ -341,6 +349,8 @@ found:
 static int dw_dma_init(const struct device *dev)
 {
 	const struct dw_dma_dev_cfg *const dev_cfg = DEV_CFG(dev);
+
+	printk("dw dma setup\n");
 
 	/* Disable all channels and Channel interrupts */
 	dw_dma_setup(dev);

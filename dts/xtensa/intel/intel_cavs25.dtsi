@@ -120,5 +120,39 @@
 			interrupts = <8 0 0>;
 			interrupt-parent = <&cavs0>;
 		};
+
+		dma0: dma@7c000 {
+			compatible = "snps,designware-dma";
+			#dma-cells = <1>;
+			reg = <0x0007C000 0x1000>;
+			interrupts = <0x10 0 0>;
+			interrupt-parent = <&cavs3>;
+			label = "DMA_0";
+
+			status = "okay";
+		};
+
+		dma1: dma@7d000 {
+			compatible = "snps,designware-dma";
+			#dma-cells = <1>;
+			reg = <0x0007D000 0x1000>;
+			interrupts = <0x00 0 0>;
+			interrupt-parent = <&cavs1>;
+			label = "DMA_1";
+
+			status = "disabled";
+		};
+
+		dma2: dma@7e000 {
+			compatible = "snps,designware-dma";
+			#dma-cells = <1>;
+			reg = <0x0007E000 0x1000>;
+			interrupts = <0x00 0 0>;
+			interrupt-parent = <&cavs2>;
+			label = "DMA_2";
+
+			status = "disabled";
+		};
+
 	};
 };

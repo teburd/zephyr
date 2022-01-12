@@ -3,7 +3,13 @@
 # Copyright (c) 2018 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+# This option signifies whether DesignWare DMA compatible HW is
+# available
+config HAS_DMA_DW
+	bool
+
 config DMA_DW
 	bool "Enable DesignWare DMA driver"
+	depends on HAS_DMA_DW
 	help
 	  DesignWare DMA driver.

@@ -405,6 +405,8 @@ FUNC_NORETURN void z_cstart(void)
 	/* perform any architecture-specific initialization */
 	arch_kernel_init();
 
+    printk("initialized\n");
+
 #if defined(CONFIG_MULTITHREADING)
 	/* Note: The z_ready_thread() call in prepare_multithreading() requires
 	 * a dummy thread even if CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN=y
@@ -413,6 +415,7 @@ FUNC_NORETURN void z_cstart(void)
 
 	z_dummy_thread_init(&dummy_thread);
 #endif
+    printk("device_state_init\n");
 	/* do any necessary initialization of static devices */
 	z_device_state_init();
 
@@ -433,6 +436,7 @@ FUNC_NORETURN void z_cstart(void)
 	timing_start();
 #endif
 
+    printk("starting main thread\n");
 #ifdef CONFIG_MULTITHREADING
 	switch_to_main_thread(prepare_multithreading());
 #else
