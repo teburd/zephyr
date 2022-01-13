@@ -17,6 +17,13 @@
 #include <soc.h>
 #include "dma_dw.h"
 
+#define LPGPDMA_ADDR(x) (0x78400 + 0x0100*(x))
+#define LPGPDMA_CAP(x) LPGPDMA_ADDR(x)
+#define LPGPDMA_CTL(x) (LPGPDMA_ADDR(x) + 0x4)
+#define LPGPDMA_IPPTR(x) (LPGPDMA_ADDR(x) + 0x8)
+
+
+#define CTL_FCG BIT(27-1)
 #define LOG_LEVEL CONFIG_DMA_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(dma_dw);
@@ -306,10 +313,8 @@ static void dw_dma_setup(const struct device *dev)
 	/* we cannot config DMAC if DMAC has been already enabled by host */
 	uint32_t dma_cfg = dw_read(dev_cfg->base, DW_DMA_CFG);
 	printk("dma cfg is %x\n", dma_cfg);
-	while(true) {};
 	if (dma_cfg != 0) {
 		printk("writing to DW_DMA_CFG 0x0\n");
-		while(true) {};
 		dw_write(dev_cfg->base, DW_DMA_CFG, 0x0);
 	}
 
@@ -354,7 +359,19 @@ static int dw_dma_init(const struct device *dev)
 {
 	const struct dw_dma_dev_cfg *const dev_cfg = DEV_CFG(dev);
 
-	printk("dw dma setup\n");
+	printk("dw dma setup, reading capability (0x%x) and control (0x%x) regs\n", LPGPDMA_CAP(0), LPGPDMA_CTL(0));
+	uint32_t cap = sys_read32(LPGPDMA_CAP(0));
+	uint32_t ctl = sys_read32(LPGPDMA_CTL(0));
+	printk("cap %x, ctl %x\n", cap, ctl);
+	printk("Setting power of ctl 1\n");
+	sys_write32(BIT(0), LPGPDMA_CTL(0));
+	for(int i = 0; i < 10000; i++) {}
+	//printk("waiting for dma power up\n");
+	//while((sys_read32(LPGPDMA_CTL(0)) & BIT(8)) == 0) {}
+	printk("dma powered, reading capability (0x%x) and control (0x%x) regs\n", LPGPDMA_CAP(0), LPGPDMA_CTL(0));
+	cap = sys_read32(LPGPDMA_CAP(0));
+	ctl = sys_read32(LPGPDMA_CTL(0));
+	printk("cap %x, ctl %x\n", cap, ctl);
 
 	/* Disable all channels and Channel interrupts */
 	dw_dma_setup(dev);
@@ -426,7 +443,7 @@ static const struct dma_driver_api dw_dma_driver_api = {
 			    &dw_dma_init,				\
 			    NULL,					\
 			    &dw_dma##inst##_data,			\
-			    &dw_dma##inst##_config, POST_KERNEL,	\
+			    &dw_dma##inst##_config, PRE_KERNEL_2,	\
 			    CONFIG_DMA_INIT_PRIORITY,			\
 			    &dw_dma_driver_api);			\
 									\
