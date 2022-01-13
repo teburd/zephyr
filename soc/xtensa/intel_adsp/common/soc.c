@@ -119,6 +119,7 @@ static __imr int soc_init(const struct device *dev)
 	}
 
 #if CONFIG_MP_NUM_CPUS > 1
+    printk("Running soc_mp_init\n");
 	soc_mp_init();
 #endif
 

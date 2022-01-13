@@ -182,6 +182,7 @@ __imr void soc_mp_init(void)
 	 * target core clears the busy bit.
 	 */
 	for (int core = 0; core < CONFIG_MP_NUM_CPUS; core++) {
+        printk("initializing core %d\n", core);
 		IDC[core].busy_int |= IDC_ALL_CORES;
 		IDC[core].done_int &= ~IDC_ALL_CORES;
 
@@ -215,6 +216,8 @@ __imr int soc_relaunch_cpu(int id)
 {
 	int ret = 0;
 	k_spinlock_key_t k = k_spin_lock(&mplock);
+
+    printk("relaunching cpu %d\n", id);
 
 	if (id < 1 || id >= CONFIG_MP_NUM_CPUS) {
 		ret = -EINVAL;
@@ -257,6 +260,7 @@ __imr int soc_halt_cpu(int id)
 	int ret = 0;
 	k_spinlock_key_t k = k_spin_lock(&mplock);
 
+    printk("halting cpu %d\n", id);
 	if (id == 0 || id == _current_cpu->id) {
 		ret = -EINVAL;
 		goto out;

@@ -302,10 +302,14 @@ static void dw_dma_setup(const struct device *dev)
 	struct dw_drv_plat_data *dp = dev_data->channel_data;
 	int i;
 
-	printk("checking if dma is enabled by host by reading DW_DMA_CFG, base addr %x, offset %x\n", dev_cfg->base, DW_DMA_CFG);
+	printk("checking if dma is enabled by host by reading DW_DMA_CFG, base addr %x, offset %x, addr %x\n", dev_cfg->base, DW_DMA_CFG, dev_cfg->base + DW_DMA_CFG);
 	/* we cannot config DMAC if DMAC has been already enabled by host */
-	if (dw_read(dev_cfg->base, DW_DMA_CFG) != 0) {
+	uint32_t dma_cfg = dw_read(dev_cfg->base, DW_DMA_CFG);
+	printk("dma cfg is %x\n", dma_cfg);
+	while(true) {};
+	if (dma_cfg != 0) {
 		printk("writing to DW_DMA_CFG 0x0\n");
+		while(true) {};
 		dw_write(dev_cfg->base, DW_DMA_CFG, 0x0);
 	}
 
