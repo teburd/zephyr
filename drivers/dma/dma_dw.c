@@ -50,7 +50,7 @@ static ALWAYS_INLINE uint32_t dw_read(uint32_t dma_base, uint32_t reg)
 	return *((volatile uint32_t*)(dma_base + reg));
 }
 
-static void dw_dma_isr(const struct device *dev)
+void dw_dma_isr(const struct device *dev)
 {
 	const struct dw_dma_dev_cfg *const dev_cfg = dev->config;
 	struct dw_dma_dev_data *const dev_data = dev->data;
@@ -112,7 +112,7 @@ static void dw_dma_isr(const struct device *dev)
 	}
 }
 
-static int dw_dma_config(const struct device *dev, uint32_t channel,
+int dw_dma_config(const struct device *dev, uint32_t channel,
 			 struct dma_config *cfg)
 {
 	struct dw_dma_dev_data *const dev_data = dev->data;
@@ -246,7 +246,7 @@ static int dw_dma_config(const struct device *dev, uint32_t channel,
 	return 0;
 }
 
-static int dw_dma_reload(const struct device *dev, uint32_t channel,
+int dw_dma_reload(const struct device *dev, uint32_t channel,
 			 uint32_t src, uint32_t dst, size_t size)
 {
 	struct dw_dma_dev_data *const dev_data = dev->data;
@@ -265,7 +265,7 @@ static int dw_dma_reload(const struct device *dev, uint32_t channel,
 	return 0;
 }
 
-static int dw_dma_transfer_start(const struct device *dev, uint32_t channel)
+int dw_dma_transfer_start(const struct device *dev, uint32_t channel)
 {
 	const struct dw_dma_dev_cfg *const dev_cfg = dev->config;
 
@@ -279,7 +279,7 @@ static int dw_dma_transfer_start(const struct device *dev, uint32_t channel)
 	return 0;
 }
 
-static int dw_dma_transfer_stop(const struct device *dev, uint32_t channel)
+int dw_dma_transfer_stop(const struct device *dev, uint32_t channel)
 {
 	const struct dw_dma_dev_cfg *const dev_cfg = dev->config;
 
@@ -292,7 +292,7 @@ static int dw_dma_transfer_stop(const struct device *dev, uint32_t channel)
 	return 0;
 }
 
-static void dw_dma_setup(const struct device *dev)
+void dw_dma_setup(const struct device *dev)
 {
 	const struct dw_dma_dev_cfg *const dev_cfg = dev->config;
 	struct dw_dma_dev_data *const dev_data = dev->data;

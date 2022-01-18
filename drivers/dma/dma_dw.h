@@ -7,6 +7,8 @@
 #ifndef ZEPHYR_DRIVERS_DMA_DMA_DW_H_
 #define ZEPHYR_DRIVERS_DMA_DMA_DW_H_
 
+#include <drivers/dma.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -110,6 +112,28 @@ struct dw_dma_dev_cfg {
 	uint32_t base;
 	void (*irq_config)(void);
 };
+
+/* Common driver functionality used by derivatives */
+
+/** @private */
+void dw_dma_setup(const struct device *dev);
+
+/** @private */
+int dw_dma_config(const struct device *dev, uint32_t channel,
+		  struct dma_config *cfg);
+
+/** @private */
+int dw_dma_reload(const struct device *dev, uint32_t channel,
+		  uint32_t src, uint32_t dst, size_t size);
+
+/** @private */
+int dw_dma_transfer_start(const struct device *dev, uint32_t channel);
+
+/** @private */
+int dw_dma_transfer_stop(const struct device *dev, uint32_t channel);
+
+/** @private */
+void dw_dma_isr(const struct device *dev);
 
 #ifdef __cplusplus
 }
