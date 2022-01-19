@@ -152,7 +152,9 @@ typedef void (*dma_callback_t)(const struct device *dev, void *user_data,
  * @param linked_channel       [ 20 : 26 ] - after channel count exhaust will
  *                                        initiate a channel service request
  *                                        at this channel
- * @param reserved             [ 27 : 31 ]
+ * @param poll                 [ 27 ] - poll for transfer completion before returning
+ *                                      rather than waiting on an interrupt when possible.
+ * @param reserved             [ 28 : 31 ]
  * @param source_data_size    [ 0 : 15 ]   - width of source data (in bytes)
  * @param dest_data_size      [ 16 : 31 ]  - width of dest data (in bytes)
  * @param source_burst_length [ 0 : 15 ]   - number of source data units
@@ -173,6 +175,7 @@ struct dma_config {
 	uint32_t  source_chaining_en :   1;
 	uint32_t  dest_chaining_en :     1;
 	uint32_t  linked_channel   :     7;
+	uint32_t  poll             :     1;
 	uint32_t  reserved :             5;
 	uint32_t  source_data_size :    16;
 	uint32_t  dest_data_size :      16;
