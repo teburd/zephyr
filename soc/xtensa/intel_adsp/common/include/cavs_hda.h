@@ -1,0 +1,219 @@
+/* Copyright (c) 2022 Intel Corporation
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#ifndef ZEPHYR_INCLUDE_CAVS_HDA_H
+#define ZEPHYR_INCLUDE_CAVS_HDA_H
+
+#include <kernel.h>
+#include <device.h>
+
+/* HDA stream */
+struct cavs_hda_stream {
+	uint32_t elem_size;
+	uint32_t borrowed;
+};
+
+#define HDA_STREAM_COUNT 14
+
+/* HDA stream set */
+struct cavs_hda_streams {
+	uint32_t base; /* base address of register block */
+	struct cavs_hda_stream streams[HDA_STREAM_COUNT];
+};
+
+/**
+ * Statically allocated and publicly available set of HDA stream sets
+ */
+struct cavs_hda {
+	struct cavs_hda_streams host_in;
+	struct cavs_hda_streams host_out;
+} cavs_hda = {
+	.host_in = {
+		.base =
+	},
+	.host_out = {
+		.base =
+	},
+};
+
+/* HDA IP Register Block */
+#define HDA_REGBLOCK_SIZE 0x40
+#define HDA_ADDR(base, stream) (base + stream*HDA_REGBLOCK_SIZE)
+
+/* Buffer Size Minimum */
+#define HDA_BUFSIZE_MIN 0x10
+
+/* Read/Write pointer mask, 24 bits */
+#define HDA_RWP_MASK 0x00FFFFFF
+
+/* Gateway Control and Status Register */
+#define DGCS(base, stream) ((volatile uint32_t *)HDA_ADDR(base, stream))
+#define DGCS_SCS BIT(31) /* Sample container size */
+#define DGCS_GEN BIT(26) /* Gateway Enable */
+#define DGCS_L1ETP BIT(25) /* L1 Enter Prevent */
+#define DGCS_L1EXP BIT(25) /* L1 Exit Prevent */
+#define DGCS_FWCB BIT(23) /* Firmware Control Buffer */
+#define DGCS_GBUSY BIT(15) /* Gateway Busy */
+#define DGCS_TE BIT(14) /* Transfer Error */
+#define DGCS_BSC BIT(11) /* Buffer Segment Completion */
+#define DGCS_BOR BIT(10) /* Buffer Overrun */
+#define DGCS_BUR BIT(10) /* Buffer Underrun */
+#define DGCS_BF BIT(9) /* Buffer Full */
+#define DGCS_BNE BIT(8) /* Buffer Not Empty */
+#define DGCS_FIFORDY BIT(5) /* Enable FIFO */
+#define DGCS_BSCIE BIT(3) /* Buffer Segment Completion Interrupt Enable */
+
+/* Gateway Buffer Base Address */
+#define DGBBA(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x04))
+/* Gateway Buffer Size */
+#define DGBS(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x08))
+/* Gateway Buffer Pointer Increment */
+#define DGBFPI(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x0c))
+/* Gateway Buffer Read Pointer */
+#define DGBRP(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x10))
+/* Gateway Buffer Write Pointer */
+#define DGBWP(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x14))
+/* Gateway Buffer Segment Pointer */
+#define DGBSP(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x18))
+/* Gateway Minimum Buffer Size */
+#define DGMBS(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x1c))
+/* Gateway Linear Link Position Increment */
+#define DGLLPI(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x24)
+/* Gateway Linear Position In Buffer Increment */
+#define DGLPIBI(base, stream) ((volatile uint32_t *)(HDA_ADDR(base, stream) + 0x28)
+
+
+/**
+ * @brief Dump all the useful registers of an HDA stream to printk
+ */
+static inline void cavs_hda_dbg(struct cavs_hda_streams *hda, uint32_t sid)
+{
+
+	if(&cavs_hda->host_in == hda) {
+		printk("in");
+	} else {
+		printk("out");
+	}
+	printk("(%d), dgcs 0x%x, dgbba 0x%x, dgbs 0x%x, dgbrp 0x%x, dgbwp 0x%x, dgbsp 0x%x, dgmbs 0x%x, dgbllpi 0x%x, dglpibi 0x%x\n",
+	       sid,
+	       *DGCS(hda->base, sid),
+	       *DGBBA(hda->base, sid),
+	       *DGBS(hda->base, sid),
+	       *DGBRP(hda->base, sid),
+	       *DGBWP(hda->base, sid),
+	       *DGBSP(hda->base, sid),
+	       *DGMBS(hda->base, sid),
+	       *DGLLPI(hda->base, sid),
+	       *DGLPIBI(hda->base, sid));
+}
+
+
+/**
+ * @brief Set the buffer, size, and element size for an HDA stream
+ *
+ * Prior to enabling an HDA stream to/from the host this is the minimum configuration
+ * that is required.
+ *
+ * @param hda Stream set to work with
+ * @param sid Stream identifier
+ * @param buf Buffer address to use for the shared FIFO. Must be in L2.
+ * @param buf_size Buffer size in bytes
+ * @param elem_size Buffer element size, must be *atleast* 0x10 bytes.
+ * @retval -EBUSY if the HDA stream is already enabled
+ * @retval -EINVAL if the buf is not in L2, buf size isn't aligned on 0x10, or elem_size is smaller than 0x10
+ * @retval 0 on Success
+ */
+static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t sid,
+				     uint8_t *buf, uint32_t buf_size, uint16_t elem_size)
+{
+	cavs_hda_dbg(hda, sid);
+
+	/* Tell hardware we want to control the buffer pointer
+	 * and we haven't read anything yet so don't power down
+	 */
+	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP;
+
+	*DGBBA(hda->base, sid) = (uint32_t)buf;
+	*DGBS(hda->base, sid) = HDA_RWP_MASK & buf_size;
+	*DGMBS(hda->base, sid) = elem_size;
+
+	cavs_hda_dbg(hda, sid);
+
+}
+
+/**
+ * @brief Enable the stream
+ *
+ * @param hda Stream set to work with
+ * @param sid Stream identifier
+ */
+static inline void cavs_hda_enable(struct cavs_hda_streams *hda, uint32_t sid)
+{
+	/* enable the stream */
+	*DGCS(hda->base, sid) |= DGCS_GEN;
+}
+
+static inline void cavs_hda_disable(struct cavs_hda_streams *hda, uint32_t sid)
+{
+	/* disable the stream */
+	/* TODO maybe see if we can signal a stop with FIFORDY
+	 * by setting high, waiting for the appropriate index
+	 * to stop incrementing or GBUSY bit, then unsetting DGCS_GEN
+	 * once the stream is stopped
+	 */
+	*DGCS(hda->base, sid) &= ~(DGCS_GEN | DGCS_FIFORDY);
+}
+
+static inline void cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid, uint8_t byte)
+{
+	cavs_hda_dbg(hda, sid);
+
+	uint32_t next_idx = *DGWP(hda->base, sid) + 1;
+
+	/* wrapped next index */
+	if (next_idx >= *DGBS(hda->base, sid)) {
+		next_idx = 0;
+	}
+
+	cavs_hda_dbg(hda, sid);
+	printk("Wait while buffer is full, next_idx %d...", next_idx);
+	while (next_idx == *DGRP(hda->base, sid)) {}
+
+	printk("writing byte\n");
+	(volatile uint32_t *)*DGBBA(hda->base, sid)[next_idx] = byte;
+
+	printk("indicate byte written\n");
+	/* Indicate we've provided 1 byte */
+	*DGBFPI(hda->base, sid) += 1;
+	cavs_hda_dbg(hda, sid);
+}
+
+static inline int cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t sid)
+{
+	uint32_t dgcs = *DGCS(hda->base, sid);
+
+	if (dgcs & DGCS_BF) {
+		return 0;
+	}
+
+	uint32_t dgbs = *DGBS(hda->base, sid);
+
+	if (dgcs & DGCS_BNE == 0) {
+		return dgbs;
+	}
+
+	int32_t rp = *DGBRP(hda->base, sid);
+	int32_t wp = *DGBWP(hda->base, sid);
+	int32_t size = rp - wp;
+
+	if (size <= 0) {
+		size +=dgbs;
+	}
+
+	return size;
+}
+
+
+
+
+#endif // ZEPHYR_INCLUDE_CAVS_HDA_H_
