@@ -394,7 +394,6 @@ static inline int z_impl_dma_stop(const struct device *dev, uint32_t channel)
 	return api->stop(dev, channel);
 }
 
-
 /**
  * @brief Suspend a DMA channel transfer
  *
