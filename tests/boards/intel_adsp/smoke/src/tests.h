@@ -38,6 +38,18 @@ enum cavstool_cmd {
 
 	/* The host emits a (real/host time) timestamp into the log stream */
 	IPCCMD_TIMESTAMP,
+
+	/* The host initializes an HDA host in stream */
+	IPCCMD_HDA_HOST_IN_INIT,
+
+	/* The host runs (sets the SDxCTL.RUN bit) a HDA host in stream */
+	IPCCMD_HDA_HOST_IN_RUN,
+
+	/* The host validates an HDA host in byte stream containing an 8bit counter */
+	IPCCMD_HDA_HOST_IN_VALIDATE,
+
+	/* The host clears the run bit and resets the HDA host in stream */
+	IPCCMD_HDA_HOST_IN_RESET,
 };
 
 void test_post_boot_ipi(void);
@@ -45,5 +57,6 @@ void test_smp_boot_delay(void);
 void test_host_ipc(void);
 void test_cpu_behavior(void);
 void test_cpu_halt(void);
+void test_hda_host_in(void);
 
 #endif /* ZEPHYR_TESTS_INTEL_ADSP_TESTS_H */

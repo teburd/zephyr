@@ -329,6 +329,18 @@ def ipc_command(data, ext_data):
         ext_data = t - ipc_timestamp
         ipc_timestamp = t
         send_msg = True
+    elif data == 5: # HDA HOST IN INIT
+        log.warning("HDA host in init")
+        send_msg = True
+    elif data == 6: # HDA HOST IN RUN
+        log.warning("HDA host in run")
+        send_msg = True
+    elif data == 7: # HDA HOST IN VALIDATE
+        log.warning("HDA_ host in validate")
+        send_msg = True
+    elif data == 8: # HDA HOST IN RESET
+        log.warning("HDA host in reset")
+        send_msg = True
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
 

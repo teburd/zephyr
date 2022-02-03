@@ -48,7 +48,8 @@ void test_main(void)
 			 ztest_unit_test(test_post_boot_ipi),
 			 ztest_unit_test(test_cpu_behavior),
 			 ztest_unit_test(test_host_ipc),
-			 ztest_unit_test(test_clock_calibrate)
+			 ztest_unit_test(test_clock_calibrate),
+			 ztest_unit_test(test_hda_host_in)
 			 );
 
 	ztest_run_test_suite(intel_adsp);
