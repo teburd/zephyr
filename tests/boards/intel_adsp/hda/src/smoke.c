@@ -53,15 +53,11 @@ void test_hda_smoke(void)
 	 */
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT));
 
+	int res;
 	for(uint32_t i = 0; i < TRANSFER_COUNT; i++) {
 		uint8_t val = i & 0xff;
-		int res = 0, retries = 10;
-		do {
-			res = cavs_hda_write(host_in, STREAM_ID, &val, 1);
-			retries--;
-		} while(res == -1 && retries != 0);
-		printk("result %d\n", res);
-		zassert_true(res == 0, "cavs hda write failed after 10 retries");
+		res = cavs_hda_write(host_in, STREAM_ID, &val, 1);
+		zassert_true(res == 0, "cavs_hda_write failed with result %d, expected 0", res);
 
 		/* TODO is this really needed or can we set the dma stream to not enter L1? */
 		cavs_hda_l1_exit(host_in, STREAM_ID);
@@ -72,6 +68,18 @@ void test_hda_smoke(void)
 	 * and respond yes/no
 	 */
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID));
+
+	/**
+	 * Write a 32 byte block of data at once
+	 */
+	uint8_t vals[32];
+	for(int i = 0; i < 32; i++)
+	{
+		vals[i] = i;
+	}
+	res = cavs_hda_write(host_in, STREAM_ID, vals, 32);
+	zassert_true(res == 0, "cavs_hda_write block failed with result %d, expected 0", res);
+
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, STREAM_ID, IPC_TIMEOUT));
 
 	/* disable the stream */
