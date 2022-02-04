@@ -97,7 +97,7 @@ struct cavs_hda {
 		} else {						\
 			hda_name = "out";				\
 		}							\
-		printk("%s:%u %s(%u:0x%p), dgcs: 0x%x, dgbba 0x%x, dgbs %u, dgbrp 0x%x, dgbwp 0x%x, dgbsp 0x%x, dgmbs %u, dgbllpi 0x%x, dglpibi 0x%x\n", \
+		printk("%s:%u %s(%u:0x%p), dgcs: 0x%x, dgbba 0x%x, dgbs %u, dgbrp %u, dgbwp %u, dgbsp %u, dgmbs %u, dgbllpi 0x%x, dglpibi 0x%x\n", \
 		       __FILE__, __LINE__, hda_name,			\
 		       sid, DGCS(hda->base, sid),			\
 		       *DGCS(hda->base, sid),				\
