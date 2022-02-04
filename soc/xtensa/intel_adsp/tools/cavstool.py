@@ -30,37 +30,48 @@ class HDAStream:
         log.info("Mapping registers for hda stream")
         self.regs = Regs(self.base)
         self.regs.CTL  = 0x00
+        self.regs.LPIB = 0x04
         self.regs.CBL  = 0x08
         self.regs.LVI  = 0x0c
         self.regs.BDPL = 0x18
         self.regs.BDPU = 0x1c
         self.regs.freeze()
+        self.debug()
         log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
         self.reset()
+        self.debug()
 
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
         hda.PPCTL |= (1 << self.stream_id)
+        self.debug()
 
+        log.info("Setting buffer list, length, and stream id")
         self.mem, self.buf_list_addr, self.n_bufs = self.setup_buf(buf_len)
-        self.regs.CTL = (1 << 20)
+        self.regs.CTL = (self.stream_id << 20)
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
         self.regs.CBL = buf_len
         self.regs.LVI = self.n_bufs - 1
+        self.debug()
+        log.info("Stream %d initialized", self.stream_id)
 
 
     def __del__(self):
         self.reset()
 
     def start(self):
-        # set run bit
-        log.info("Setting run bit")
+        log.info("Starting stream %d", self.stream_id)
+        self.debug()
         self.regs.CTL |= 2
-        log.info("Set run bit")
-        return
+        self.debug()
+        log.info("Started stream %d", self.stream_id)
 
     def stop(self):
+        log.info("Stopping stream %d", self.stream_id)
+        self.debug()
         self.reset()
+        self.debug()
+        log.info("Stopped stread %d", self.stream_id)
 
     def setup_buf(self, buf_len):
         (mem, phys_addr) = map_phys_mem()
@@ -81,6 +92,13 @@ class HDAStream:
         log.info("Filled the buffer descriptor list (BDL) for DMA.")
         return (mem, phys_addr + bdl_off, 2)
 
+    def debug(self):
+        log.info("HDA %d: PPROC %d, CTL 0x%x, LPIB 0x%x, BDPU 0x%x, BDPL 0x%x, CBL 0x%x, LVI 0x%x",
+                 self.stream_id, (hda.PPCTL >> self.stream_id) & 1, self.regs.CTL, self.regs.LPIB, self.regs.BDPU,
+                 self.regs.BDPL, self.regs.CBL, self.regs.LVI)
+        log.info("    status: FIFORDY %d, DESE %d, FIFOE %d, BCIS %d",
+                 self.regs.CTL >> 29, self.regs.CTL >> 28, self.regs.CTL >> 27, self.regs.CTL >> 26)
+
     def reset(self):
         # Turn DMA off and reset the stream.  Clearing START first is a
         # noop per the spec, but absolutely required for stability.
@@ -89,6 +107,8 @@ class HDAStream:
         # The sleep too is required, on at least one board (a fast
         # chromebook) putting the two writes next each other also hangs
         # the DSP!
+        log.info("Resetting stream %d", self.stream_id)
+        self.debug()
         sd.CTL &= ~2 # clear START
         time.sleep(0.1)
         # set enter reset bit
@@ -98,7 +118,8 @@ class HDAStream:
         sd.CTL = 0
         while (sd.CTL & 1) == 1: pass
         # hardware is ready to be used
-        self.state = "READY"
+        self.debug()
+        log.info("Reset stream %d", self.stream_id)
 
 
 def map_regs():
@@ -433,6 +454,7 @@ def ipc_command(data, ext_data):
     if done and not cavs15:
         log.info("Sending done")
         dsp.HIPCTDA = 1<<31 # Signal done
+        log.info("Sent done")
     if send_msg:
         log.info("Sending Message")
         dsp.HIPCIDD = ext_data
@@ -462,9 +484,13 @@ async def main():
             sys.stdout.write(output)
             sys.stdout.flush()
         if dsp.HIPCTDR & 0x80000000:
+            log.info("ipc_command exit")
             ipc_command(dsp.HIPCTDR & ~0x80000000, dsp.HIPCTDD)
+            log.info("ipc_command exit")
         if dsp.HIPCIDA & 0x80000000:
+            log.info("ACKing done")
             dsp.HIPCIDA = 1<<31 # must ACK any DONE interrupts that arrive!
+            log.info("ACKed done")
 
 
 ap = argparse.ArgumentParser(description="DSP loader/logger tool")
