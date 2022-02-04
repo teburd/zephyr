@@ -27,7 +27,7 @@ class HDAStream:
     def __init__(self, stream_id, buf_len):
         self.stream_id = stream_id
         self.base = hdamem + 0x0080 + (stream_id * 0x20)
-        log.warn("Mapping registers for hda stream")
+        log.info("Mapping registers for hda stream")
         self.regs = Regs(self.base)
         self.regs.CTL  = 0x00
         self.regs.CBL  = 0x08
@@ -35,10 +35,10 @@ class HDAStream:
         self.regs.BDPL = 0x18
         self.regs.BDPU = 0x1c
         self.regs.freeze()
-        log.warn("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
+        log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
         self.reset()
 
-        log.warn("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
+        log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
         hda.PPCTL |= (1 << self.stream_id)
 
         self.mem, self.buf_list_addr, self.n_bufs = self.setup_buf(buf_len)
