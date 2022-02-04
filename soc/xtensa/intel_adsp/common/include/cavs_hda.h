@@ -10,10 +10,29 @@
 
 /* HDA stream */
 struct cavs_hda_stream {
-	uint32_t elem_size;
+	/* rather than copying data to and from
+	 * the underlying fifo buffer we allow software
+	 * to borrow slices of the buffer as a pointer
+	 * and return it when done.
+	 */
 	uint32_t borrowed;
-	uint32_t last_brwp; /* track the hardware pointer position when last changed */
-	uint32_t fpi; /* number of positions from the hardware pointer position expected to change */
+
+	/* track the hardware read pointer position in software
+	 * to detect hardware updates
+	 */
+	uint32_t rp;
+
+	/* track the hardware write pointer position
+	 * to detect hardware updates
+	 */
+	uint32_t wp;
+
+	/* track firmware pointer increment to
+	 * ensure we don't overwrite existing buffer
+	 * data when the hardware hasn't yet updated
+	 * its own position.
+	 */
+	uint32_t fpi;
 };
 
 #define HDA_STREAM_COUNT 14
@@ -45,7 +64,7 @@ static struct cavs_hda cavs_hda = {
 #define HDA_REGBLOCK_SIZE 0x40
 #define HDA_ADDR(base, stream) (base + stream*HDA_REGBLOCK_SIZE)
 
-/* Buffer Size Minimum */
+/* Buffer Size Minimum (32 bytes!) */
 #define HDA_BUFSIZE_MIN 0x10
 
 /* Read/Write pointer mask, 24 bits */
@@ -111,7 +130,10 @@ static struct cavs_hda cavs_hda = {
 		       *DGMBS(hda->base, sid),				\
 		       *DGLLPI(hda->base, sid),				\
 		       *DGLPIBI(hda->base, sid));			\
-		printk("\tlast_brwp %d, fpi %d\n", hda->streams[sid].last_brwp, hda->streams[sid].fpi); \
+		printk("\tborrowed %d, wp: %d, rp: %d, fpi %d\n", hda->streams[sid].borrowed, \
+		       hda->streams[sid].wp,				\
+		       hda->streams[sid].rp,				\
+		       hda->streams[sid].fpi);				\
 	} while (0)
 
 
@@ -144,11 +166,12 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	*DGBS(hda->base, sid) = HDA_RWP_MASK & buf_size;
 	*DGMBS(hda->base, sid) = elem_size;
 
-	cavs_hda_dbg(hda, sid);
 	hda->streams[sid].borrowed = 0;
-	hda->streams[sid].last_brwp = 0;
+	hda->streams[sid].rp = 0;
+	hda->streams[sid].wp = 0;
 	hda->streams[sid].fpi = 0;
 
+	cavs_hda_dbg(hda, sid);
 }
 
 /**
@@ -186,71 +209,35 @@ static inline void cavs_hda_disable(struct cavs_hda_streams *hda, uint32_t sid)
 }
 
 /**
- * Write a byte only waiting for a spot to write it if needed
+ *@brief Determine the number of unused bytes in the fifo
+ *
+ * @param hda HDA device
+ * @param sid Stream ID
+ *
+ * @retval n Number of unused bytes
  */
-static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid, uint8_t byte)
-{
-	cavs_hda_dbg(hda, sid);
-
-	uint32_t dgbwp = *DGBWP(hda->base, sid);
-
-	/* If the hardware hasn't update the write pointer and we've written previously
-	 * there's an issue
-	 */
-	printk("Check if writes have carried on in hardware...\n");
-	if (dgbwp == hda->streams[sid].last_brwp && hda->streams[sid].fpi > 0) {
-		return -1;
-	}
-
-	uint32_t next_idx = dgbwp + 1;
-
-	/* wrapped next index */
-	if (next_idx >= *DGBS(hda->base, sid)) {
-		next_idx = 0;
-	}
-
-	cavs_hda_dbg(hda, sid);
-
-	printk("Check if buffer is full, next_idx %d...\n", next_idx);
-	uint32_t retries = 1000;
-	/* TODO account for the bne, bf checks instead as we lose out on 1 byte by doing it
-	 * this way. */
-	while (next_idx == *DGBRP(hda->base, sid)) {
-		retries--;
-		if (retries == 0) {
-			return -2;
-		}
-	}
-
-	printk("Writing byte(s) after %d retries on buffer full check\n", 1000 - retries);
-	((volatile uint32_t *)(*DGBBA(hda->base, sid)))[next_idx] = byte;
-
-	printk("Indicate byte(s) written\n");
-	/* Indicate we've provided 1 byte */
-	*DGBFPI(hda->base, sid) += 1;
-	cavs_hda_dbg(hda, sid);
-
-	/* book keeping to ensure we don't corrupt our own buffer by
-	 * writing faster than the hardware
-	 */
-	hda->streams[sid].last_brwp = dgbwp;
-	hda->streams[sid].fpi = 1;
-
-	return 1;
-}
-
-/*
-static inline int cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t sid)
+static inline uint32_t cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t sid)
 {
 	uint32_t dgcs = *DGCS(hda->base, sid);
 
+	/* if buffer is full then 0 bytes available
+	 * TODO this only works if the host sets the stream format!
+	 * which means its not useful in a general fifo sense but
+	 * in I think a flow control sense. "don't write more, backlogged" kind of
+	 * thing.
+	 */
+	/*
 	if (dgcs & DGCS_BF) {
+		printk("buffer full!\n");
 		return 0;
 	}
+	*/
 
 	uint32_t dgbs = *DGBS(hda->base, sid);
 
-	if (dgcs & DGCS_BNE == 0) {
+	/* if buffer is not empty */
+	if ((dgcs & DGCS_BNE) == 0) {
+		printk("buffer empty!\n");
 		return dgbs;
 	}
 
@@ -259,12 +246,82 @@ static inline int cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t sid)
 	int32_t size = rp - wp;
 
 	if (size <= 0) {
-		size +=dgbs;
+		size += dgbs;
 	}
 
+	printk("cavs_hda_unused stream %d, size %d\n", sid, size);
 	return size;
 }
-*/
+
+/**
+ * @brief Copying write to the fifo
+ *
+ * @param hda HDA device
+ * @param sid Stream ID
+ * @param buf Buffer of bytes
+ * @param buf_len Number of bytes
+ *
+ * @retval -2 Previous writes to the buffer have not been committed in hardware
+ *            or the stream isn't enabled in some way. Check on the host SDxCTL.RUN and
+ *            ppctl.PPROC are set. Check on the DSP that dgctl.GEN is enabled.
+ * @retval -1 Not enough room in the FIFO for the buffer to be written. Try again soon
+ *            and ensure the stream is running and enabled.
+ * @retval  0 Write was successful. No guarantee the other side has all bytes though
+ *            as the burst size appears to be 32 bytes. Only once 32 bytes are written
+ *            does the data actually get moved.
+ */
+static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
+				 uint8_t *buf, uint32_t buf_len)
+{
+	/* TODO assert on buf_len being word aligned? would avoid the byte-wise copy below */
+	cavs_hda_dbg(hda, sid);
+
+	uint32_t dgbwp = *DGBWP(hda->base, sid);
+
+	/* If the hardware hasn't updated the write pointer and we've written previously
+	 * there's an issue and we cannot continue.
+	 */
+	if (dgbwp == hda->streams[sid].wp && hda->streams[sid].fpi > 0) {
+		return -2;
+	}
+
+	cavs_hda_dbg(hda, sid);
+
+	/* Check if there's room in the fifo for the given buffer */
+	if (cavs_hda_unused(hda, sid) < buf_len) {
+		return -1;
+	}
+
+	/* Start on the current write position
+	 * then increment by one before each write
+	 *
+	 * TODO use word copies rather than byte copies when feasible
+	 */
+	uint32_t fifo_size = *DGBS(hda->base, sid);
+	uint8_t *fifo = (uint8_t *)(*DGBBA(hda->base, sid));
+	uint32_t idx = dgbwp;
+	for(uint32_t i = 0; i < buf_len; i++) {
+		idx++;
+		/* wrapped index case */
+		if (idx == fifo_size) {
+			idx = 0;
+		}
+		fifo[idx] = buf[i];
+	}
+
+	/* Indicate we've provided buf_len bytes */
+	*DGBFPI(hda->base, sid) += buf_len;
+
+	cavs_hda_dbg(hda, sid);
+
+	/* book keeping to ensure we don't corrupt our own buffer by
+	 * writing faster than the hardware
+	 */
+	hda->streams[sid].wp = dgbwp;
+	hda->streams[sid].rp = *DGBRP(hda->base, sid);
+	hda->streams[sid].fpi = buf_len;
+	return 0;
+}
 
 
 
