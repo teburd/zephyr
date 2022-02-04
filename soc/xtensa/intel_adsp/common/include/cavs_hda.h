@@ -218,7 +218,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid, uin
 		}
 	}
 
-	printk("Writing byte(s)\n");
+	printk("Writing byte(s) after %d retries on buffer full check\n", 1000 - retries);
 	((volatile uint32_t *)(*DGBBA(hda->base, sid)))[next_idx] = byte;
 
 	printk("Indicate byte(s) written\n");

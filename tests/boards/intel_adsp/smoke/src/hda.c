@@ -8,8 +8,8 @@
 #include <cavs_hda.h>
 #include "tests.h"
 
-#define FIFO_SIZE 128
-#define TRANSFER_COUNT 128
+#define FIFO_SIZE 64
+#define TRANSFER_COUNT (32*5)
 
 __attribute__((section(".dma_buffers"))) uint8_t in_fifo[128];
 
