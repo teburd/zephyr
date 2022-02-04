@@ -30,9 +30,10 @@ void test_hda_host_in(void)
 	cavs_ipc_set_done_handler(CAVS_HOST_DEV, ipc_done, NULL);
 
 	/**
-	 * Tell the host to setup a hda host in stream with the given id (0)
+	 * Tell the host to setup an hda host in stream with the given id (0) and size of 1024
+	 * We can add more flags/options here if needed
 	 */
-	while(!cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_HOST_IN_INIT, 0, K_FOREVER)) {}
+	while(!cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_HOST_IN_INIT, 0 | (1024 << 8), K_FOREVER)) {}
 
 	struct cavs_hda_streams *host_in = &cavs_hda.host_in;
 
@@ -40,6 +41,7 @@ void test_hda_host_in(void)
 	 * Write out a message byte by byte to the stream
 	 */
 	cavs_hda_set_buffer(host_in, 0, host_in_buf, 32, 1);
+	cavs_hda_enable(host_in, 0);
 
 	/**
 	 * Tell the host to set run bit for hda host in stream with the given id (0)
@@ -47,7 +49,6 @@ void test_hda_host_in(void)
 	while(!cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_HOST_IN_RUN, 0, K_FOREVER)) {};
 
 
-	cavs_hda_enable(host_in, 0);
 
 	int res;
 	for(uint8_t i = 0; i < 128; i++) {

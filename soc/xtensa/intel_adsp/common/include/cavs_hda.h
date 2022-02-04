@@ -6,6 +6,7 @@
 
 #include <kernel.h>
 #include <device.h>
+#include <cavs-shim.h>
 
 /* HDA stream */
 struct cavs_hda_stream {
@@ -149,6 +150,17 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 }
 
 /**
+ * @brief Force DMA to exist L1 (low power state)
+ */
+static inline void cavs_hda_l1_exit(struct cavs_hda_streams *hda, uint32_t sid)
+{
+	CAVS_SHIM.svcfg |= BIT(2);
+	k_busy_wait(100000);
+	CAVS_SHIM.svcfg &= ~BIT(2);
+}
+
+
+/**
  * @brief Enable the stream
  *
  * @param hda Stream set to work with
@@ -198,8 +210,12 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid, uin
 	cavs_hda_dbg(hda, sid);
 
 	printk("Check if buffer is full, next_idx %d...\n", next_idx);
-	if (next_idx == *DGBRP(hda->base, sid)) {
-		return -2;
+	uint32_t retries = 10;
+	while (next_idx == *DGBRP(hda->base, sid)) {
+		retries--;
+		if (retries == 0) {
+			return -2;
+		}
 	}
 
 	printk("Writing byte(s)\n");
@@ -216,6 +232,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid, uin
 	hda->streams[sid].last_brwp = dgbwp;
 	hda->streams[sid].fpi = 1;
 
+	cavs_hda_l1_exit(hda, sid);
 	return 1;
 }
 

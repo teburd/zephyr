@@ -23,6 +23,81 @@ HUGEPAGE_FILE = "/dev/hugepages/cavs-fw-dma.tmp"
 # Log is in the fourth window, they appear in 128k regions starting at 512k
 WINSTREAM_OFFSET = (512 + (3 * 128)) * 1024
 
+class HDAStream:
+    def __init__(self, stream_id, buf_len):
+        self.stream_id = stream_id
+        self.base = hdamem + 0x0080 + (stream_id * 0x20)
+        self.regs = Regs(self.base)
+        self.regs.CTL  = 0x00
+        self.regs.CBL  = 0x08
+        self.regs.LVI  = 0x0c
+        self.regs.BDPL = 0x18
+        self.regs.BDPU = 0x1c
+        self.regs.freeze()
+        log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
+        self.reset()
+
+        log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
+        hda.PPCTL |= (1 << self.stream_id)
+
+        self.mem, self.buf_list_addr, self.n_bufs = self.setup_buf(buf_len)
+        self.regs.CTL = (1 << 20)
+        self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
+        self.regs.BDPL = self.buf_list_addr & 0xffffffff
+        self.regs.CBL = buf_len
+        self.regs.LVI = self.n_bufs - 1
+
+
+    def __del__(self):
+        self.reset()
+
+    def start(self):
+        # set run bit
+        self.regs.CTL |= 2
+        return
+
+    def stop(self):
+        self.reset()
+
+    def setup_buf(self, buf_len):
+        (mem, phys_addr) = map_phys_mem()
+
+        log.info("Mapped 2M huge page at 0x%x for buf size (%d)"
+                 % (phys_addr, buf_len))
+
+        # HDA requires at least two buffers be defined, but we don't care about
+        # boundaries because it's all a contiguous region. Place a vestigial
+        # 128-byte (minimum size and alignment) buffer after the main one, and put
+        # the 4-entry BDL list into the final 128 bytes of the page.
+        buf0_len = HUGEPAGESZ - 2 * 128
+        buf1_len = 128
+        bdl_off = buf0_len + buf1_len
+        mem[bdl_off:bdl_off + 32] = struct.pack("<QQQQ",
+                                                phys_addr, buf0_len,
+                                                phys_addr + buf0_len, buf1_len)
+        log.info("Filled the buffer descriptor list (BDL) for DMA.")
+        return (mem, phys_addr + bdl_off, 2)
+
+    def reset(self):
+        # Turn DMA off and reset the stream.  Clearing START first is a
+        # noop per the spec, but absolutely required for stability.
+        # Apparently the reset doesn't stop the stream, and the next load
+        # starts before it's ready and kills the load (and often the DSP).
+        # The sleep too is required, on at least one board (a fast
+        # chromebook) putting the two writes next each other also hangs
+        # the DSP!
+        sd.CTL &= ~2 # clear START
+        time.sleep(0.1)
+        # set enter reset bit
+        sd.CTL = 1
+        while (sd.CTL & 1) == 0: pass
+        # clear enter reset bit to exit reset
+        sd.CTL = 0
+        while (sd.CTL & 1) == 1: pass
+        # hardware is ready to be used
+        self.state = "READY"
+
+
 def map_regs():
     p = runx(f"grep -iPl 'PCI_CLASS=40(10|38)0' /sys/bus/pci/devices/*/uevent")
     pcidir = os.path.dirname(p)
@@ -51,6 +126,7 @@ def map_regs():
         cfg.write(b'\x06\x04')
 
     # Standard HD Audio Registers
+    global hdamem
     (hdamem, _) = bar_map(pcidir, 0)
     hda = Regs(hdamem)
     hda.GCAP    = 0x0000
@@ -63,6 +139,7 @@ def map_regs():
     log.info(f"Selected output stream {hda_ostream_id} (GCAP = 0x{hda.GCAP:x})")
     hda.SD_SPIB = 0x0708 + (8 * hda_ostream_id)
     hda.freeze()
+
 
     # Standard HD Audio Stream Descriptor
     sd = Regs(hdamem + 0x0080 + (hda_ostream_id * 0x20))
@@ -330,16 +407,21 @@ def ipc_command(data, ext_data):
         ipc_timestamp = t
         send_msg = True
     elif data == 5: # HDA HOST IN INIT
+        global host_in
+        host_in = HDAStream(ext_data & 0xff, (ext_data >> 8) &0xff)
         log.warning("HDA host in init")
         send_msg = True
     elif data == 6: # HDA HOST IN RUN
         log.warning("HDA host in run")
+        host_in.start()
         send_msg = True
     elif data == 7: # HDA HOST IN VALIDATE
         log.warning("HDA_ host in validate")
+        # TODO send message back
         send_msg = True
     elif data == 8: # HDA HOST IN RESET
         log.warning("HDA host in reset")
+        del host_in
         send_msg = True
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
