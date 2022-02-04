@@ -210,7 +210,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid, uin
 	cavs_hda_dbg(hda, sid);
 
 	printk("Check if buffer is full, next_idx %d...\n", next_idx);
-	uint32_t retries = 10;
+	uint32_t retries = 1000;
 	while (next_idx == *DGBRP(hda->base, sid)) {
 		retries--;
 		if (retries == 0) {

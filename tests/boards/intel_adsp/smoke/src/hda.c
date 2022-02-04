@@ -8,7 +8,9 @@
 #include <cavs_hda.h>
 #include "tests.h"
 
-__attribute__((section(".dma_buffers"))) uint8_t host_in_buf[32];
+#define FIFO_SIZE 128
+
+__attribute__((section(".dma_buffers"))) uint8_t in_fifo[128];
 
 static volatile int msg_res;
 
@@ -40,7 +42,7 @@ void test_hda_host_in(void)
 	/*
 	 * Write out a message byte by byte to the stream
 	 */
-	cavs_hda_set_buffer(host_in, 0, host_in_buf, 32, 1);
+	cavs_hda_set_buffer(host_in, 0, in_fifo, FIFO_SIZE, 1);
 	cavs_hda_enable(host_in, 0);
 
 	/**
