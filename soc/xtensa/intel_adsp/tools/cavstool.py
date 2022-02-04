@@ -27,6 +27,7 @@ class HDAStream:
     def __init__(self, stream_id, buf_len):
         self.stream_id = stream_id
         self.base = hdamem + 0x0080 + (stream_id * 0x20)
+        log.warn("Mapping registers for hda stream")
         self.regs = Regs(self.base)
         self.regs.CTL  = 0x00
         self.regs.CBL  = 0x08
@@ -34,10 +35,10 @@ class HDAStream:
         self.regs.BDPL = 0x18
         self.regs.BDPU = 0x1c
         self.regs.freeze()
-        log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
+        log.warn("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
         self.reset()
 
-        log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
+        log.warn("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
         hda.PPCTL |= (1 << self.stream_id)
 
         self.mem, self.buf_list_addr, self.n_bufs = self.setup_buf(buf_len)
@@ -388,6 +389,7 @@ ipc_timestamp = 0
 
 # Super-simple command language, driven by the test code on the DSP
 def ipc_command(data, ext_data):
+    global host_in
     send_msg = False
     done = True
     if data == 0: # noop, with synchronous DONE
@@ -407,7 +409,6 @@ def ipc_command(data, ext_data):
         ipc_timestamp = t
         send_msg = True
     elif data == 5: # HDA HOST IN INIT
-        global host_in
         host_in = HDAStream(ext_data & 0xff, (ext_data >> 8) &0xff)
         log.warning("HDA host in init")
         send_msg = True

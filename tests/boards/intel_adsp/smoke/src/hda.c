@@ -9,6 +9,7 @@
 #include "tests.h"
 
 #define FIFO_SIZE 128
+#define TRANSFER_COUNT 1024
 
 __attribute__((section(".dma_buffers"))) uint8_t in_fifo[128];
 
@@ -53,7 +54,7 @@ void test_hda_host_in(void)
 
 
 	int res;
-	for(uint8_t i = 0; i < 128; i++) {
+	for(uint8_t i = 0; i < 1024; i++) {
 		res = cavs_hda_write(host_in, 0, i);
 		zassert_true(res > 0, "cavs hda write failed");
 	}

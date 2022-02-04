@@ -232,7 +232,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid, uin
 	hda->streams[sid].last_brwp = dgbwp;
 	hda->streams[sid].fpi = 1;
 
-	cavs_hda_l1_exit(hda, sid);
+	/*  cavs_hda_l1_exit(hda, sid); */
 	return 1;
 }
 
