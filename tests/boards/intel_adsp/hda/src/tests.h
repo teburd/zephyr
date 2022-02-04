@@ -7,10 +7,7 @@
 #include <cavs_ipc.h>
 #include <cavs_test.h>
 
-void test_post_boot_ipi(void);
-void test_smp_boot_delay(void);
-void test_host_ipc(void);
-void test_cpu_behavior(void);
-void test_cpu_halt(void);
+void test_hda_smoke(void);
+void test_hda_host_loop(void);
 
 #endif /* ZEPHYR_TESTS_INTEL_ADSP_TESTS_H */

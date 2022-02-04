@@ -30,7 +30,9 @@ struct cavs_hda_streams {
 struct cavs_hda {
 	struct cavs_hda_streams host_in;
 	struct cavs_hda_streams host_out;
-} cavs_hda = {
+};
+
+static struct cavs_hda cavs_hda = {
 	.host_in = {
 		.base = 0x72c00
 	},
