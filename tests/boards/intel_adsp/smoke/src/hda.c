@@ -46,7 +46,7 @@ void test_hda_host_in(void)
 	 * We can add more flags/options here if needed
 	 */
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_HOST_IN_INIT, STREAM_ID| (FIFO_SIZE << 8)));
-	k_msleep(10);
+	k_msleep(1);
 
 	struct cavs_hda_streams *host_in = &cavs_hda.host_in;
 
@@ -69,7 +69,7 @@ void test_hda_host_in(void)
 
 	printk("sending hda host start\n");
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_HOST_IN_RUN, STREAM_ID));
-	k_msleep(10);
+	k_msleep(1);
 	printk("hda host start sent");
 
 	printk("writing...\n");
@@ -88,10 +88,8 @@ void test_hda_host_in(void)
 	/*
 	 * Tell the host to validate the stream containing a counter up to the given value
 	 * and respond yes/no
-	 */;
+	 */
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_HOST_IN_VALIDATE, 127));
-	/*zassert_eq(msg_res == 1, "Validation of data sent from dsp to host over HDA stream failed"); */
-
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_HOST_IN_RESET, 127));
 
 	/* disable the stream */
