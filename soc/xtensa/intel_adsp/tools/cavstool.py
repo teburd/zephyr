@@ -54,7 +54,9 @@ class HDAStream:
 
     def start(self):
         # set run bit
+        log.info("Setting run bit")
         self.regs.CTL |= 2
+        log.info("Set run bit")
         return
 
     def stop(self):
@@ -389,7 +391,6 @@ ipc_timestamp = 0
 
 # Super-simple command language, driven by the test code on the DSP
 def ipc_command(data, ext_data):
-    global host_in
     send_msg = False
     done = True
     if data == 0: # noop, with synchronous DONE
@@ -409,21 +410,19 @@ def ipc_command(data, ext_data):
         ipc_timestamp = t
         send_msg = True
     elif data == 5: # HDA HOST IN INIT
+        global host_in
         host_in = HDAStream(ext_data & 0xff, (ext_data >> 8) &0xff)
         log.warning("HDA host in init")
-        send_msg = True
     elif data == 6: # HDA HOST IN RUN
-        log.warning("HDA host in run")
+        log.warning("HDA starting")
         host_in.start()
-        send_msg = True
+        log.warning("HDA started")
     elif data == 7: # HDA HOST IN VALIDATE
         log.warning("HDA_ host in validate")
         # TODO send message back
-        send_msg = True
     elif data == 8: # HDA HOST IN RESET
         log.warning("HDA host in reset")
         del host_in
-        send_msg = True
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
 
@@ -432,8 +431,10 @@ def ipc_command(data, ext_data):
         time.sleep(0.01) # Needed on 1.8, or the command below won't send!
 
     if done and not cavs15:
+        log.info("Sending done")
         dsp.HIPCTDA = 1<<31 # Signal done
     if send_msg:
+        log.info("Sending Message")
         dsp.HIPCIDD = ext_data
         dsp.HIPCIDR = (1<<31) | ext_data
 
