@@ -60,7 +60,7 @@ void test_hda_smoke(void)
 		zassert_true(res == 0, "cavs_hda_write failed with result %d, expected 0", res);
 
 		/* TODO is this really needed or can we set the dma stream to not enter L1? */
-		cavs_hda_l1_exit(host_in, STREAM_ID);
+		/*  cavs_hda_l1_exit(host_in, STREAM_ID); */
 	}
 
 	/*

@@ -26,6 +26,7 @@ WINSTREAM_OFFSET = (512 + (3 * 128)) * 1024
 class HDAStream:
     def __init__(self, stream_id, buf_len):
         self.stream_id = stream_id
+        self.buf_len = buf_len
         self.base = hdamem + 0x0080 + (stream_id * 0x20)
         log.info("Mapping registers for hda stream")
         self.regs = Regs(self.base)
@@ -430,16 +431,23 @@ def ipc_command(data, ext_data):
         ext_data = t - ipc_timestamp
         ipc_timestamp = t
         send_msg = True
-    elif data == 5: # HDA HOST IN INIT
+    elif data == 5: # HDA INIT
         global host_in
-        host_in = HDAStream(ext_data & 0xff, (ext_data >> 8) &0xff)
-        log.warning("HDA host in init")
-    elif data == 6: # HDA HOST IN RUN
-        log.warning("HDA starting")
+        log.info("HDA init stream %d with buf_len %d", ext_data & 0xff, (ext_data >> 8) & 0xff)
+        host_in = HDAStream(ext_data & 0xff, (ext_data >> 8) & 0xff)
+        log.info("HDA init stream %d done", ext_data & 0xff)
+    elif data == 6: # HDA START
+        log.warning("HDA starting stream %d", ext_data & 0xff)
         host_in.start()
-        log.warning("HDA started")
-    elif data == 7: # HDA HOST IN VALIDATE
-        log.warning("HDA_ host in validate")
+        log.warning("HDA started stream %d", ext_data & 0xff)
+    elif data == 7: # HDA VALIDATE
+        log.warning("HDA validating stream %d for ramp", ext_data & 0xff)
+        is_ramp_data = True
+        for i in range(0, host_in.buf_len):
+            if i != host_in.mem[i]:
+                is_ramp_data = False
+            log.info("hda stream buffer %d: %d", i, host_in.mem[i])
+        log.info("Is ramp data?")
         # TODO send message back
     elif data == 8: # HDA HOST IN RESET
         log.warning("HDA host in reset")
