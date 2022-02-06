@@ -24,6 +24,7 @@ HUGEPAGE_FILE = "/dev/hugepages/cavs-fw-dma.tmp"
 WINSTREAM_OFFSET = (512 + (3 * 128)) * 1024
 
 class HDAStream:
+    # creates an hda stream with at 2 buffers of buf_len
     def __init__(self, stream_id, buf_len):
         self.stream_id = stream_id
         self.buf_len = buf_len
@@ -31,11 +32,13 @@ class HDAStream:
         log.info("Mapping registers for hda stream")
         self.regs = Regs(self.base)
         self.regs.CTL  = 0x00
+        self.regs.STS  = 0x03
         self.regs.LPIB = 0x04
         self.regs.CBL  = 0x08
         self.regs.LVI  = 0x0c
         self.regs.BDPL = 0x18
         self.regs.BDPU = 0x1c
+
         self.regs.freeze()
         self.debug()
         log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
@@ -84,8 +87,8 @@ class HDAStream:
         # boundaries because it's all a contiguous region. Place a vestigial
         # 128-byte (minimum size and alignment) buffer after the main one, and put
         # the 4-entry BDL list into the final 128 bytes of the page.
-        buf0_len = HUGEPAGESZ - 2 * 128
-        buf1_len = 128
+        buf0_len = buf_len
+        buf1_len = buf_len
         bdl_off = buf0_len + buf1_len
         mem[bdl_off:bdl_off + 32] = struct.pack("<QQQQ",
                                                 phys_addr, buf0_len,
@@ -98,7 +101,7 @@ class HDAStream:
                  self.stream_id, (hda.PPCTL >> self.stream_id) & 1, self.regs.CTL, self.regs.LPIB, self.regs.BDPU,
                  self.regs.BDPL, self.regs.CBL, self.regs.LVI)
         log.info("    status: FIFORDY %d, DESE %d, FIFOE %d, BCIS %d",
-                 self.regs.CTL >> 29, self.regs.CTL >> 28, self.regs.CTL >> 27, self.regs.CTL >> 26)
+                 (self.regs.STS >> 5) & 1, (self.regs.STS >> 4) & 1, (self.regs.STS >> 3) & 1, (self.regs.STS >> 2) & 1)
 
     def reset(self):
         # Turn DMA off and reset the stream.  Clearing START first is a
@@ -230,6 +233,7 @@ def map_phys_mem():
     hugef = open(HUGEPAGE_FILE, "w+")
     hugef.truncate(HUGEPAGESZ)
     mem = mmap.mmap(hugef.fileno(), HUGEPAGESZ)
+    log.info("type of mem is %s", str(type(mem)))
     global_mmaps.append(mem)
     os.unlink(HUGEPAGE_FILE)
 
@@ -433,17 +437,20 @@ def ipc_command(data, ext_data):
         send_msg = True
     elif data == 5: # HDA INIT
         global host_in
-        log.info("HDA init stream %d with buf_len %d", ext_data & 0xff, (ext_data >> 8) & 0xff)
-        host_in = HDAStream(ext_data & 0xff, (ext_data >> 8) & 0xff)
+        stream_id = ext_data & 0xff
+        buf_len = (ext_data >> 8) & 0xffff
+        log.info("HDA init stream %d with buf_len %d", stream_id, buf_len)
+        host_in = HDAStream(stream_id, buf_len)
         log.info("HDA init stream %d done", ext_data & 0xff)
     elif data == 6: # HDA START
-        log.warning("HDA starting stream %d", ext_data & 0xff)
+        log.info("HDA starting stream %d", ext_data & 0xff)
         host_in.start()
-        log.warning("HDA started stream %d", ext_data & 0xff)
+        log.info("HDA started stream %d", ext_data & 0xff)
     elif data == 7: # HDA VALIDATE
-        log.warning("HDA validating stream %d for ramp", ext_data & 0xff)
+        log.info("HDA validating stream %d for ramp, mem type %s", ext_data & 0xff, type(host_in.mem))
+        host_in.debug()
         is_ramp_data = True
-        for i in range(0, host_in.buf_len):
+        for i in range(0, host_in.buf_len*2):
             if i != host_in.mem[i]:
                 is_ramp_data = False
             log.info("hda stream buffer %d: %d", i, host_in.mem[i])

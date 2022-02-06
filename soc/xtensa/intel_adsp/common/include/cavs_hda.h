@@ -157,10 +157,11 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 {
 	cavs_hda_dbg(hda, sid);
 
-	/* Tell hardware we want to control the buffer pointer
-	 * and we haven't read anything yet so don't power down
+	/* Tell hardware we want to control the buffer pointer,
+	 * we don't want it to enter low power, and we want to control
+	 * the sample size.
 	 */
-	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP;
+	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP | DGCS_SCS;
 
 	*DGBBA(hda->base, sid) = (uint32_t)buf;
 	*DGBS(hda->base, sid) = HDA_RWP_MASK & buf_size;
@@ -194,7 +195,7 @@ static inline void cavs_hda_l1_exit(struct cavs_hda_streams *hda, uint32_t sid)
 static inline void cavs_hda_enable(struct cavs_hda_streams *hda, uint32_t sid)
 {
 	/* enable the stream */
-	*DGCS(hda->base, sid) |= DGCS_GEN;
+	*DGCS(hda->base, sid) |= DGCS_GEN | DGCS_FIFORDY;
 }
 
 static inline void cavs_hda_disable(struct cavs_hda_streams *hda, uint32_t sid)
@@ -311,6 +312,8 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 
 	/* Indicate we've provided buf_len bytes */
 	*DGBFPI(hda->base, sid) += buf_len;
+	*DGLLPI(hda->base, sid) += buf_len;
+	*DGLPIBI(hda->base, sid) += buf_len;
 
 	cavs_hda_dbg(hda, sid);
 

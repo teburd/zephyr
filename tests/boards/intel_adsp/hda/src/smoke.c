@@ -9,9 +9,10 @@
 #include "tests.h"
 
 #define IPC_TIMEOUT K_MSEC(100)
-#define STREAM_ID 0
-#define FIFO_SIZE 64
-#define TRANSFER_COUNT (32*5)
+#define STREAM_ID 1
+#define FIFO_SIZE 256
+#define TRANSFER_SIZE 32
+#define TRANSFER_COUNT 5
 
 __attribute__((section(".dma_buffers"))) uint8_t in_fifo[FIFO_SIZE];
 
@@ -45,7 +46,11 @@ void test_hda_smoke(void)
 
 	struct cavs_hda_streams *host_in = &cavs_hda.host_in;
 
+	printk("Using buffer of size %d at addr %p\n", FIFO_SIZE, in_fifo);
+
 	cavs_hda_set_buffer(host_in, STREAM_ID, in_fifo, FIFO_SIZE, 1);
+
+	/* Enable the gateway */
 	cavs_hda_enable(host_in, STREAM_ID);
 
 	/**
@@ -53,12 +58,19 @@ void test_hda_smoke(void)
 	 */
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT));
 
+
+	uint8_t val = 0;
+	uint8_t vals[TRANSFER_SIZE];
 	int res;
 	for(uint32_t i = 0; i < TRANSFER_COUNT; i++) {
-		uint8_t val = i & 0xff;
-		res = cavs_hda_write(host_in, STREAM_ID, &val, 1);
+		for(int j = 0; j < TRANSFER_SIZE; j++) {
+			val += 1;
+			vals[j] = val;
+		}
+		res = cavs_hda_write(host_in, STREAM_ID, vals, TRANSFER_SIZE);
 		zassert_true(res == 0, "cavs_hda_write failed with result %d, expected 0", res);
 
+		/* We told the dma not to enter l1 in init rather than needed to force exit here */
 		/* TODO is this really needed or can we set the dma stream to not enter L1? */
 		/*  cavs_hda_l1_exit(host_in, STREAM_ID); */
 	}
@@ -69,15 +81,6 @@ void test_hda_smoke(void)
 	 */
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID));
 
-	/**
-	 * Write a 32 byte block of data at once
-	 */
-	uint8_t vals[32];
-	for(int i = 0; i < 32; i++)
-	{
-		vals[i] = i;
-	}
-	res = cavs_hda_write(host_in, STREAM_ID, vals, 32);
 	zassert_true(res == 0, "cavs_hda_write block failed with result %d, expected 0", res);
 
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, STREAM_ID, IPC_TIMEOUT));
