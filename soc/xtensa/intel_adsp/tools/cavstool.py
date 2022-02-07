@@ -36,8 +36,15 @@ class HDAStream:
         self.regs.LPIB = 0x04
         self.regs.CBL  = 0x08
         self.regs.LVI  = 0x0c
+        self.regs.FIFOW = 0x0e
+        self.regs.FIFOS = 0x10
+        self.regs.FMT = 0x12
+        self.regs.FIFOL= 0x14
         self.regs.BDPL = 0x18
         self.regs.BDPU = 0x1c
+        self.dbg0 = Regs(hdamem + 0x0084 + (0x20*stream_id))
+        self.dbg0.DPIB = 0x00
+        self.dbg0.EFIFOS = 0x10
 
         self.regs.freeze()
         self.debug()
@@ -45,12 +52,18 @@ class HDAStream:
         self.reset()
         self.debug()
 
+        log.info("Resetting SPIB related registers")
+        #hda.SPBFCTL = (1 << stream_id)
+        #hda.SD0SPIB = 0
+
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
         hda.PPCTL |= (1 << self.stream_id)
         self.debug()
 
         log.info("Setting buffer list, length, and stream id")
         self.mem, self.buf_list_addr, self.n_bufs = self.setup_buf(buf_len)
+        for i in range(0, self.buf_len*2):
+            self.mem[i] = 0xff
         self.regs.CTL = (self.stream_id << 20)
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
@@ -100,6 +113,8 @@ class HDAStream:
         log.info("HDA %d: PPROC %d, CTL 0x%x, LPIB 0x%x, BDPU 0x%x, BDPL 0x%x, CBL 0x%x, LVI 0x%x",
                  self.stream_id, (hda.PPCTL >> self.stream_id) & 1, self.regs.CTL, self.regs.LPIB, self.regs.BDPU,
                  self.regs.BDPL, self.regs.CBL, self.regs.LVI)
+        log.info("    FIFOW %d, FIFOS %d, FMT %x, FIFOL %d, DPIB %d, EFIFOS %d",
+                 self.regs.FIFOW & 0x7, self.regs.FIFOS, self.regs.FMT, self.regs.FIFOL, self.dbg0.DPIB, self.dbg0.EFIFOS)
         log.info("    status: FIFORDY %d, DESE %d, FIFOE %d, BCIS %d",
                  (self.regs.STS >> 5) & 1, (self.regs.STS >> 4) & 1, (self.regs.STS >> 3) & 1, (self.regs.STS >> 2) & 1)
 
@@ -166,6 +181,7 @@ def map_regs():
     hda_ostream_id = (hda.GCAP >> 8) & 0x0f # number of input streams
     log.info(f"Selected output stream {hda_ostream_id} (GCAP = 0x{hda.GCAP:x})")
     hda.SD_SPIB = 0x0708 + (8 * hda_ostream_id)
+    hda.SD0SPIB = 0x0708
     hda.freeze()
 
 

@@ -161,11 +161,15 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	 * we don't want it to enter low power, and we want to control
 	 * the sample size.
 	 */
-	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP | DGCS_SCS;
-
+	/* Sample size is 4 bytes when scs not set */
+	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP;
 	*DGBBA(hda->base, sid) = (uint32_t)buf;
 	*DGBS(hda->base, sid) = HDA_RWP_MASK & buf_size;
-	*DGMBS(hda->base, sid) = elem_size;
+	*DGBFPI(hda->base, sid) = 0;
+	*DGBSP(hda->base, sid) = buf_size;
+	*DGMBS(hda->base, sid) = buf_size;
+	*DGLLPI(hda->base, sid) = 0;
+	*DGLPIBI(hda->base, sid) = 0;
 
 	hda->streams[sid].borrowed = 0;
 	hda->streams[sid].rp = 0;
@@ -310,7 +314,8 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 		fifo[idx] = buf[i];
 	}
 
-	/* Indicate we've provided buf_len bytes */
+	/* Indicate we've provided buf_len bytes and flag the buffer segment complete bit (this to force a copy!) */
+	*DGCS(hda->base, sid) |= DGCS_BSC;
 	*DGBFPI(hda->base, sid) += buf_len;
 	*DGLLPI(hda->base, sid) += buf_len;
 	*DGLPIBI(hda->base, sid) += buf_len;

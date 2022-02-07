@@ -9,10 +9,10 @@
 #include "tests.h"
 
 #define IPC_TIMEOUT K_MSEC(100)
-#define STREAM_ID 1
+#define STREAM_ID 0
 #define FIFO_SIZE 256
 #define TRANSFER_SIZE 32
-#define TRANSFER_COUNT 5
+#define TRANSFER_COUNT 10
 
 __attribute__((section(".dma_buffers"))) uint8_t in_fifo[FIFO_SIZE];
 
@@ -67,12 +67,13 @@ void test_hda_smoke(void)
 			val += 1;
 			vals[j] = val;
 		}
+		printk("transfer %d, size %d\n", i, TRANSFER_SIZE);
 		res = cavs_hda_write(host_in, STREAM_ID, vals, TRANSFER_SIZE);
 		zassert_true(res == 0, "cavs_hda_write failed with result %d, expected 0", res);
 
 		/* We told the dma not to enter l1 in init rather than needed to force exit here */
 		/* TODO is this really needed or can we set the dma stream to not enter L1? */
-		/*  cavs_hda_l1_exit(host_in, STREAM_ID); */
+		/*  */cavs_hda_l1_exit(host_in, STREAM_ID);
 	}
 
 	/*
