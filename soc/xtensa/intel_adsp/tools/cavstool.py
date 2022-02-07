@@ -62,7 +62,7 @@ class HDAStream:
         self.debug()
 
         log.info("Disable SPIB and set position")
-        self.spib.SPBFCTL &= ~(0 << stream_id)
+        self.spib.SPBFCTL |= (1 << stream_id)
         self.spib.SPIB = 0
 
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)

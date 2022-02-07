@@ -155,11 +155,11 @@ static struct cavs_hda cavs_hda = {
  * @param buf_size Buffer size in bytes
  * @param elem_size Buffer element size, must be *atleast* 0x10 bytes.
  * @retval -EBUSY if the HDA stream is already enabled
- * @retval -EINVAL if the buf is not in L2, buf size isn't aligned on 0x10, or elem_size is smaller than 0x10
+ * @retval -EINVAL if the buf is not in L2, buf isn't aligned on 128 byte boundaries
  * @retval 0 on Success
  */
 static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t sid,
-				     uint8_t *buf, uint32_t buf_size, uint16_t elem_size)
+				     uint8_t *buf, uint32_t buf_size)
 {
 	cavs_hda_dbg(hda, sid);
 
@@ -168,7 +168,7 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	 * the sample size.
 	 */
 	/* Sample size is 4 bytes when scs not set */
-	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP | DGCS_SCS;
+	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP;
 	void *cached_buf = arch_xtensa_cached_ptr(buf);
 	uint32_t cached_addr = (uint32_t)cached_buf;
 	uint32_t aligned_addr = cached_addr & 0x0FFFFF80;
@@ -315,6 +315,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	 */
 	uint32_t fifo_size = *DGBS(hda->base, sid);
 	uint8_t *fifo = arch_xtensa_uncached_ptr(hda->streams[sid].buf);
+	uint8_t *dbba_buf = arch_xtensa_uncached_ptr((void *)(*DGBBA(hda->base, sid)));
 	uint32_t idx = dgbwp;
 	for(uint32_t i = 0; i < buf_len; i++) {
 		idx++;
@@ -323,7 +324,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 			idx = 0;
 		}
 		fifo[idx] = buf[i];
-		if (fifo[idx] != buf[i]) {
+		if (fifo[idx] != buf[i] || dbba_buf[idx] != buf[i]) {
 			printk("written value does not match source value\n");
 			return -3;
 		}
@@ -347,5 +348,18 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	hda->streams[sid].fpi = buf_len;
 	return 0;
 }
+
+static inline int cavs_hda_post_write(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
+{
+	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
+	*DGBSP(hda->base, sid) = len; /* have the hardware set the BSC bit again when we've reached the end of our last write */
+	*DGBFPI(hda->base, sid) = len;
+	*DGLLPI(hda->base, sid) = len;
+	*DGLPIBI(hda->base, sid) = len;
+
+	return 0;
+}
+
+
 
 #endif // ZEPHYR_INCLUDE_CAVS_HDA_H_
