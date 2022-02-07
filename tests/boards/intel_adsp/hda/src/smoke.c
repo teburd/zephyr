@@ -9,10 +9,10 @@
 #include "tests.h"
 
 #define IPC_TIMEOUT K_MSEC(100)
-#define STREAM_ID 0
-#define FIFO_SIZE 128
+#define STREAM_ID 1
+#define FIFO_SIZE 256
 #define TRANSFER_SIZE 32
-#define TRANSFER_COUNT 7
+#define TRANSFER_COUNT 100
 
 __attribute__((section(".dma_buffers"))) uint8_t in_fifo[FIFO_SIZE];
 
@@ -35,6 +35,9 @@ static void ipc_done(const struct device *dev, void *arg)
 
 void test_hda_smoke(void)
 {
+
+	printk("smoke testing hda with fifo buffer at address %p, size %d\n", in_fifo, FIFO_SIZE);
+
 	cavs_ipc_set_message_handler(CAVS_HOST_DEV, ipc_message, NULL);
 	cavs_ipc_set_done_handler(CAVS_HOST_DEV, ipc_done, NULL);
 
@@ -67,8 +70,11 @@ void test_hda_smoke(void)
 			val += 1;
 			vals[j] = val;
 		}
-		printk("transfer %d, size %d\n", i, TRANSFER_SIZE);
-		res = cavs_hda_write(host_in, STREAM_ID, vals, TRANSFER_SIZE);
+		/*  printk("transfer %d, size %d\n", i, TRANSFER_SIZE); */
+		res = 0;
+		do {
+			res = cavs_hda_write(host_in, STREAM_ID, vals, TRANSFER_SIZE);
+		} while(res == -1);
 		zassert_true(res == 0, "cavs_hda_write failed with result %d, expected 0", res);
 
 		/* We told the dma not to enter l1 in init rather than needed to force exit here */

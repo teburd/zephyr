@@ -61,8 +61,8 @@ class HDAStream:
         self.reset()
         self.debug()
 
-        log.info("Enable SPIB and set position")
-        self.spib.SPBFCTL = (1 << stream_id)
+        log.info("Disable SPIB and set position")
+        self.spib.SPBFCTL &= ~(0 << stream_id)
         self.spib.SPIB = 0
 
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
@@ -73,7 +73,7 @@ class HDAStream:
         self.mem, self.buf_list_addr, self.n_bufs = self.setup_buf(buf_len)
         for i in range(0, self.buf_len*2):
             self.mem[i] = 0xff
-        self.regs.CTL = (self.stream_id << 20 + 1) # must be set to something other than 0
+        self.regs.CTL = (self.stream_id << 20) # must be set to something other than 0
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
         self.regs.CBL = buf_len

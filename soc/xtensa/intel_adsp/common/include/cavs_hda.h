@@ -4,6 +4,7 @@
 #ifndef ZEPHYR_INCLUDE_CAVS_HDA_H
 #define ZEPHYR_INCLUDE_CAVS_HDA_H
 
+#include "arch/xtensa/cache.h"
 #include <kernel.h>
 #include <device.h>
 #include <cavs-shim.h>
@@ -33,6 +34,11 @@ struct cavs_hda_stream {
 	 * its own position.
 	 */
 	uint32_t fpi;
+
+	/**
+	 * buf
+	 **/
+	uint8_t *buf;
 };
 
 #define HDA_STREAM_COUNT 14
@@ -162,12 +168,16 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	 * the sample size.
 	 */
 	/* Sample size is 4 bytes when scs not set */
-	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP;
-	*DGBBA(hda->base, sid) = (uint32_t)buf;
+	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP | DGCS_SCS;
+	void *cached_buf = arch_xtensa_cached_ptr(buf);
+	uint32_t cached_addr = (uint32_t)cached_buf;
+	uint32_t aligned_addr = cached_addr & 0x0FFFFF80;
+	*DGBBA(hda->base, sid) = aligned_addr;
+	printk("cached %p, addr 0x%x, aligned 0x%x, DGBBA 0x%x\n", cached_buf, cached_addr, aligned_addr, *DGBBA(hda->base, sid));
 	*DGBS(hda->base, sid) = HDA_RWP_MASK & buf_size;
 	*DGBFPI(hda->base, sid) = 0;
-	/*  *DGBSP(hda->base, sid) = 32; */
-	/*  *DGMBS(hda->base, sid) = 32; */
+	*DGBSP(hda->base, sid) = 0;
+	*DGMBS(hda->base, sid) = 128;
 	*DGLLPI(hda->base, sid) = 0;
 	*DGLPIBI(hda->base, sid) = 0;
 
@@ -175,6 +185,7 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	hda->streams[sid].rp = 0;
 	hda->streams[sid].wp = 0;
 	hda->streams[sid].fpi = 0;
+	hda->streams[sid].buf = buf;
 
 	cavs_hda_dbg(hda, sid);
 }
@@ -303,7 +314,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	 * TODO use word copies rather than byte copies when feasible
 	 */
 	uint32_t fifo_size = *DGBS(hda->base, sid);
-	uint8_t *fifo = (uint8_t *)(*DGBBA(hda->base, sid));
+	uint8_t *fifo = arch_xtensa_uncached_ptr(hda->streams[sid].buf);
 	uint32_t idx = dgbwp;
 	for(uint32_t i = 0; i < buf_len; i++) {
 		idx++;
@@ -312,13 +323,18 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 			idx = 0;
 		}
 		fifo[idx] = buf[i];
+		if (fifo[idx] != buf[i]) {
+			printk("written value does not match source value\n");
+			return -3;
+		}
 	}
 
-	/* Indicate we've provided buf_len bytes and flag the buffer segment complete bit (this to force a copy!) */
-	*DGCS(hda->base, sid) |= DGCS_BSC;
-	*DGBFPI(hda->base, sid) += buf_len;
-	*DGLLPI(hda->base, sid) += buf_len;
-	*DGLPIBI(hda->base, sid) += buf_len;
+	/* Indicate we've provided buf_len bytes and flag the buffer segment complete bit */
+	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
+	*DGBSP(hda->base, sid) = idx; /* have the hardware set the BSC bit again when we've reached the end of our last write */
+	*DGBFPI(hda->base, sid) = buf_len;
+	*DGLLPI(hda->base, sid) = buf_len;
+	*DGLPIBI(hda->base, sid) = buf_len;
 
 	cavs_hda_dbg(hda, sid);
 
@@ -331,8 +347,5 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	hda->streams[sid].fpi = buf_len;
 	return 0;
 }
-
-
-
 
 #endif // ZEPHYR_INCLUDE_CAVS_HDA_H_
