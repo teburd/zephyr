@@ -30,6 +30,13 @@ class HDAStream:
         self.buf_len = buf_len
         self.base = hdamem + 0x0080 + (stream_id * 0x20)
         log.info("Mapping registers for hda stream")
+
+        self.spib = Regs(hdamem + 0x0700)
+        self.spib.SPBFCH  = 0x00
+        self.spib.SPBFCTL = 0x04
+        self.spib.SPIB = 0x08 + stream_id*0x80
+        self.spib.freeze()
+
         self.regs = Regs(self.base)
         self.regs.CTL  = 0x00
         self.regs.STS  = 0x03
@@ -54,9 +61,9 @@ class HDAStream:
         self.reset()
         self.debug()
 
-        log.info("Resetting SPIB related registers")
-        #hda.SPBFCTL = (1 << stream_id)
-        #hda.SD0SPIB = 0
+        log.info("Enable SPIB and set position")
+        self.spib.SPBFCTL = (1 << stream_id)
+        self.spib.SPIB = 0
 
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
         hda.PPCTL |= (1 << self.stream_id)
@@ -181,7 +188,6 @@ def map_regs():
     hda_ostream_id = (hda.GCAP >> 8) & 0x0f # number of input streams
     log.info(f"Selected output stream {hda_ostream_id} (GCAP = 0x{hda.GCAP:x})")
     hda.SD_SPIB = 0x0708 + (8 * hda_ostream_id)
-    hda.SD0SPIB = 0x0708
     hda.freeze()
 
 
