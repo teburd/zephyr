@@ -323,7 +323,8 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	cavs_hda_dbg(hda, sid);
 
 	/* book keeping to ensure we don't corrupt our own buffer by
-	 * writing faster than the hardware
+	 * writing faster than the hardware or trying to write while
+	 * the hardware is disabled
 	 */
 	hda->streams[sid].wp = dgbwp;
 	hda->streams[sid].rp = *DGBRP(hda->base, sid);

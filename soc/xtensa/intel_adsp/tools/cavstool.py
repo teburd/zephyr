@@ -42,11 +42,13 @@ class HDAStream:
         self.regs.FIFOL= 0x14
         self.regs.BDPL = 0x18
         self.regs.BDPU = 0x1c
+        self.regs.freeze()
+
         self.dbg0 = Regs(hdamem + 0x0084 + (0x20*stream_id))
         self.dbg0.DPIB = 0x00
         self.dbg0.EFIFOS = 0x10
+        self.dbg0.freeze()
 
-        self.regs.freeze()
         self.debug()
         log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
         self.reset()
@@ -96,10 +98,8 @@ class HDAStream:
         log.info("Mapped 2M huge page at 0x%x for buf size (%d)"
                  % (phys_addr, buf_len))
 
-        # HDA requires at least two buffers be defined, but we don't care about
-        # boundaries because it's all a contiguous region. Place a vestigial
-        # 128-byte (minimum size and alignment) buffer after the main one, and put
-        # the 4-entry BDL list into the final 128 bytes of the page.
+        # create two buffers in the page of buf_len and mark them
+        # in a buffer descriptor list for the hardware to use
         buf0_len = buf_len
         buf1_len = buf_len
         bdl_off = buf0_len + buf1_len
