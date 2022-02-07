@@ -9,7 +9,7 @@
 #include "tests.h"
 
 #define IPC_TIMEOUT K_MSEC(100)
-#define STREAM_ID 1
+#define STREAM_ID 3
 #define FIFO_SIZE 256
 #define TRANSFER_SIZE 256
 #define TRANSFER_COUNT 100
@@ -54,17 +54,20 @@ void test_hda_smoke(void)
 		in_fifo[i] = i & 0xff;
 	}
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_INIT, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
 	cavs_hda_set_buffer(host_in, STREAM_ID, in_fifo, FIFO_SIZE);
+
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_INIT, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
 
 	/* Enable the gateway */
 	cavs_hda_enable(host_in, STREAM_ID);
+
 
 	/**
 	 * Tell the host to set run bit for hda host in stream with the given id (0)
 	 */
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT));
 
+	/* informs the hardware we've written some number of bytes */
 	cavs_hda_post_write(host_in, STREAM_ID, FIFO_SIZE);
 
 	/*

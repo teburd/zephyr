@@ -161,7 +161,6 @@ static struct cavs_hda cavs_hda = {
 static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t sid,
 				     uint8_t *buf, uint32_t buf_size)
 {
-	cavs_hda_dbg(hda, sid);
 
 	/* Tell hardware we want to control the buffer pointer,
 	 * we don't want it to enter low power, and we want to control
@@ -174,10 +173,10 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	uint32_t aligned_addr = cached_addr & 0x0FFFFF80;
 	*DGBBA(hda->base, sid) = aligned_addr;
 	printk("cached %p, addr 0x%x, aligned 0x%x, DGBBA 0x%x\n", cached_buf, cached_addr, aligned_addr, *DGBBA(hda->base, sid));
-	*DGBS(hda->base, sid) = HDA_RWP_MASK & buf_size;
+	*DGBS(hda->base, sid) = buf_size;
 	*DGBFPI(hda->base, sid) = 0;
 	*DGBSP(hda->base, sid) = 0;
-	*DGMBS(hda->base, sid) = 128;
+	*DGMBS(hda->base, sid) = 256;
 	*DGLLPI(hda->base, sid) = 0;
 	*DGLPIBI(hda->base, sid) = 0;
 
@@ -186,8 +185,6 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	hda->streams[sid].wp = 0;
 	hda->streams[sid].fpi = 0;
 	hda->streams[sid].buf = buf;
-
-	cavs_hda_dbg(hda, sid);
 }
 
 /**
@@ -315,7 +312,6 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	 */
 	uint32_t fifo_size = *DGBS(hda->base, sid);
 	uint8_t *fifo = arch_xtensa_uncached_ptr(hda->streams[sid].buf);
-	uint8_t *dbba_buf = arch_xtensa_uncached_ptr((void *)(*DGBBA(hda->base, sid)));
 	uint32_t idx = dgbwp;
 	for(uint32_t i = 0; i < buf_len; i++) {
 		idx++;
@@ -324,10 +320,6 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 			idx = 0;
 		}
 		fifo[idx] = buf[i];
-		if (fifo[idx] != buf[i] || dbba_buf[idx] != buf[i]) {
-			printk("written value does not match source value\n");
-			return -3;
-		}
 	}
 
 	/* Indicate we've provided buf_len bytes and flag the buffer segment complete bit */

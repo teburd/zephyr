@@ -31,11 +31,18 @@ class HDAStream:
         self.base = hdamem + 0x0080 + (stream_id * 0x20)
         log.info("Mapping registers for hda stream")
 
-        self.spib = Regs(hdamem + 0x0700)
-        self.spib.SPBFCH  = 0x00
-        self.spib.SPBFCTL = 0x04
-        self.spib.SPIB = 0x08 + stream_id*0x80
-        self.spib.freeze()
+        self.hda = Regs(hdamem)
+        self.hda.GCAP    = 0x0000
+        self.hda.GCTL    = 0x0008
+        self.hda.DPLBASE = 0x0070
+        self.hda.DPUBASE = 0x0074
+        self.hda.SPBFCH  = 0x0700
+        self.hda.SPBFCTL = 0x0704
+        self.hda.PPCH    = 0x0800
+        self.hda.PPCTL   = 0x0804
+        self.hda.PPSTS   = 0x0808
+        self.hda.SPIB = 0x0708 + stream_id*0x80
+        self.hda.freeze()
 
         self.regs = Regs(self.base)
         self.regs.CTL  = 0x00
@@ -56,28 +63,31 @@ class HDAStream:
         self.dbg0.EFIFOS = 0x10
         self.dbg0.freeze()
 
-        self.debug()
+        log.info("Allocating huge page and setting up buffers")
+        self.mem, self.buf_list_addr, self.pos_buf_addr, self.n_bufs = self.setup_buf(buf_len)
+
         log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
         self.reset()
-        self.debug()
 
         log.info("Disable SPIB and set position")
-        self.spib.SPBFCTL |= (1 << stream_id)
-        self.spib.SPIB = 0
+        self.hda.SPBFCTL = 0
+        self.hda.SPIB = 0
+
+        log.info("Setting dma position buffer and enable it")
+        self.hda.DPUBASE = self.pos_buf_addr >> 32 & 0xffffffff
+        self.hda.DPLBASE = self.pos_buf_addr & 0xfffffff0 | 1
 
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
-        hda.PPCTL |= (1 << self.stream_id)
-        self.debug()
+        self.hda.PPCTL |= (1 << self.stream_id)
 
         log.info("Setting buffer list, length, and stream id")
-        self.mem, self.buf_list_addr, self.n_bufs = self.setup_buf(buf_len)
-        for i in range(0, self.buf_len*2):
-            self.mem[i] = 0xff
-        self.regs.CTL = (self.stream_id << 20) # must be set to something other than 0
+        self.regs.CTL = ((self.stream_id & 0x0F) << 20)  # must be set to something other than 0?
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
         self.regs.CBL = buf_len
         self.regs.LVI = self.n_bufs - 1
+        self.regs.FMT = 0
+        log.info("formatted fifo size %d", self.regs.FIFOS) # 32 byte fetch
         self.debug()
         log.info("Stream %d initialized", self.stream_id)
 
@@ -87,17 +97,15 @@ class HDAStream:
 
     def start(self):
         log.info("Starting stream %d", self.stream_id)
-        self.debug()
         self.regs.CTL |= 2
-        self.debug()
         log.info("Started stream %d", self.stream_id)
 
     def stop(self):
         log.info("Stopping stream %d", self.stream_id)
-        self.debug()
-        self.reset()
-        self.debug()
-        log.info("Stopped stread %d", self.stream_id)
+        self.regs.CTL &= 2
+        time.sleep(0.1)
+        self.regs.CTL |= 1
+        log.info("Stopped stream %d", self.stream_id)
 
     def setup_buf(self, buf_len):
         (mem, phys_addr) = map_phys_mem()
@@ -110,11 +118,15 @@ class HDAStream:
         buf0_len = buf_len
         buf1_len = buf_len
         bdl_off = buf0_len + buf1_len
+        # bdl is 2 (64bits, 16 bytes) per entry, we have two
         mem[bdl_off:bdl_off + 32] = struct.pack("<QQQQ",
-                                                phys_addr, buf0_len,
-                                                phys_addr + buf0_len, buf1_len)
+                                                phys_addr,
+                                                buf0_len,
+                                                phys_addr + buf0_len,
+                                                buf1_len)
+        dpib_off = bdl_off+32
         log.info("Filled the buffer descriptor list (BDL) for DMA.")
-        return (mem, phys_addr + bdl_off, 2)
+        return (mem, phys_addr + bdl_off, phys_addr+dpib_off, 2)
 
     def debug(self):
         log.info("HDA %d: PPROC %d, CTL 0x%x, LPIB 0x%x, BDPU 0x%x, BDPL 0x%x, CBL 0x%x, LVI 0x%x",
@@ -463,16 +475,20 @@ def ipc_command(data, ext_data):
         buf_len = (ext_data >> 8) & 0xffff
         log.info("HDA init stream %d with buf_len %d", stream_id, buf_len)
         host_in = HDAStream(stream_id, buf_len)
+        host_in.debug()
         log.info("HDA init stream %d done", ext_data & 0xff)
     elif data == 6: # HDA START
         log.info("HDA starting stream %d", ext_data & 0xff)
+        host_in.debug()
         host_in.start()
         log.info("HDA started stream %d", ext_data & 0xff)
+        host_in.debug()
     elif data == 7: # HDA VALIDATE
         log.info("HDA validating stream %d for ramp, mem type %s", ext_data & 0xff, type(host_in.mem))
         host_in.debug()
+        log.info("dma position buf: " + host_in.mem[host_in.pos_buf_addr:host_in.pos_buf_addr+128].hex())
         is_ramp_data = True
-        for i in range(0, host_in.buf_len*2):
+        for i in range(0, host_in.buf_len):
             if i != host_in.mem[i]:
                 is_ramp_data = False
             log.info("hda stream buffer %d: %d", i, host_in.mem[i])
