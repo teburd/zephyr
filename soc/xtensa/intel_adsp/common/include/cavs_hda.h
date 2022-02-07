@@ -166,8 +166,8 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	*DGBBA(hda->base, sid) = (uint32_t)buf;
 	*DGBS(hda->base, sid) = HDA_RWP_MASK & buf_size;
 	*DGBFPI(hda->base, sid) = 0;
-	*DGBSP(hda->base, sid) = buf_size;
-	*DGMBS(hda->base, sid) = buf_size;
+	/*  *DGBSP(hda->base, sid) = 32; */
+	/*  *DGMBS(hda->base, sid) = 32; */
 	*DGLLPI(hda->base, sid) = 0;
 	*DGLPIBI(hda->base, sid) = 0;
 

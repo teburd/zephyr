@@ -10,9 +10,9 @@
 
 #define IPC_TIMEOUT K_MSEC(100)
 #define STREAM_ID 0
-#define FIFO_SIZE 256
-#define TRANSFER_SIZE 128
-#define TRANSFER_COUNT 10
+#define FIFO_SIZE 128
+#define TRANSFER_SIZE 32
+#define TRANSFER_COUNT 7
 
 __attribute__((section(".dma_buffers"))) uint8_t in_fifo[FIFO_SIZE];
 
@@ -42,7 +42,7 @@ void test_hda_smoke(void)
 	 * Tell the host to setup an hda host in stream with the given id (0) and size of FIFO_SIZE
 	 * We can add more flags/options here if needed
 	 */
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_INIT, STREAM_ID | (FIFO_SIZE*4 << 8), IPC_TIMEOUT));
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_INIT, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
 
 	struct cavs_hda_streams *host_in = &cavs_hda.host_in;
 
