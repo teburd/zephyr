@@ -14,7 +14,7 @@
 #define TRANSFER_SIZE 256
 #define TRANSFER_COUNT 100
 
-__attribute__((section(".dma_buffers"))) uint8_t in_fifo[FIFO_SIZE];
+__attribute__((section(".dma_buffers"), aligned(128))) uint8_t hda_fifo[FIFO_SIZE];
 
 static volatile int msg_res;
 
@@ -36,7 +36,7 @@ static void ipc_done(const struct device *dev, void *arg)
 void test_hda_smoke(void)
 {
 
-	printk("smoke testing hda with fifo buffer at address %p, size %d\n", in_fifo, FIFO_SIZE);
+	printk("smoke testing hda with fifo buffer at address %p, size %d\n", hda_fifo, FIFO_SIZE);
 
 	cavs_ipc_set_message_handler(CAVS_HOST_DEV, ipc_message, NULL);
 	cavs_ipc_set_done_handler(CAVS_HOST_DEV, ipc_done, NULL);
@@ -48,13 +48,15 @@ void test_hda_smoke(void)
 
 	struct cavs_hda_streams *host_in = &cavs_hda.host_in;
 
-	printk("Using buffer of size %d at addr %p\n", FIFO_SIZE, in_fifo);
+	printk("Using buffer of size %d at addr %p\n", FIFO_SIZE, hda_fifo);
 
 	for(uint32_t i = 0; i < FIFO_SIZE; i++) {
-		in_fifo[i] = i & 0xff;
+		hda_fifo[i] = i & 0xff;
 	}
 
-	cavs_hda_set_buffer(host_in, STREAM_ID, in_fifo, FIFO_SIZE);
+	z_xtensa_cache_flush(hda_fifo, FIFO_SIZE);
+
+	cavs_hda_set_buffer(host_in, STREAM_ID, hda_fifo, FIFO_SIZE);
 
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_INIT, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
 
