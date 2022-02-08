@@ -64,7 +64,7 @@ class HDAStream:
         self.dbg0.freeze()
 
         log.info("Allocating huge page and setting up buffers")
-        self.mem, self.buf_list_addr, self.pos_buf_addr, self.n_bufs = self.setup_buf(buf_len)
+        self.mem, self.hugef, self.buf_list_addr, self.pos_buf_addr, self.n_bufs = self.setup_buf(buf_len)
 
         log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
         self.reset()
@@ -108,7 +108,7 @@ class HDAStream:
         log.info("Stopped stream %d", self.stream_id)
 
     def setup_buf(self, buf_len):
-        (mem, phys_addr) = map_phys_mem()
+        (mem, phys_addr, hugef) = map_phys_mem()
 
         log.info("Mapped 2M huge page at 0x%x for buf size (%d)"
                  % (phys_addr, buf_len))
@@ -126,7 +126,7 @@ class HDAStream:
                                                 buf1_len)
         dpib_off = bdl_off+32
         log.info("Filled the buffer descriptor list (BDL) for DMA.")
-        return (mem, phys_addr + bdl_off, phys_addr+dpib_off, 2)
+        return (mem, hugef, phys_addr + bdl_off, phys_addr+dpib_off, 2)
 
     def debug(self):
         log.info("HDA %d: PPROC %d, CTL 0x%x, LPIB 0x%x, BDPU 0x%x, BDPL 0x%x, CBL 0x%x, LVI 0x%x",
@@ -229,7 +229,7 @@ def map_regs():
     return (hda, sd, dsp, hda_ostream_id)
 
 def setup_dma_mem(fw_bytes):
-    (mem, phys_addr) = map_phys_mem()
+    (mem, phys_addr, _) = map_phys_mem()
     mem[0:len(fw_bytes)] = fw_bytes
 
     log.info("Mapped 2M huge page at 0x%x to contain %d bytes of firmware"
@@ -269,7 +269,7 @@ def map_phys_mem():
     mem = mmap.mmap(hugef.fileno(), HUGEPAGESZ)
     log.info("type of mem is %s", str(type(mem)))
     global_mmaps.append(mem)
-    os.unlink(HUGEPAGE_FILE)
+    #os.unlink(HUGEPAGE_FILE)
 
     # Find the local process address of the mapping, then use that to extract
     # the physical address from the kernel's pagemap interface.  The physical
@@ -282,7 +282,7 @@ def map_phys_mem():
     pent = pagemap.read(8)
     paddr = (struct.unpack("Q", pent)[0] & ((1 << 55) - 1)) * PAGESZ
     pagemap.close()
-    return (mem, paddr)
+    return (mem, paddr, hugef)
 
 # Maps a PCI BAR and returns the in-process address
 def bar_map(pcidir, barnum):
