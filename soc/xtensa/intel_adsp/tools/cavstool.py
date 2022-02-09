@@ -81,7 +81,7 @@ class HDAStream:
         self.hda.PPCTL |= (1 << self.stream_id)
 
         log.info("Setting buffer list, length, and stream id and traffic priorit bit")
-        self.regs.CTL = ((self.stream_id & 0x0F) << 20) | (1 << 18) # must be set to something other than 0?
+        self.regs.CTL = ((self.stream_id & 0xFF) << 20) | (1 << 18) # must be set to something other than 0?
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
         self.regs.CBL = buf_len
@@ -159,8 +159,8 @@ class HDAStream:
         # hardware is ready to be used
         self.debug()
         log.info("Reset stream %d", self.stream_id)
-        for i in range(0, self.buf_len):
-            log.info("mem[%d] = %d", i, self.mem[i])
+        #for i in range(0, self.buf_len):
+        #    log.info("mem[%d] = %d", i, self.mem[i])
 
 
 def map_regs():
@@ -500,11 +500,12 @@ def ipc_command(data, ext_data):
         os.fsync(hda_str.hugef.fileno()) # seems to work more often?
         log.info("dma position buf: " + hda_str.mem[hda_str.pos_buf_addr:hda_str.pos_buf_addr+128].hex())
         is_ramp_data = True
-        hda_str.mem.seek(0)
-        for (i, val) in enumerate(hda_str.mem.read(256)):
-            if i != val:
-                is_ramp_data = False
-            log.info("hda stream buffer %d: %d", i, val)
+        log.info("buf " + str(hda_str.mem[0:256]))
+        #hda_str.mem.seek(0)
+        #for (i, val) in enumerate(hda_str.mem.read(256)):
+        #    if i != val:
+        #        is_ramp_data = False
+        #    log.info("hda stream buffer %d: %d", i, val)
         log.info("Is ramp data? " + str(is_ramp_data))
     elif data == 8: # HDA HOST IN RESET
         stream_id = ext_data & 0xff

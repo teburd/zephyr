@@ -85,9 +85,10 @@ void test_hda_out_smoke(void)
 	cavs_hda_dbg(host_out, STREAM_ID);
 	/* The buffer is in the cached address range and must be invalidated prior to reading. */
 	z_xtensa_cache_inv(hda_fifo, FIFO_SIZE);
-	for (int j = 0; j < FIFO_SIZE; j++) {
+	/*for (int j = 0; j < FIFO_SIZE; j++) {
 		printk("hda_fifo[%d] = %d\n", j, hda_fifo[j]);
 	}
+	*/
 	cavs_hda_copy(host_out, STREAM_ID, FIFO_SIZE);
 	cavs_hda_dbg(host_out, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 8), IPC_TIMEOUT));
