@@ -50,6 +50,9 @@ enum cavstool_cmd {
 
 	/* The host clears the run bit and resets the HDA stream */
 	IPCCMD_HDA_RESET,
+
+	/* Host sends some data */
+	IPCCMD_HDA_SEND
 };
 
 #endif /* ZEPHYR_INCLUDE_CAVS_TEST_H */

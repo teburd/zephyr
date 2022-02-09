@@ -9,7 +9,8 @@
 void test_main(void)
 {
 	ztest_test_suite(intel_adsp_hda,
-			 ztest_unit_test(test_hda_smoke),
+			 ztest_unit_test(test_hda_in_smoke),
+			 ztest_unit_test(test_hda_out_smoke),
 			 ztest_unit_test(test_hda_host_loop)
 			 );
 

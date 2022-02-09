@@ -58,11 +58,11 @@ struct cavs_hda {
 };
 
 static struct cavs_hda cavs_hda = {
-	.host_in = {
-		.base = 0x72c00
-	},
 	.host_out = {
 		.base = 0x72800
+	},
+	.host_in = {
+		.base = 0x72c00
 	},
 };
 
@@ -292,18 +292,12 @@ static inline uint32_t cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t si
 	return size;
 }
 
-static inline int cavs_hda_copy(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
+static inline void cavs_hda_copy(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
 {
-	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
-	*DGBSP(hda->base, sid) = len; /* have the hardware set the BSC bit again when we've reached the end of our last write */
 	*DGBFPI(hda->base, sid) = len;
 	*DGLLPI(hda->base, sid) = len;
 	*DGLPIBI(hda->base, sid) = len;
-
-	return 0;
 }
-
-
 
 /**
  * @brief Copying write to the underlying HDA FIFO Buffer.

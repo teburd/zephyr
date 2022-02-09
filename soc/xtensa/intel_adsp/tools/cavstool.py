@@ -473,40 +473,49 @@ def ipc_command(data, ext_data):
         ipc_timestamp = t
         send_msg = True
     elif data == 5: # HDA INIT
-        global host_in
         stream_id = ext_data & 0xff
         buf_len = (ext_data >> 8) & 0xffff
         log.info("HDA init stream %d with buf_len %d", stream_id, buf_len)
-        host_in = HDAStream(stream_id, buf_len)
-        host_in.debug()
-        log.info("HDA init stream %d done", ext_data & 0xff)
+        hda_str = HDAStream(stream_id, buf_len)
+        hda_str.debug()
+        log.info("HDA init stream %d done", stream_id)
+        hda_streams[stream_id] = hda_str
     elif data == 6: # HDA START
-        log.info("HDA starting stream %d", ext_data & 0xff)
-        host_in.debug()
-        host_in.start()
-        log.info("HDA started stream %d", ext_data & 0xff)
-        host_in.debug()
+        stream_id = ext_data & 0xff
+        log.info("HDA starting stream %d", stream_id)
+        hda_str = hda_streams[stream_id]
+        hda_str.debug()
+        hda_str.start()
+        log.info("HDA started stream %d", stream_id)
+        hda_str.debug()
     elif data == 7: # HDA VALIDATE
-        #ctypes.libc.cacheflush(host_in.mem, HUGEPAGESZ, 0xFFFFFFFF) # flush with BCACHE
-        #time.sleep(60)
+        stream_id = ext_data & 0xff
+        hda_str = hda_streams[stream_id]
         log.info("Waiting for completion...")
-        while(host_in.regs.LPIB < 128):
+        hda_str.debug()
+        while(hda_str.regs.LPIB < 128):
             time.sleep(0.1)
-        log.info("HDA validating stream %d for ramp, mem type %s", ext_data & 0xff, type(host_in.mem))
-        host_in.debug()
-        #os.fsync(host_in.hugef.fileno())
-        log.info("dma position buf: " + host_in.mem[host_in.pos_buf_addr:host_in.pos_buf_addr+128].hex())
+        log.info("HDA validating stream %d for ramp, mem type %s", ext_data & 0xff, type(hda_str.mem))
+        hda_str.debug()
+        os.fsync(hda_str.hugef.fileno()) # seems to work more often?
+        log.info("dma position buf: " + hda_str.mem[hda_str.pos_buf_addr:hda_str.pos_buf_addr+128].hex())
         is_ramp_data = True
-        host_in.mem.seek(0)
-        for (i, val) in enumerate(host_in.mem.read(256)):
+        hda_str.mem.seek(0)
+        for (i, val) in enumerate(hda_str.mem.read(256)):
             if i != val:
                 is_ramp_data = False
             log.info("hda stream buffer %d: %d", i, val)
-        log.info("Is ramp data?")
-        # TODO send message back
+        log.info("Is ramp data? " + str(is_ramp_data))
     elif data == 8: # HDA HOST IN RESET
-        log.warning("HDA host in reset")
-        del host_in
+        stream_id = ext_data & 0xff
+        log.info("HDA reseting stream %d", stream_id)
+        hda_streams[stream_id].reset()
+        log.info("HDA reset stream %d", stream_id)
+    elif data == 9: # HDA HOST OUT SEND
+        stream_id = ext_data & 0xff
+        log.info("HDA writing to stream %d", stream_id)
+        # ???
+        log.info("HDA wrote to stream %d", stream_id)
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
 
@@ -524,7 +533,7 @@ def ipc_command(data, ext_data):
         dsp.HIPCIDR = (1<<31) | ext_data
 
 async def main():
-    global hda, sd, dsp, hda_ostream_id
+    global hda, sd, dsp, hda_ostream_id, hda_streams
     try:
         (hda, sd, dsp, hda_ostream_id) = map_regs()
     except Exception:
@@ -539,6 +548,7 @@ async def main():
         if not args.quiet:
             sys.stdout.write("--\n")
 
+    hda_streams = dict()
     last_seq = 0
     while True:
         await asyncio.sleep(0.03)
