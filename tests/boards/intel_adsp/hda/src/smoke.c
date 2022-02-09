@@ -56,7 +56,7 @@ void test_hda_smoke(void)
 	cavs_hda_enable(host_in, STREAM_ID);
 	cavs_hda_dbg(host_in, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT));
-	cavs_hda_post_write(host_in, STREAM_ID, FIFO_SIZE);
+	cavs_hda_copy(host_in, STREAM_ID, FIFO_SIZE);
 	WAIT_FOR(cavs_hda_wp_rp_eq(host_in, STREAM_ID));
 	cavs_hda_dbg(host_in, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID));

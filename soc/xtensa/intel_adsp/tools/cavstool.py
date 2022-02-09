@@ -18,7 +18,7 @@ log.setLevel(logging.INFO)
 
 PAGESZ = 4096
 HUGEPAGESZ = 2 * 1024 * 1024
-HUGEPAGE_FILE = "/dev/hugepages/cavs-fw-dma.tmp"
+HUGEPAGE_FILE = "/dev/hugepages/cavs-fw-dma.tmp."
 
 # Log is in the fourth window, they appear in 128k regions starting at 512k
 WINSTREAM_OFFSET = (512 + (3 * 128)) * 1024
@@ -80,8 +80,8 @@ class HDAStream:
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
         self.hda.PPCTL |= (1 << self.stream_id)
 
-        log.info("Setting buffer list, length, and stream id")
-        self.regs.CTL = ((self.stream_id & 0x0F) << 20)  # must be set to something other than 0?
+        log.info("Setting buffer list, length, and stream id and traffic priorit bit")
+        self.regs.CTL = ((self.stream_id & 0x0F) << 20) | (1 << 18) # must be set to something other than 0?
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
         self.regs.CBL = buf_len
@@ -108,7 +108,7 @@ class HDAStream:
         log.info("Stopped stream %d", self.stream_id)
 
     def setup_buf(self, buf_len):
-        (mem, phys_addr, hugef) = map_phys_mem()
+        (mem, phys_addr, hugef) = map_phys_mem(self.stream_id)
 
         log.info("Mapped 2M huge page at 0x%x for buf size (%d)"
                  % (phys_addr, buf_len))
@@ -232,7 +232,7 @@ def map_regs():
     return (hda, sd, dsp, hda_ostream_id)
 
 def setup_dma_mem(fw_bytes):
-    (mem, phys_addr, _) = map_phys_mem()
+    (mem, phys_addr, _) = map_phys_mem(hda_ostream_id)
     mem[0:len(fw_bytes)] = fw_bytes
 
     log.info("Mapped 2M huge page at 0x%x to contain %d bytes of firmware"
@@ -255,7 +255,7 @@ global_mmaps = [] # protect mmap mappings from garbage collection!
 
 # Maps 2M of contiguous memory using a single page from hugetlbfs,
 # then locates its physical address for use as a DMA buffer.
-def map_phys_mem():
+def map_phys_mem(stream_id):
     # Make sure hugetlbfs is mounted (not there on chromeos)
     os.system("mount | grep -q hugetlbfs ||"
               + " (mkdir -p /dev/hugepages; "
@@ -267,7 +267,7 @@ def map_phys_mem():
         tot = 1 + int(runx("awk '/HugePages_Total/ {print $2}' /proc/meminfo"))
         os.system(f"echo {tot} > /proc/sys/vm/nr_hugepages")
 
-    hugef = open(HUGEPAGE_FILE, "w+")
+    hugef = open(HUGEPAGE_FILE + str(stream_id), "w+")
     hugef.truncate(HUGEPAGESZ)
     mem = mmap.mmap(hugef.fileno(), HUGEPAGESZ)
     log.info("type of mem is %s", str(type(mem)))
@@ -487,13 +487,17 @@ def ipc_command(data, ext_data):
         log.info("HDA started stream %d", ext_data & 0xff)
         host_in.debug()
     elif data == 7: # HDA VALIDATE
-        time.sleep(1)
+        #ctypes.libc.cacheflush(host_in.mem, HUGEPAGESZ, 0xFFFFFFFF) # flush with BCACHE
+        #time.sleep(60)
+        log.info("Waiting for completion...")
+        while(host_in.regs.LPIB < 128):
+            time.sleep(0.1)
         log.info("HDA validating stream %d for ramp, mem type %s", ext_data & 0xff, type(host_in.mem))
         host_in.debug()
-        os.fsync(host_in.hugef.fileno())
+        #os.fsync(host_in.hugef.fileno())
         log.info("dma position buf: " + host_in.mem[host_in.pos_buf_addr:host_in.pos_buf_addr+128].hex())
         is_ramp_data = True
-        host_in.seek(0)
+        host_in.mem.seek(0)
         for (i, val) in enumerate(host_in.mem.read(256)):
             if i != val:
                 is_ramp_data = False

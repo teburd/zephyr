@@ -292,8 +292,7 @@ static inline uint32_t cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t si
 	return size;
 }
 
-
-static inline int cavs_hda_post_write(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
+static inline int cavs_hda_copy(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
 {
 	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
 	*DGBSP(hda->base, sid) = len; /* have the hardware set the BSC bit again when we've reached the end of our last write */
@@ -367,10 +366,7 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
 	*DGBSP(hda->base, sid) = idx; /* have the hardware set the BSC bit again when we've reached the end of our last write */
 
-	cavs_hda_post_write(hda, sid, buf_len);
-	*DGBFPI(hda->base, sid) = buf_len;
-	*DGLLPI(hda->base, sid) = buf_len;
-	*DGLPIBI(hda->base, sid) = buf_len;
+	cavs_hda_copy(hda, sid, buf_len);
 
 	/* book keeping to ensure we don't corrupt our own buffer by
 	 * writing faster than the hardware or trying to write while
@@ -379,17 +375,6 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	hda->streams[sid].wp = dgbwp;
 	hda->streams[sid].rp = *DGBRP(hda->base, sid);
 	hda->streams[sid].fpi = buf_len;
-	return 0;
-}
-
-static inline int cavs_hda_post_write(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
-{
-	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
-	*DGBSP(hda->base, sid) = len; /* have the hardware set the BSC bit again when we've reached the end of our last write */
-	*DGBFPI(hda->base, sid) = len;
-	*DGLLPI(hda->base, sid) = len;
-	*DGLPIBI(hda->base, sid) = len;
-
 	return 0;
 }
 
