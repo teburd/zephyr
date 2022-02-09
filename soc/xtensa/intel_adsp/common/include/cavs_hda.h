@@ -115,6 +115,10 @@ static struct cavs_hda cavs_hda = {
 
 /**
  * @brief Dump all the useful registers of an HDA stream to printk
+ *
+ * This can be invaluable when finding out why HDA isn't doing (or maybe is)
+ * doing what you want it to do. Macro so you get the file and line
+ * of the call site included.
  */
 #define cavs_hda_dbg(hda, sid)						\
 	do {								\
@@ -136,7 +140,8 @@ static struct cavs_hda cavs_hda = {
 		       *DGMBS(hda->base, sid),				\
 		       *DGLLPI(hda->base, sid),				\
 		       *DGLPIBI(hda->base, sid));			\
-		printk("\tborrowed %d, wp: %d, rp: %d, fpi %d\n", hda->streams[sid].borrowed, \
+		printk("\tborrowed %d, wp: %d, rp: %d, fpi %d\n",	\
+		       hda->streams[sid].borrowed,			\
 		       hda->streams[sid].wp,				\
 		       hda->streams[sid].rp,				\
 		       hda->streams[sid].fpi);				\
@@ -188,7 +193,29 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 }
 
 /**
- * @brief Force DMA to exist L1 (low power state)
+ * @brief Borrow a contiguous slice of the underlying HDA stream FIFO
+ *
+ * This can be read from or writen to avoiding an unneeded copy depending on the stream
+ * direction. For a sending stream write, for a recieving stream read. Will always be
+ * aligned on the buffer element size.
+ */
+static inline int cavs_hda_borrow(struct cavs_hda_streams *hda, uint32_t sid, uint8_t **buf, uint32_t *buf_len)
+{
+	return 0;
+}
+
+/**
+ * @brief Return a borrowed buffer
+ *
+ * This updates the firmware position in buffer informing the hardware of a read or write
+ * that needs to happen.
+ */
+static inline void cavs_hda_return(struct cavs_hda_streams *hda, uint32_t sid, uint8_t **buf, uint32_t *buf_len)
+{
+}
+
+/**
+ * @brief Force DMA to exit L1 (low power state)
  */
 static inline void cavs_hda_l1_exit(struct cavs_hda_streams *hda, uint32_t sid)
 {
@@ -196,7 +223,6 @@ static inline void cavs_hda_l1_exit(struct cavs_hda_streams *hda, uint32_t sid)
 	k_busy_wait(100000);
 	CAVS_SHIM.svcfg &= ~BIT(2);
 }
-
 
 /**
  * @brief Enable the stream
@@ -266,8 +292,25 @@ static inline uint32_t cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t si
 	return size;
 }
 
+
+static inline int cavs_hda_post_write(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
+{
+	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
+	*DGBSP(hda->base, sid) = len; /* have the hardware set the BSC bit again when we've reached the end of our last write */
+	*DGBFPI(hda->base, sid) = len;
+	*DGLLPI(hda->base, sid) = len;
+	*DGLPIBI(hda->base, sid) = len;
+
+	return 0;
+}
+
+
+
 /**
- * @brief Copying write to the fifo
+ * @brief Copying write to the underlying HDA FIFO Buffer.
+ *
+ * Copies bytes from buf to the underlying stream fifo wrapping if needed
+ * automatically.
  *
  * @param hda HDA device
  * @param sid Stream ID
@@ -298,8 +341,6 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 		return -2;
 	}
 
-	cavs_hda_dbg(hda, sid);
-
 	/* Check if there's room in the fifo for the given buffer */
 	if (cavs_hda_unused(hda, sid) < buf_len) {
 		return -1;
@@ -325,11 +366,11 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	/* Indicate we've provided buf_len bytes and flag the buffer segment complete bit */
 	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
 	*DGBSP(hda->base, sid) = idx; /* have the hardware set the BSC bit again when we've reached the end of our last write */
+
+	cavs_hda_post_write(hda, sid, buf_len);
 	*DGBFPI(hda->base, sid) = buf_len;
 	*DGLLPI(hda->base, sid) = buf_len;
 	*DGLPIBI(hda->base, sid) = buf_len;
-
-	cavs_hda_dbg(hda, sid);
 
 	/* book keeping to ensure we don't corrupt our own buffer by
 	 * writing faster than the hardware or trying to write while
@@ -340,18 +381,6 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	hda->streams[sid].fpi = buf_len;
 	return 0;
 }
-
-static inline int cavs_hda_post_write(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
-{
-	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
-	*DGBSP(hda->base, sid) = len; /* have the hardware set the BSC bit again when we've reached the end of our last write */
-	*DGBFPI(hda->base, sid) = len;
-	*DGLLPI(hda->base, sid) = len;
-	*DGLPIBI(hda->base, sid) = len;
-
-	return 0;
-}
-
 
 
 #endif // ZEPHYR_INCLUDE_CAVS_HDA_H_
