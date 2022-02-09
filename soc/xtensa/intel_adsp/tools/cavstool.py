@@ -124,6 +124,7 @@ class HDAStream:
                                                 buf0_len,
                                                 phys_addr + buf0_len,
                                                 buf1_len)
+        os.fsync(hugef.fileno())
         dpib_off = bdl_off+32
         log.info("Filled the buffer descriptor list (BDL) for DMA.")
         return (mem, hugef, phys_addr + bdl_off, phys_addr+dpib_off, 2)
@@ -158,6 +159,8 @@ class HDAStream:
         # hardware is ready to be used
         self.debug()
         log.info("Reset stream %d", self.stream_id)
+        for i in range(0, self.buf_len):
+            log.info("mem[%d] = %d", i, self.mem[i])
 
 
 def map_regs():
@@ -484,14 +487,17 @@ def ipc_command(data, ext_data):
         log.info("HDA started stream %d", ext_data & 0xff)
         host_in.debug()
     elif data == 7: # HDA VALIDATE
+        time.sleep(1)
         log.info("HDA validating stream %d for ramp, mem type %s", ext_data & 0xff, type(host_in.mem))
         host_in.debug()
+        os.fsync(host_in.hugef.fileno())
         log.info("dma position buf: " + host_in.mem[host_in.pos_buf_addr:host_in.pos_buf_addr+128].hex())
         is_ramp_data = True
-        for i in range(0, host_in.buf_len):
-            if i != host_in.mem[i]:
+        host_in.seek(0)
+        for (i, val) in enumerate(host_in.mem.read(256)):
+            if i != val:
                 is_ramp_data = False
-            log.info("hda stream buffer %d: %d", i, host_in.mem[i])
+            log.info("hda stream buffer %d: %d", i, val)
         log.info("Is ramp data?")
         # TODO send message back
     elif data == 8: # HDA HOST IN RESET

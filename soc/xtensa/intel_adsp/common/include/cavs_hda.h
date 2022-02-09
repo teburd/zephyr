@@ -382,5 +382,20 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	return 0;
 }
 
+static inline int cavs_hda_post_write(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
+{
+	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
+	*DGBSP(hda->base, sid) = len; /* have the hardware set the BSC bit again when we've reached the end of our last write */
+	*DGBFPI(hda->base, sid) = len;
+	*DGLLPI(hda->base, sid) = len;
+	*DGLPIBI(hda->base, sid) = len;
+
+	return 0;
+}
+
+static inline bool cavs_hda_wp_rp_eq(struct cavs_hda_streams *hda, uint32_t sid)
+{
+	return *DGBWP(hda->base, sid) == *DGBRP(hda->base, sid);
+}
 
 #endif // ZEPHYR_INCLUDE_CAVS_HDA_H_
