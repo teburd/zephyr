@@ -16,8 +16,8 @@
 
 __attribute__((section(".dma_buffers"), aligned(128))) uint8_t hda_fifo[FIFO_SIZE];
 
-static volatile int msg_res;
 
+static volatile int msg_res;
 
 static bool ipc_message(const struct device *dev, void *arg,
 			uint32_t data, uint32_t ext_data)
@@ -32,9 +32,14 @@ static void ipc_done(const struct device *dev, void *arg)
 }
 
 
+/**
+ * Tests host input streams
+ *
+ * Note that the order of operations in this test are *extremely* important.
+ * Configuring the host side buffers before the dsp side seems to cause things to become invalid.
+ */
 void test_hda_in_smoke(void)
 {
-
 	printk("smoke testing hda with fifo buffer at address %p, size %d\n", hda_fifo, FIFO_SIZE);
 
 	cavs_ipc_set_message_handler(CAVS_HOST_DEV, ipc_message, NULL);

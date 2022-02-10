@@ -73,16 +73,6 @@ class HDAStream:
         log.info("Allocating huge page and setting up buffers")
         self.mem, self.hugef, self.buf_list_addr, self.pos_buf_addr, self.n_bufs = self.setup_buf(buf_len)
 
-        log.info("Disable SPIB and set position")
-        self.hda.SPBFCTL = 0
-        self.hda.SPIB = 0
-
-        #log.info("Setting dma position buffer and enable it")
-        #self.hda.DPUBASE = self.pos_buf_addr >> 32 & 0xffffffff
-        #self.hda.DPLBASE = self.pos_buf_addr & 0xfffffff0 | 1
-
-        log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
-        self.hda.PPCTL |= (1 << self.stream_id)
 
         log.info("Setting buffer list, length, and stream id and traffic priority bit")
         self.regs.CTL = ((self.stream_id & 0xFF) << 20) | (1 << 18) # must be set to something other than 0?
@@ -131,8 +121,11 @@ class HDAStream:
                                                 phys_addr + buf0_len,
                                                 buf1_len)
         dpib_off = bdl_off+32
+
+        # ensure buffer is initialized, sanity
         for i in range(0, buf_len*2):
             mem[i] = 0
+
         log.info("Filled the buffer descriptor list (BDL) for DMA.")
         return (mem, hugef, phys_addr + bdl_off, phys_addr+dpib_off, 2)
 
@@ -163,11 +156,20 @@ class HDAStream:
         # clear enter reset bit to exit reset
         self.regs.CTL = 0
         while (self.regs.CTL & 1) == 1: pass
-        # hardware is ready to be used
+
+        log.info("Disable SPIB and set position 0 of stream %d", self.stream_id)
+        self.hda.SPBFCTL = 0
+        self.hda.SPIB = 0
+
+        #log.info("Setting dma position buffer and enable it")
+        #self.hda.DPUBASE = self.pos_buf_addr >> 32 & 0xffffffff
+        #self.hda.DPLBASE = self.pos_buf_addr & 0xfffffff0 | 1
+
+        log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
+        self.hda.PPCTL |= (1 << self.stream_id)
+
         self.debug()
         log.info("Reset stream %d", self.stream_id)
-        #for i in range(0, self.buf_len):
-        #    log.info("mem[%d] = %d", i, self.mem[i])
 
 
 def map_regs():
