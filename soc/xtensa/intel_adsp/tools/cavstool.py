@@ -25,9 +25,8 @@ WINSTREAM_OFFSET = (512 + (3 * 128)) * 1024
 
 class HDAStream:
     # creates an hda stream with at 2 buffers of buf_len
-    def __init__(self, stream_id, buf_len):
+    def __init__(self, stream_id):
         self.stream_id = stream_id
-        self.buf_len = buf_len
         self.base = hdamem + 0x0080 + (stream_id * 0x20)
         log.info("Mapping registers for hda stream")
 
@@ -63,11 +62,17 @@ class HDAStream:
         self.dbg0.EFIFOS = 0x10
         self.dbg0.freeze()
 
+        self.reset()
+        time.sleep(0.5)
+
+    def __del__(self):
+        self.reset()
+
+    def config(self, buf_len):
+        log.info("Configuring stream %d", self.stream_id)
+        self.buf_len = buf_len
         log.info("Allocating huge page and setting up buffers")
         self.mem, self.hugef, self.buf_list_addr, self.pos_buf_addr, self.n_bufs = self.setup_buf(buf_len)
-
-        log.info("Resetting hda stream %d at 0x%x", self.stream_id, self.base)
-        self.reset()
 
         log.info("Disable SPIB and set position")
         self.hda.SPBFCTL = 0
@@ -89,11 +94,7 @@ class HDAStream:
         #self.regs.FMT = 0
         #log.info("formatted fifo size %d", self.regs.FIFOS) # 32 byte fetch
         self.debug()
-        log.info("Stream %d initialized", self.stream_id)
-
-
-    def __del__(self):
-        self.reset()
+        log.info("Configured stream %d", self.stream_id)
 
     def write(self, data):
         bufl = min(len(data), self.buf_len)
@@ -463,6 +464,7 @@ ipc_timestamp = 0
 def ipc_command(data, ext_data):
     send_msg = False
     done = True
+    log.info("Command %d, data %x", data, ext_data)
     if data == 0: # noop, with synchronous DONE
         pass
     elif data == 1: # async command: signal DONE after a delay (on 1.8+)
@@ -479,48 +481,37 @@ def ipc_command(data, ext_data):
         ext_data = t - ipc_timestamp
         ipc_timestamp = t
         send_msg = True
-    elif data == 5: # HDA INIT
+    elif data == 5: # HDA RESET (init if not exists)
         stream_id = ext_data & 0xff
-        buf_len = (ext_data >> 8) & 0xffff
-        log.info("HDA init stream %d with buf_len %d", stream_id, buf_len)
-        hda_str = HDAStream(stream_id, buf_len)
-        hda_str.debug()
-        log.info("HDA init stream %d done", stream_id)
-        hda_streams[stream_id] = hda_str
-    elif data == 6: # HDA START
-        stream_id = ext_data & 0xff
-        log.info("HDA starting stream %d", stream_id)
+        if stream_id in hda_streams:
+            hda_streams[stream_id].reset()
+        else:
+            hda_str = HDAStream(stream_id)
+            hda_streams[stream_id] = hda_str
+    elif data == 6: # HDA CONFIG
+        stream_id = ext_data & 0xFF
+        buf_len = ext_data >> 8 & 0xFFFF
         hda_str = hda_streams[stream_id]
-        hda_str.debug()
-        hda_str.start()
-        log.info("HDA started stream %d", stream_id)
-        hda_str.debug()
-    elif data == 7: # HDA VALIDATE
-        stream_id = ext_data & 0xff
+        hda_str.config(buf_len)
+    elif data == 7: # HDA START
+        stream_id = ext_data & 0xFF
+        hda_streams[stream_id].start()
+
+    elif data == 8: # HDA STOP
+        stream_id = ext_data & 0xFF
+        hda_streams[stream_id].stop()
+    elif data == 9: # HDA VALIDATE
         hda_str = hda_streams[stream_id]
-        log.info("Waiting for completion...")
-        hda_str.debug()
-        while(hda_str.regs.LPIB < 128):
-            time.sleep(0.1)
-        log.info("HDA validating stream %d for ramp, mem type %s", ext_data & 0xff, type(hda_str.mem))
         hda_str.debug()
         os.fsync(hda_str.hugef.fileno()) # seems to work more often?
-        log.info("dma position buf: " + hda_str.mem[hda_str.pos_buf_addr:hda_str.pos_buf_addr+128].hex())
         is_ramp_data = True
-        log.info("buf " + str(hda_str.mem[0:256]))
-        #hda_str.mem.seek(0)
-        #for (i, val) in enumerate(hda_str.mem.read(256)):
-        #    if i != val:
-        #        is_ramp_data = False
-        #    log.info("hda stream buffer %d: %d", i, val)
+        hda_str.mem.seek(0)
+        for (i, val) in enumerate(hda_str.mem.read(256)):
+            if i != val:
+                is_ramp_data = False
+            log.info("stream[%d][%d]: %d", stream_id, i, val)
         log.info("Is ramp data? " + str(is_ramp_data))
-    elif data == 8: # HDA HOST IN RESET
-        stream_id = ext_data & 0xff
-        log.info("HDA reseting stream %d", stream_id)
-        hda_streams[stream_id].reset()
-        log.info("HDA reset stream %d", stream_id)
-        hda_streams[stream_id].debug()
-    elif data == 9: # HDA HOST OUT SEND
+    elif data == 10: # HDA HOST OUT SEND
         stream_id = ext_data & 0xff
         log.info("HDA writing to stream %d", stream_id)
         buf = bytearray(256)
@@ -547,6 +538,7 @@ def ipc_command(data, ext_data):
 async def main():
     log.debug("Removing old hugetables")
     runx("rm -rf /dev/hugepages/cavs_*")
+    #TODO this bit me, remove the globals, write a little FirmwareLoader class or something to contain.
     global hda, sd, dsp, hda_ostream_id, hda_streams
     try:
         (hda, sd, dsp, hda_ostream_id) = map_regs()

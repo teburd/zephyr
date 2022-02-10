@@ -38,18 +38,21 @@ enum cavstool_cmd {
 	/* The host emits a (real/host time) timestamp into the log stream */
 	IPCCMD_TIMESTAMP,
 
-	/* The host initializes an HDA stream (with provided buffer size and stream id) */
-	IPCCMD_HDA_INIT,
+	/* The host clears the run bit and resets the HDA stream */
+	IPCCMD_HDA_RESET,
+
+	/* The host configures an HDA stream (with provided buffer size and stream id) */
+	IPCCMD_HDA_CONFIG,
 
 	/* The host runs (sets the SDxCTL.RUN bit) for a given HDA stream */
 	IPCCMD_HDA_START,
 
+	/* The host stops (sets the SDxCTL.RUN bit) for a given HDA stream */
+	IPCCMD_HDA_STOP,
+
 	/* The host validates an HDA byte stream contains an 8bit counter and recieved a given
 	 * number of bytes (rounded down to the 32 byte burst) */
 	IPCCMD_HDA_VALIDATE,
-
-	/* The host clears the run bit and resets the HDA stream */
-	IPCCMD_HDA_RESET,
 
 	/* Host sends some data */
 	IPCCMD_HDA_SEND
