@@ -32,8 +32,6 @@ static void ipc_done(const struct device *dev, void *arg)
 }
 
 
-volatile int x = 0;
-
 void test_hda_in_smoke(void)
 {
 
@@ -54,30 +52,28 @@ void test_hda_in_smoke(void)
 	z_xtensa_cache_flush(hda_fifo, FIFO_SIZE);
 
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, STREAM_ID, IPC_TIMEOUT));
-	x = 1;
 	printk("host reset: "); cavs_hda_dbg(host_in, STREAM_ID);
+
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
+	printk("host config: "); cavs_hda_dbg(host_in, STREAM_ID);
 
 	cavs_hda_set_buffer(host_in, STREAM_ID, hda_fifo, FIFO_SIZE);
 	printk("dsp set_buffer: "); cavs_hda_dbg(host_in, STREAM_ID);
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
-	x = 2;
-	printk("host config: "); cavs_hda_dbg(host_in, STREAM_ID);
-
 	cavs_hda_enable(host_in, STREAM_ID);
 	printk("dsp enable: "); cavs_hda_dbg(host_in, STREAM_ID);
+
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT));
-	x = 3;
 	printk("host start: "); cavs_hda_dbg(host_in, STREAM_ID);
 
-	/* copies the buffer out */
 	cavs_hda_inc_pos(host_in, STREAM_ID, FIFO_SIZE);
-	k_msleep(10);
 	printk("dsp inc_pos: "); cavs_hda_dbg(host_in, STREAM_ID);
 
 	WAIT_FOR(cavs_hda_wp_rp_eq(host_in, STREAM_ID));
 	printk("dsp wp_rp_eq: "); cavs_hda_dbg(host_in, STREAM_ID);
-	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID));
+
+	k_msleep(100);
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID, IPC_TIMEOUT));
 
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, STREAM_ID, IPC_TIMEOUT));
 	cavs_hda_disable(host_in, STREAM_ID);

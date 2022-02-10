@@ -63,7 +63,6 @@ class HDAStream:
         self.dbg0.freeze()
 
         self.reset()
-        time.sleep(0.5)
 
     def __del__(self):
         self.reset()
@@ -501,6 +500,7 @@ def ipc_command(data, ext_data):
         stream_id = ext_data & 0xFF
         hda_streams[stream_id].stop()
     elif data == 9: # HDA VALIDATE
+        stream_id = ext_data & 0xFF
         hda_str = hda_streams[stream_id]
         hda_str.debug()
         os.fsync(hda_str.hugef.fileno()) # seems to work more often?
