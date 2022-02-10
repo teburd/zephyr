@@ -45,6 +45,7 @@ void test_hda_in_smoke(void)
 
 	printk("Using buffer of size %d at addr %p\n", FIFO_SIZE, hda_fifo);
 
+	/* setup a ramp in the buffer */
 	for(uint32_t i = 0; i < FIFO_SIZE; i++) {
 		hda_fifo[i] = i & 0xff;
 	}
@@ -56,7 +57,8 @@ void test_hda_in_smoke(void)
 	cavs_hda_enable(host_in, STREAM_ID);
 	cavs_hda_dbg(host_in, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT));
-	cavs_hda_copy(host_in, STREAM_ID, FIFO_SIZE);
+	/* copies the buffer out */
+	cavs_hda_inc_pos(host_in, STREAM_ID, FIFO_SIZE);
 	WAIT_FOR(cavs_hda_wp_rp_eq(host_in, STREAM_ID));
 	cavs_hda_dbg(host_in, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID));
@@ -89,7 +91,7 @@ void test_hda_out_smoke(void)
 		printk("hda_fifo[%d] = %d\n", j, hda_fifo[j]);
 	}
 	*/
-	cavs_hda_copy(host_out, STREAM_ID, FIFO_SIZE);
+	cavs_hda_inc_pos(host_out, STREAM_ID, FIFO_SIZE);
 	cavs_hda_dbg(host_out, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 8), IPC_TIMEOUT));
 	cavs_hda_disable(host_out, STREAM_ID);

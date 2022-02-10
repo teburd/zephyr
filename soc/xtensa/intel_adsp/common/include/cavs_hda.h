@@ -41,7 +41,7 @@ struct cavs_hda_stream {
 	uint8_t *buf;
 };
 
-#define HDA_STREAM_COUNT 14
+#define HDA_STREAM_COUNT 7
 
 /* HDA stream set */
 struct cavs_hda_streams {
@@ -176,14 +176,12 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 	void *cached_buf = arch_xtensa_cached_ptr(buf);
 	uint32_t cached_addr = (uint32_t)cached_buf;
 	uint32_t aligned_addr = cached_addr & 0x0FFFFF80;
+
+
 	*DGBBA(hda->base, sid) = aligned_addr;
-	printk("cached %p, addr 0x%x, aligned 0x%x, DGBBA 0x%x\n", cached_buf, cached_addr, aligned_addr, *DGBBA(hda->base, sid));
+
 	*DGBS(hda->base, sid) = buf_size;
-	*DGBFPI(hda->base, sid) = 0;
-	*DGBSP(hda->base, sid) = 0;
 	*DGMBS(hda->base, sid) = 256;
-	*DGLLPI(hda->base, sid) = 0;
-	*DGLPIBI(hda->base, sid) = 0;
 
 	hda->streams[sid].borrowed = 0;
 	hda->streams[sid].rp = 0;
@@ -193,41 +191,19 @@ static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t si
 }
 
 /**
- * @brief Borrow a contiguous slice of the underlying HDA stream FIFO
- *
- * This can be read from or writen to avoiding an unneeded copy depending on the stream
- * direction. For a sending stream write, for a recieving stream read. Will always be
- * aligned on the buffer element size.
- */
-static inline int cavs_hda_borrow(struct cavs_hda_streams *hda, uint32_t sid, uint8_t **buf, uint32_t *buf_len)
-{
-	return 0;
-}
-
-/**
- * @brief Return a borrowed buffer
- *
- * This updates the firmware position in buffer informing the hardware of a read or write
- * that needs to happen.
- */
-static inline void cavs_hda_return(struct cavs_hda_streams *hda, uint32_t sid, uint8_t **buf, uint32_t *buf_len)
-{
-}
-
-/**
  * @brief Force DMA to exit L1 (low power state)
  */
 static inline void cavs_hda_l1_exit(struct cavs_hda_streams *hda, uint32_t sid)
 {
 	CAVS_SHIM.svcfg |= BIT(2);
-	k_busy_wait(100000);
+	k_msleep(1);
 	CAVS_SHIM.svcfg &= ~BIT(2);
 }
 
 /**
  * @brief Enable the stream
  *
- * @param hda Stream set to work with
+ * @param hda HDA stream to enable
  * @param sid Stream identifier
  */
 static inline void cavs_hda_enable(struct cavs_hda_streams *hda, uint32_t sid)
@@ -236,6 +212,10 @@ static inline void cavs_hda_enable(struct cavs_hda_streams *hda, uint32_t sid)
 	*DGCS(hda->base, sid) |= DGCS_GEN | DGCS_FIFORDY;
 }
 
+/**
+ * @brief Disable stream
+ *
+ * @param hda HDA stream to disable */
 static inline void cavs_hda_disable(struct cavs_hda_streams *hda, uint32_t sid)
 {
 	/* disable the stream */
@@ -292,7 +272,20 @@ static inline uint32_t cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t si
 	return size;
 }
 
-static inline void cavs_hda_copy(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
+/**
+ * @brief Update the firmware position by a given length
+ *
+ * Updates the ringbuffer position (read or write pointer) by
+ * setting the FPI register. We update the book kept state of
+ * the stream rp/wp prior to the update of position. In
+ * some cases where the hardware is not pulling yet from
+ * the FIFO the WP/RP will not update until it is started.
+ *
+ * @param hda HDA device
+ * @param sid Stream ID
+ * @param len Len to increment postion by
+ */
+static inline void cavs_hda_inc_pos(struct cavs_hda_streams *hda, uint32_t sid, uint32_t len)
 {
 	*DGBFPI(hda->base, sid) = len;
 	*DGLLPI(hda->base, sid) = len;
@@ -310,14 +303,13 @@ static inline void cavs_hda_copy(struct cavs_hda_streams *hda, uint32_t sid, uin
  * @param buf Buffer of bytes
  * @param buf_len Number of bytes
  *
- * @retval -2 Previous writes to the buffer have not been committed in hardware
+ * @retval -EAGAIN Previous writes to the buffer have not been committed in hardware
  *            or the stream isn't enabled in some way. Check on the host SDxCTL.RUN and
  *            ppctl.PPROC are set. Check on the DSP that dgctl.GEN is enabled.
- * @retval -1 Not enough room in the FIFO for the buffer to be written. Try again soon
+ * @retval -ENOBUFS Not enough room in the FIFO for the buffer to be written. Try again soon
  *            and ensure the stream is running and enabled.
- * @retval  0 Write was successful. No guarantee the other side has all bytes though
- *            as the burst size appears to be 32 bytes. Only once 32 bytes are written
- *            does the data actually get moved.
+ * @retval  rem Write was successful and the remaining number of bytes to be read or
+ *            writen by the hardware is returned.
  */
 static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 				 uint8_t *buf, uint32_t buf_len)
@@ -331,18 +323,18 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	 * there's an issue and we cannot continue.
 	 */
 	if (dgbwp == hda->streams[sid].wp && hda->streams[sid].fpi > 0) {
-		return -2;
+		return -EAGAIN;
 	}
 
 	/* Check if there's room in the fifo for the given buffer */
 	if (cavs_hda_unused(hda, sid) < buf_len) {
-		return -1;
+		return -ENOBUFS;
 	}
 
 	/* Start on the current write position
 	 * then increment by one before each write
 	 *
-	 * TODO use word copies rather than byte copies when feasible
+	 * TODO use memcpy rather than byte copies when feasible, split when wrapped
 	 */
 	uint32_t fifo_size = *DGBS(hda->base, sid);
 	uint8_t *fifo = arch_xtensa_uncached_ptr(hda->streams[sid].buf);
@@ -360,16 +352,17 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	*DGCS(hda->base, sid) &= ~DGCS_BSC; /* clear the bsc bit if set by the hardware */
 	*DGBSP(hda->base, sid) = idx; /* have the hardware set the BSC bit again when we've reached the end of our last write */
 
-	cavs_hda_copy(hda, sid, buf_len);
+	cavs_hda_inc_pos(hda, sid, buf_len);
 
 	/* book keeping to ensure we don't corrupt our own buffer by
-	 * writing faster than the hardware or trying to write while
-	 * the hardware is disabled
+	 * writing again  while the hardware is disabled or hasn't yet picked up
+	 * our position change which while unlikely seems to be possible.
 	 */
 	hda->streams[sid].wp = dgbwp;
 	hda->streams[sid].rp = *DGBRP(hda->base, sid);
 	hda->streams[sid].fpi = buf_len;
-	return 0;
+
+	return (buf_len - cavs_hda_unused(hda, sid));
 }
 
 static inline bool cavs_hda_wp_rp_eq(struct cavs_hda_streams *hda, uint32_t sid)
