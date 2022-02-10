@@ -365,6 +365,15 @@ static inline int cavs_hda_write(struct cavs_hda_streams *hda, uint32_t sid,
 	return (buf_len - cavs_hda_unused(hda, sid));
 }
 
+/**
+ * @brief Read the buffer full bit of the given stream.
+ */
+static inline bool cavs_hda_buf_full(struct cavs_hda_streams *hda, uint32_t sid)
+{
+	return *DGCS(hda->base, sid) & DGCS_BF;
+}
+
+
 static inline bool cavs_hda_wp_rp_eq(struct cavs_hda_streams *hda, uint32_t sid)
 {
 	return *DGBWP(hda->base, sid) == *DGBRP(hda->base, sid);

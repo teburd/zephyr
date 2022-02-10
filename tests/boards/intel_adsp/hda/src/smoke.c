@@ -52,14 +52,18 @@ void test_hda_in_smoke(void)
 	/* The buffer is in the cached address range and must be flushed when done writing. */
 	z_xtensa_cache_flush(hda_fifo, FIFO_SIZE);
 
-	cavs_hda_set_buffer(host_in, STREAM_ID, hda_fifo, FIFO_SIZE);
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_INIT, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
+	k_msleep(100);
+	cavs_hda_set_buffer(host_in, STREAM_ID, hda_fifo, FIFO_SIZE);
+	cavs_hda_dbg(host_in, STREAM_ID);
 	cavs_hda_enable(host_in, STREAM_ID);
 	cavs_hda_dbg(host_in, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT));
 	/* copies the buffer out */
 	cavs_hda_inc_pos(host_in, STREAM_ID, FIFO_SIZE);
-	WAIT_FOR(cavs_hda_wp_rp_eq(host_in, STREAM_ID));
+	k_msleep(10);
+	cavs_hda_dbg(host_in, STREAM_ID);
+	//WAIT_FOR(cavs_hda_wp_rp_eq(host_in, STREAM_ID));
 	cavs_hda_dbg(host_in, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID));
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, STREAM_ID, IPC_TIMEOUT));
@@ -81,16 +85,17 @@ void test_hda_out_smoke(void)
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_INIT, (STREAM_ID + 8) | (FIFO_SIZE << 8), IPC_TIMEOUT));
 	cavs_hda_enable(host_out, STREAM_ID);
 	cavs_hda_dbg(host_out, STREAM_ID);
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, (STREAM_ID + 8), IPC_TIMEOUT));
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_SEND, (STREAM_ID + 8) | (FIFO_SIZE << 8), IPC_TIMEOUT));
-	/*WAIT_FOR(*DGBWP(host_out, STREAM_ID) != 0); */
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, (STREAM_ID + 8), IPC_TIMEOUT));
+	k_msleep(5);
+	cavs_hda_dbg(host_out, STREAM_ID);
+	WAIT_FOR(cavs_hda_buf_full(host_out, STREAM_ID));
 	cavs_hda_dbg(host_out, STREAM_ID);
 	/* The buffer is in the cached address range and must be invalidated prior to reading. */
 	z_xtensa_cache_inv(hda_fifo, FIFO_SIZE);
-	/*for (int j = 0; j < FIFO_SIZE; j++) {
+	for (int j = 0; j < FIFO_SIZE; j++) {
 		printk("hda_fifo[%d] = %d\n", j, hda_fifo[j]);
 	}
-	*/
 	cavs_hda_inc_pos(host_out, STREAM_ID, FIFO_SIZE);
 	cavs_hda_dbg(host_out, STREAM_ID);
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 8), IPC_TIMEOUT));

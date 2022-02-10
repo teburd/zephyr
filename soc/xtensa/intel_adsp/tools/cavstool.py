@@ -73,27 +73,33 @@ class HDAStream:
         self.hda.SPBFCTL = 0
         self.hda.SPIB = 0
 
-        log.info("Setting dma position buffer and enable it")
-        self.hda.DPUBASE = self.pos_buf_addr >> 32 & 0xffffffff
-        self.hda.DPLBASE = self.pos_buf_addr & 0xfffffff0 | 1
+        #log.info("Setting dma position buffer and enable it")
+        #self.hda.DPUBASE = self.pos_buf_addr >> 32 & 0xffffffff
+        #self.hda.DPLBASE = self.pos_buf_addr & 0xfffffff0 | 1
 
         log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
         self.hda.PPCTL |= (1 << self.stream_id)
 
-        log.info("Setting buffer list, length, and stream id and traffic priorit bit")
+        log.info("Setting buffer list, length, and stream id and traffic priority bit")
         self.regs.CTL = ((self.stream_id & 0xFF) << 20) | (1 << 18) # must be set to something other than 0?
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
         self.regs.CBL = buf_len
         self.regs.LVI = self.n_bufs - 1
-        self.regs.FMT = 0
-        log.info("formatted fifo size %d", self.regs.FIFOS) # 32 byte fetch
+        #self.regs.FMT = 0
+        #log.info("formatted fifo size %d", self.regs.FIFOS) # 32 byte fetch
         self.debug()
         log.info("Stream %d initialized", self.stream_id)
 
 
     def __del__(self):
         self.reset()
+
+    def write(self, data):
+        bufl = min(len(data), self.buf_len)
+        self.mem[0:bufl] = data[0:bufl]
+        self.hda.SPBFCTL |= (1 << self.stream_id)
+        self.hda.SPIB = bufl
 
     def start(self):
         log.info("Starting stream %d", self.stream_id)
@@ -149,14 +155,14 @@ class HDAStream:
         # the DSP!
         log.info("Resetting stream %d", self.stream_id)
         self.debug()
-        sd.CTL &= ~2 # clear START
+        self.regs.CTL &= ~2 # clear START
         time.sleep(0.1)
         # set enter reset bit
-        sd.CTL = 1
-        while (sd.CTL & 1) == 0: pass
+        self.regs.CTL = 1
+        while (self.regs.CTL & 1) == 0: pass
         # clear enter reset bit to exit reset
-        sd.CTL = 0
-        while (sd.CTL & 1) == 1: pass
+        self.regs.CTL = 0
+        while (self.regs.CTL & 1) == 1: pass
         # hardware is ready to be used
         self.debug()
         log.info("Reset stream %d", self.stream_id)
@@ -513,10 +519,14 @@ def ipc_command(data, ext_data):
         log.info("HDA reseting stream %d", stream_id)
         hda_streams[stream_id].reset()
         log.info("HDA reset stream %d", stream_id)
+        hda_streams[stream_id].debug()
     elif data == 9: # HDA HOST OUT SEND
         stream_id = ext_data & 0xff
         log.info("HDA writing to stream %d", stream_id)
-        # ???
+        buf = bytearray(256)
+        for i in range(0, 256):
+            buf[i] = i
+        hda_streams[stream_id].write(buf)
         log.info("HDA wrote to stream %d", stream_id)
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
