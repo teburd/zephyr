@@ -124,8 +124,9 @@ class HDAStream:
                                                 buf0_len,
                                                 phys_addr + buf0_len,
                                                 buf1_len)
-        os.fsync(hugef.fileno())
         dpib_off = bdl_off+32
+        for i in range(0, buf_len*2):
+            mem[i] = 0
         log.info("Filled the buffer descriptor list (BDL) for DMA.")
         return (mem, hugef, phys_addr + bdl_off, phys_addr+dpib_off, 2)
 
@@ -534,6 +535,8 @@ def ipc_command(data, ext_data):
         dsp.HIPCIDR = (1<<31) | ext_data
 
 async def main():
+    log.debug("Removing old hugetables")
+    runx("rm -rf /dev/hugepages/cavs_*")
     global hda, sd, dsp, hda_ostream_id, hda_streams
     try:
         (hda, sd, dsp, hda_ostream_id) = map_regs()
