@@ -28,7 +28,6 @@ static bool ipc_message(const struct device *dev, void *arg,
 
 static void ipc_done(const struct device *dev, void *arg)
 {
-	printk("ipc done called\n");
 }
 
 
@@ -87,31 +86,32 @@ void test_hda_in_smoke(void)
 void test_hda_out_smoke(void)
 {
 	printk("smoke testing hda with fifo buffer at address %p, size %d\n", hda_fifo, FIFO_SIZE);
-//
-//	cavs_ipc_set_message_handler(CAVS_HOST_DEV, ipc_message, NULL);
-//	cavs_ipc_set_done_handler(CAVS_HOST_DEV, ipc_done, NULL);
-//
-//	struct cavs_hda_streams *host_out = &cavs_hda.host_out;
-//
-//	printk("Using buffer of size %d at addr %p\n", FIFO_SIZE, hda_fifo);
-//
-//	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 8), IPC_TIMEOUT));
-//	cavs_hda_set_buffer(host_out, STREAM_ID, hda_fifo, FIFO_SIZE);
-//	cavs_hda_enable(host_out, STREAM_ID);
-//	cavs_hda_dbg(host_out, STREAM_ID);
-//	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_SEND, (STREAM_ID + 8) | (FIFO_SIZE << 8), IPC_TIMEOUT));
-//	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, (STREAM_ID + 8), IPC_TIMEOUT));
-//	k_msleep(5);
-//	cavs_hda_dbg(host_out, STREAM_ID);
-//	WAIT_FOR(cavs_hda_buf_full(host_out, STREAM_ID));
-//	cavs_hda_dbg(host_out, STREAM_ID);
-//	/* The buffer is in the cached address range and must be invalidated prior to reading. */
-//	z_xtensa_cache_inv(hda_fifo, FIFO_SIZE);
-//	for (int j = 0; j < FIFO_SIZE; j++) {
-//		printk("hda_fifo[%d] = %d\n", j, hda_fifo[j]);
-//	}
-//	cavs_hda_inc_pos(host_out, STREAM_ID, FIFO_SIZE);
-//	cavs_hda_dbg(host_out, STREAM_ID);
-//	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 8), IPC_TIMEOUT));
-//	cavs_hda_disable(host_out, STREAM_ID);
+
+	cavs_ipc_set_message_handler(CAVS_HOST_DEV, ipc_message, NULL);
+	cavs_ipc_set_done_handler(CAVS_HOST_DEV, ipc_done, NULL);
+
+	struct cavs_hda_streams *host_out = &cavs_hda.host_out;
+
+	printk("Using buffer of size %d at addr %p\n", FIFO_SIZE, hda_fifo);
+
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 7), IPC_TIMEOUT));
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG, (STREAM_ID + 7) | (FIFO_SIZE << 8), IPC_TIMEOUT));
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_SEND, (STREAM_ID + 7) | (FIFO_SIZE << 8), IPC_TIMEOUT));
+	cavs_hda_set_buffer(host_out, STREAM_ID, hda_fifo, FIFO_SIZE);
+	cavs_hda_enable(host_out, STREAM_ID);
+	cavs_hda_dbg(host_out, STREAM_ID);
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, (STREAM_ID + 7), IPC_TIMEOUT));
+	k_msleep(5);
+	cavs_hda_dbg(host_out, STREAM_ID);
+	WAIT_FOR(cavs_hda_buf_full(host_out, STREAM_ID));
+	cavs_hda_dbg(host_out, STREAM_ID);
+	/* The buffer is in the cached address range and must be invalidated prior to reading. */
+	z_xtensa_cache_inv(hda_fifo, FIFO_SIZE);
+	for (int j = 0; j < FIFO_SIZE; j++) {
+		printk("hda_fifo[%d] = %d\n", j, hda_fifo[j]);
+	}
+	cavs_hda_inc_pos(host_out, STREAM_ID, FIFO_SIZE);
+	cavs_hda_dbg(host_out, STREAM_ID);
+	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 7), IPC_TIMEOUT));
+	cavs_hda_disable(host_out, STREAM_ID);
 }

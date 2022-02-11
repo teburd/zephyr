@@ -465,7 +465,7 @@ ipc_timestamp = 0
 def ipc_command(data, ext_data):
     send_msg = False
     done = True
-    log.info("Command %d, data %x", data, ext_data)
+    log.debug ("ipc data %d, ext_data %x", data, ext_data)
     if data == 0: # noop, with synchronous DONE
         pass
     elif data == 1: # async command: signal DONE after a delay (on 1.8+)
@@ -520,6 +520,7 @@ def ipc_command(data, ext_data):
         for i in range(0, 256):
             buf[i] = i
         hda_streams[stream_id].write(buf)
+        hda_streams[stream_id].debug()
         log.info("HDA wrote to stream %d", stream_id)
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
@@ -529,11 +530,8 @@ def ipc_command(data, ext_data):
         time.sleep(0.01) # Needed on 1.8, or the command below won't send!
 
     if done and not cavs15:
-        log.info("Sending done")
         dsp.HIPCTDA = 1<<31 # Signal done
-        log.info("Sent done")
     if send_msg:
-        log.info("Sending Message")
         dsp.HIPCIDD = ext_data
         dsp.HIPCIDR = (1<<31) | ext_data
 
@@ -565,13 +563,9 @@ async def main():
             sys.stdout.write(output)
             sys.stdout.flush()
         if dsp.HIPCTDR & 0x80000000:
-            log.info("ipc_command exit")
             ipc_command(dsp.HIPCTDR & ~0x80000000, dsp.HIPCTDD)
-            log.info("ipc_command exit")
         if dsp.HIPCIDA & 0x80000000:
-            log.info("ACKing done")
             dsp.HIPCIDA = 1<<31 # must ACK any DONE interrupts that arrive!
-            log.info("ACKed done")
 
 
 ap = argparse.ArgumentParser(description="DSP loader/logger tool")

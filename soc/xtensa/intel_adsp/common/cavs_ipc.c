@@ -57,12 +57,10 @@ void z_cavs_ipc_isr(const void *devarg)
 	bool done = IS_ENABLED(CONFIG_SOC_SERIES_INTEL_CAVS_V15) ?
 		(regs->idd & CAVS_IPC_IDD15_DONE) : (regs->ida & CAVS_IPC_DONE);
 
-	printk("checking done\n");
 	if (done) {
 		if (devdata->done_notify != NULL) {
 			devdata->done_notify(dev, devdata->done_arg);
 		}
-		printk("giving ipc sem\n");
 		k_sem_give(&devdata->sem);
 		if (IS_ENABLED(CONFIG_SOC_SERIES_INTEL_CAVS_V15)) {
 			regs->idd = CAVS_IPC_IDD15_DONE;
