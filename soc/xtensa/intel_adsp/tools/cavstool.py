@@ -512,6 +512,9 @@ def ipc_command(data, ext_data):
                 is_ramp_data = False
             log.info("stream[%d][%d]: %d", stream_id, i, val)
         log.info("Is ramp data? " + str(is_ramp_data))
+        ext_data = int(is_ramp_data)
+        log.info(f"Ext data to send back on ramp status {ext_data}")
+        send_msg = True
     elif data == 10: # HDA HOST OUT SEND
         stream_id = ext_data & 0xff
         buf = bytearray(256)

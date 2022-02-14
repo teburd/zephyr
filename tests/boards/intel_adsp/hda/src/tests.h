@@ -7,8 +7,7 @@
 #include <cavs_ipc.h>
 #include <cavs_test.h>
 
-void test_hda_in_smoke(void);
-void test_hda_out_smoke(void);
-void test_hda_host_loop(void);
+void test_hda_host_in_smoke(void);
+void test_hda_host_out_smoke(void);
 
 #endif /* ZEPHYR_TESTS_INTEL_ADSP_TESTS_H */
