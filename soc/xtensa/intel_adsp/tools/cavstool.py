@@ -73,15 +73,12 @@ class HDAStream:
         log.info("Allocating huge page and setting up buffers")
         self.mem, self.hugef, self.buf_list_addr, self.pos_buf_addr, self.n_bufs = self.setup_buf(buf_len)
 
-
         log.info("Setting buffer list, length, and stream id and traffic priority bit")
         self.regs.CTL = ((self.stream_id & 0xFF) << 20) | (1 << 18) # must be set to something other than 0?
         self.regs.BDPU = (self.buf_list_addr >> 32) & 0xffffffff
         self.regs.BDPL = self.buf_list_addr & 0xffffffff
         self.regs.CBL = buf_len
         self.regs.LVI = self.n_bufs - 1
-        #self.regs.FMT = 0
-        #log.info("formatted fifo size %d", self.regs.FIFOS) # 32 byte fetch
         self.debug()
         log.info(f"Configured stream {self.stream_id}")
 
@@ -109,8 +106,7 @@ class HDAStream:
     def setup_buf(self, buf_len: int):
         (mem, phys_addr, hugef) = map_phys_mem(self.stream_id)
 
-        log.info("Mapped 2M huge page at 0x%x for buf size (%d)"
-                 % (phys_addr, buf_len))
+        log.info(f"Mapped 2M huge page at 0x{phys_addr:x} for buf size ({buf_len})")
 
         # create two buffers in the page of buf_len and mark them
         # in a buffer descriptor list for the hardware to use
@@ -149,7 +145,7 @@ class HDAStream:
         # The sleep too is required, on at least one board (a fast
         # chromebook) putting the two writes next each other also hangs
         # the DSP!
-        log.info("Resetting stream %d", self.stream_id)
+        log.info(f"Resetting stream {self.stream_id}")
         self.debug()
         self.regs.CTL &= ~2 # clear START
         time.sleep(0.1)
@@ -160,7 +156,7 @@ class HDAStream:
         self.regs.CTL = 0
         while (self.regs.CTL & 1) == 1: pass
 
-        log.info("Disable SPIB and set position 0 of stream %d", self.stream_id)
+        log.info(f"Disable SPIB and set position 0 of stream {self.stream_id}")
         self.hda.SPBFCTL = 0
         self.hda.SPIB = 0
 
@@ -168,11 +164,11 @@ class HDAStream:
         #self.hda.DPUBASE = self.pos_buf_addr >> 32 & 0xffffffff
         #self.hda.DPLBASE = self.pos_buf_addr & 0xfffffff0 | 1
 
-        log.info("Enabling dsp capture (PROCEN) of stream %d", self.stream_id)
+        log.info(f"Enabling dsp capture (PROCEN) of stream {self.stream_id}")
         self.hda.PPCTL |= (1 << self.stream_id)
 
         self.debug()
-        log.info("Reset stream %d", self.stream_id)
+        log.info(f"Reset stream {self.stream_id}")
 
 
 def map_regs():
