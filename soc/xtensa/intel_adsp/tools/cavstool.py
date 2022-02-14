@@ -25,10 +25,10 @@ WINSTREAM_OFFSET = (512 + (3 * 128)) * 1024
 
 class HDAStream:
     # creates an hda stream with at 2 buffers of buf_len
-    def __init__(self, stream_id):
+    def __init__(self, stream_id: int):
         self.stream_id = stream_id
         self.base = hdamem + 0x0080 + (stream_id * 0x20)
-        log.info("Mapping registers for hda stream")
+        log.info(f"Mapping registers for hda stream {self.stream_id} at base {self.base:x}")
 
         self.hda = Regs(hdamem)
         self.hda.GCAP    = 0x0000
@@ -40,7 +40,7 @@ class HDAStream:
         self.hda.PPCH    = 0x0800
         self.hda.PPCTL   = 0x0804
         self.hda.PPSTS   = 0x0808
-        self.hda.SPIB = 0x0708 + stream_id*0x80
+        self.hda.SPIB = 0x0708 + stream_id*0x08
         self.hda.freeze()
 
         self.regs = Regs(self.base)
@@ -67,8 +67,8 @@ class HDAStream:
     def __del__(self):
         self.reset()
 
-    def config(self, buf_len):
-        log.info("Configuring stream %d", self.stream_id)
+    def config(self, buf_len: int):
+        log.info(f"Configuring stream {self.stream_id}")
         self.buf_len = buf_len
         log.info("Allocating huge page and setting up buffers")
         self.mem, self.hugef, self.buf_list_addr, self.pos_buf_addr, self.n_bufs = self.setup_buf(buf_len)
@@ -83,27 +83,30 @@ class HDAStream:
         #self.regs.FMT = 0
         #log.info("formatted fifo size %d", self.regs.FIFOS) # 32 byte fetch
         self.debug()
-        log.info("Configured stream %d", self.stream_id)
+        log.info(f"Configured stream {self.stream_id}")
 
     def write(self, data):
+
         bufl = min(len(data), self.buf_len)
+        log.info(f"Writing data to stream {self.stream_id}, len {bufl}, SPBFCTL {self.hda.SPBFCTL:x}, SPIB {self.hda.SPIB}")
         self.mem[0:bufl] = data[0:bufl]
         self.hda.SPBFCTL |= (1 << self.stream_id)
         self.hda.SPIB = bufl
+        log.info(f"Wrote data to stream {self.stream_id}, SPBFCTL {self.hda.SPBFCTL:x}, SPIB {self.hda.SPIB}")
 
     def start(self):
-        log.info("Starting stream %d", self.stream_id)
+        log.info(f"Starting stream {self.stream_id}, CTL {self.regs.CTL:x}")
         self.regs.CTL |= 2
-        log.info("Started stream %d", self.stream_id)
+        log.info(f"Started stream {self.stream_id}, CTL {self.regs.CTL:x}")
 
     def stop(self):
-        log.info("Stopping stream %d", self.stream_id)
+        log.info(f"Stopping stream {self.stream_id}, CTL {self.regs.CTL:x}")
         self.regs.CTL &= 2
         time.sleep(0.1)
         self.regs.CTL |= 1
-        log.info("Stopped stream %d", self.stream_id)
+        log.info(f"Stopped stream {self.stream_id}, CTL {self.regs.CTL:x}")
 
-    def setup_buf(self, buf_len):
+    def setup_buf(self, buf_len: int):
         (mem, phys_addr, hugef) = map_phys_mem(self.stream_id)
 
         log.info("Mapped 2M huge page at 0x%x for buf size (%d)"
@@ -515,13 +518,10 @@ def ipc_command(data, ext_data):
         log.info("Is ramp data? " + str(is_ramp_data))
     elif data == 10: # HDA HOST OUT SEND
         stream_id = ext_data & 0xff
-        log.info("HDA writing to stream %d", stream_id)
         buf = bytearray(256)
         for i in range(0, 256):
             buf[i] = i
         hda_streams[stream_id].write(buf)
-        hda_streams[stream_id].debug()
-        log.info("HDA wrote to stream %d", stream_id)
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
 
