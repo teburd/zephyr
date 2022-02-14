@@ -61,6 +61,9 @@ void test_hda_in_smoke(void)
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG, STREAM_ID | (FIFO_SIZE << 8), IPC_TIMEOUT));
 	printk("host config: "); cavs_hda_dbg(host_in, STREAM_ID);
 
+	cavs_hda_init(host_in, STREAM_ID);
+	printk("dsp init: "); cavs_hda_dbg(host_in, STREAM_ID);
+
 	cavs_hda_set_buffer(host_in, STREAM_ID, hda_fifo, FIFO_SIZE);
 	printk("dsp set_buffer: "); cavs_hda_dbg(host_in, STREAM_ID);
 
@@ -101,6 +104,9 @@ void test_hda_out_smoke(void)
 	printk("host config: "); cavs_hda_dbg(host_out, STREAM_ID);
 
 	k_sleep(K_MSEC(10));
+
+	cavs_hda_init(host_out, STREAM_ID);
+	printk("dsp init: "); cavs_hda_dbg(host_out, STREAM_ID);
 
 	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_SEND, (STREAM_ID + 7) | (FIFO_SIZE << 8), IPC_TIMEOUT));
 	printk("host send: "); cavs_hda_dbg(host_out, STREAM_ID);

@@ -1,23 +1,18 @@
 /* Copyright (c) 2022 Intel Corporation
  * SPDX-License-Identifier: Apache-2.0
  */
+
 #ifndef ZEPHYR_INCLUDE_CAVS_HDA_H
 #define ZEPHYR_INCLUDE_CAVS_HDA_H
 
-#include "arch/xtensa/cache.h"
+#include <arch/xtensa/cache.h>
 #include <kernel.h>
 #include <device.h>
 #include <cavs-shim.h>
+#include <cavs-mem.h>
 
 /* HDA stream */
 struct cavs_hda_stream {
-	/* rather than copying data to and from
-	 * the underlying fifo buffer we allow software
-	 * to borrow slices of the buffer as a pointer
-	 * and return it when done.
-	 */
-	uint32_t borrowed;
-
 	/* track the hardware read pointer position in software
 	 * to detect hardware updates
 	 */
@@ -140,54 +135,82 @@ static struct cavs_hda cavs_hda = {
 		       *DGMBS(hda->base, sid),				\
 		       *DGLLPI(hda->base, sid),				\
 		       *DGLPIBI(hda->base, sid));			\
-		printk("\tborrowed %d, wp: %d, rp: %d, fpi %d\n",	\
-		       hda->streams[sid].borrowed,			\
+		printk("\twp: %d, rp: %d, fpi %d\n",	\
 		       hda->streams[sid].wp,				\
 		       hda->streams[sid].rp,				\
 		       hda->streams[sid].fpi);				\
 	} while (0)
 
 
+#define HDA_ALIGN_MASK 0xFFFFFF80
+
+/**
+ * @brief Initialize an HDA stream for use with the firmware
+ *
+ * @param hda Stream set to work with
+ * @param sid Stream ID
+ */
+static inline void cavs_hda_init(struct cavs_hda_streams *hda, uint32_t sid)
+{
+	/* Safe to do under all conditions */
+	*DGCS(hda->base, sid) |= DGCS_FWCB;
+}
+
 /**
  * @brief Set the buffer, size, and element size for an HDA stream
  *
  * Prior to enabling an HDA stream to/from the host this is the minimum configuration
- * that is required.
+ * that is required. It must be set *after* the host has configured its own buffers.
  *
  * @param hda Stream set to work with
- * @param sid Stream identifier
- * @param buf Buffer address to use for the shared FIFO. Must be in L2.
- * @param buf_size Buffer size in bytes
- * @param elem_size Buffer element size, must be *atleast* 0x10 bytes.
+ * @param sid Stream ID
+ * @param buf Buffer address to use for the shared FIFO. Must be in L2 and 128 byte aligned.
+ * @param buf_size Buffer size in bytes Must be 128 byte aligned
+ *
  * @retval -EBUSY if the HDA stream is already enabled
  * @retval -EINVAL if the buf is not in L2, buf isn't aligned on 128 byte boundaries
  * @retval 0 on Success
  */
-static inline void cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t sid,
+static inline int cavs_hda_set_buffer(struct cavs_hda_streams *hda, uint32_t sid,
 				     uint8_t *buf, uint32_t buf_size)
 {
-
-	/* Tell hardware we want to control the buffer pointer,
-	 * we don't want it to enter low power, and we want to control
-	 * the sample size.
-	 */
-	/* Sample size is 4 bytes when scs not set */
-	*DGCS(hda->base, sid) |= DGCS_FWCB | DGCS_L1ETP;
 	void *cached_buf = arch_xtensa_cached_ptr(buf);
 	uint32_t cached_addr = (uint32_t)cached_buf;
-	uint32_t aligned_addr = cached_addr & 0x0FFFFF80;
+	uint32_t aligned_addr = cached_addr & HDA_ALIGN_MASK;
+	uint32_t aligned_size = buf_size & HDA_ALIGN_MASK;
 
+	if (aligned_addr != cached_addr) {
+		return -EINVAL;
+	}
+
+	if (aligned_addr < L2_SRAM_BASE || aligned_addr >= L2_SRAM_BASE + L2_SRAM_SIZE) {
+		return -EINVAL;
+	}
+
+	if (aligned_size != buf_size) {
+		return -EINVAL;
+	}
+
+	if (aligned_addr + aligned_size >= L2_SRAM_BASE + L2_SRAM_SIZE) {
+		return -EINVAL;
+	}
+
+	if (*DGCS(hda->base, sid) & DGCS_GEN) {
+		return -EBUSY;
+	}
 
 	*DGBBA(hda->base, sid) = aligned_addr;
+	*DGBS(hda->base, sid) = aligned_size;
 
-	*DGBS(hda->base, sid) = buf_size;
-	*DGMBS(hda->base, sid) = 256;
+	/* is this needed? */
+	/*  *DGMBS(hda->base, sid) = 256; */ /* should be min(elem_size, 128) probably */
 
-	hda->streams[sid].borrowed = 0;
 	hda->streams[sid].rp = 0;
 	hda->streams[sid].wp = 0;
 	hda->streams[sid].fpi = 0;
 	hda->streams[sid].buf = buf;
+
+	return 0;
 }
 
 /**
@@ -238,20 +261,6 @@ static inline void cavs_hda_disable(struct cavs_hda_streams *hda, uint32_t sid)
 static inline uint32_t cavs_hda_unused(struct cavs_hda_streams *hda, uint32_t sid)
 {
 	uint32_t dgcs = *DGCS(hda->base, sid);
-
-	/* if buffer is full then 0 bytes available
-	 * TODO this only works if the host sets the stream format!
-	 * which means its not useful in a general fifo sense but
-	 * in I think a flow control sense. "don't write more, backlogged" kind of
-	 * thing.
-	 */
-	/*
-	if (dgcs & DGCS_BF) {
-		printk("buffer full!\n");
-		return 0;
-	}
-	*/
-
 	uint32_t dgbs = *DGBS(hda->base, sid);
 
 	/* if buffer is not empty */
@@ -374,6 +383,12 @@ static inline bool cavs_hda_buf_full(struct cavs_hda_streams *hda, uint32_t sid)
 }
 
 
+/**
+ * @brief Check if the write and read position are equal
+ *
+ * @param dev HDA Stream device
+ * @param sid Stream ID
+ */
 static inline bool cavs_hda_wp_rp_eq(struct cavs_hda_streams *hda, uint32_t sid)
 {
 	return *DGBWP(hda->base, sid) == *DGBRP(hda->base, sid);
