@@ -410,12 +410,13 @@ SECTIONS {
   . = SEGSTART_UNCACHED;
   _heap_sentry = .;
 
-  /* dma buffers */
-  .lpbuf (NOLOAD): {
+  /* dma buffers, require 128 byte alignment */
+  .hpbuf (NOLOAD): {
+    . = ALIGN(128);
     _dma_buf_start = .;
     *(.dma_buffers)
     _dma_buf_end = .;
-  } >lpram
+  } >ucram
 
   /* Non-loadable sections below.  Back to cached memory so
    * the cache remap script doesn't try to move them around needlessly.
