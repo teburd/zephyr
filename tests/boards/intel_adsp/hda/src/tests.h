@@ -9,5 +9,6 @@
 
 void test_hda_host_in_smoke(void);
 void test_hda_host_out_smoke(void);
+void test_hda_host_in_dma(void);
 
 #endif /* ZEPHYR_TESTS_INTEL_ADSP_TESTS_H */

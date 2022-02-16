@@ -134,7 +134,8 @@ static inline void cavs_hda_init(uint32_t base, uint32_t sid)
  * @param buf Buffer address to use for the shared FIFO. Must be in L2 and 128 byte aligned.
  * @param buf_size Buffer size in bytes Must be 128 byte aligned
  *
- * @retval -EBUSY if the HDA stream is already enabled
+ * @retval -EBUS
+Y if the HDA stream is already enabled
  * @retval -EINVAL if the buf is not in L2, buf isn't aligned on 128 byte boundaries
  * @retval 0 on Success
  */
@@ -246,6 +247,19 @@ static inline void cavs_hda_commit(uint32_t base, uint32_t sid, uint32_t len)
 		*DGLLPI(base, sid) = len;
 		*DGLPIBI(base, sid) = len;
 	}
+}
+
+/**
+ * @brief Read the gateway busy bit of the given stream.
+ *
+ * @param base Base address of the IP register block
+ * @param sid Stream ID within the register block
+ *
+ * @retval true If the stream is busy
+ */
+static inline bool cavs_hda_is_busy(uint32_t base, uint32_t sid)
+{
+	return *DGCS(base, sid) & DGCS_GBUSY;
 }
 
 /**

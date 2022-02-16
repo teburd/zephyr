@@ -15,7 +15,7 @@
 #define TRANSFER_SIZE 256
 #define TRANSFER_COUNT 8
 
-__aligned(128) uint8_t hda_fifo[FIFO_SIZE];
+static __aligned(128) uint8_t hda_fifo[FIFO_SIZE];
 
 
 static volatile int msg_cnt;
@@ -35,7 +35,7 @@ static void ipc_done(const struct device *dev, void *arg)
 }
 
 
-/**
+/*
  * Tests host input streams
  *
  * Note that the order of operations in this test are important and things potentially will not

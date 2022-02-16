@@ -126,6 +126,5 @@
 			interrupts = <8 0 0>;
 			interrupt-parent = <&cavs0>;
 		};
-
 	};
 };
