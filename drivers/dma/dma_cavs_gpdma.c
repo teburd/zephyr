@@ -48,6 +48,8 @@ int cavs_gpdma_init(const struct device *dev)
 	/* Disable all channels and Channel interrupts */
 	dw_dma_setup(dev);
 
+	void *mem = k_malloc(128);
+
 	/* Configure interrupts */
 	dev_cfg->dw_cfg.irq_config();
 
