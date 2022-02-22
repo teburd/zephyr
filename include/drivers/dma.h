@@ -211,12 +211,16 @@ struct dma_config {
  * dir				- DMA transfer direction
  * pending_length 		- data length pending to be transferred in bytes
  * 					or platform dependent.
+ * write_position               - write position in a circular dma buffer
+ * read_position                - read position in a circular dma buffer
  *
  */
 struct dma_status {
 	bool busy;
 	enum dma_channel_direction dir;
 	uint32_t pending_length;
+	uint32_t write_position;
+	uint32_t read_position;
 };
 
 /**
