@@ -23,12 +23,10 @@
 
 static __aligned(128) uint8_t hda_fifo[FIFO_SIZE];
 
-
 static volatile int msg_cnt;
 static volatile int msg_res;
 
-static bool ipc_message(const struct device *dev, void *arg,
-			uint32_t data, uint32_t ext_data)
+static bool ipc_message(const struct device *dev, void *arg, uint32_t data, uint32_t ext_data)
 {
 	printk("HDA message received, data %u, ext_data %u\n", data, ext_data);
 	msg_res = data;
@@ -39,7 +37,6 @@ static bool ipc_message(const struct device *dev, void *arg,
 static void ipc_done(const struct device *dev, void *arg)
 {
 }
-
 
 /*
  * Tests host input streams
@@ -52,8 +49,7 @@ void test_hda_host_in_smoke(void)
 	int res;
 	uint32_t last_msg_cnt;
 
-	printk("smoke testing hda with fifo buffer at address %p, size %d\n",
-	       hda_fifo, FIFO_SIZE);
+	printk("smoke testing hda with fifo buffer at address %p, size %d\n", hda_fifo, FIFO_SIZE);
 
 	cavs_ipc_set_message_handler(CAVS_HOST_DEV, ipc_message, NULL);
 	cavs_ipc_set_done_handler(CAVS_HOST_DEV, ipc_done, NULL);
@@ -74,46 +70,48 @@ void test_hda_host_in_smoke(void)
 #endif
 
 	cavs_hda_init(HDA_HOST_IN_BASE, STREAM_ID);
-	printk("dsp init: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
+	printk("dsp init: ");
+	cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET,
-					    STREAM_ID, IPC_TIMEOUT));
-	printk("host reset: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
+	cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, STREAM_ID, IPC_TIMEOUT);
+	printk("host reset: ");
+	cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG,
-					    STREAM_ID | (FIFO_SIZE << 8),
-					    IPC_TIMEOUT));
-	printk("host config: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
-
+	cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG, STREAM_ID | (FIFO_SIZE << 8),
+				   IPC_TIMEOUT);
+	printk("host config: ");
+	cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 
 	res = cavs_hda_set_buffer(HDA_HOST_IN_BASE, STREAM_ID, hda_fifo, FIFO_SIZE);
-	printk("dsp set_buffer: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
+	printk("dsp set_buffer: ");
+	cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 	zassert_ok(res, "Expected set buffer to succeed");
 
 	cavs_hda_enable(HDA_HOST_IN_BASE, STREAM_ID);
-	printk("dsp enable: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
+	printk("dsp enable: ");
+	cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START,
-					    STREAM_ID, IPC_TIMEOUT));
-	printk("host start: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
+	cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, STREAM_ID, IPC_TIMEOUT);
+	printk("host start: ");
+	cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 
 	for (uint32_t i = 0; i < TRANSFER_COUNT; i++) {
 		cavs_hda_commit(HDA_HOST_IN_BASE, STREAM_ID, FIFO_SIZE);
-		printk("dsp inc_pos: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
+		printk("dsp inc_pos: ");
+		cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 
 		WAIT_FOR(cavs_hda_wp_rp_eq(HDA_HOST_IN_BASE, STREAM_ID));
-		printk("dsp wp_rp_eq: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
+		printk("dsp wp_rp_eq: ");
+		cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
 
 		last_msg_cnt = msg_cnt;
-		WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE,
-						    STREAM_ID, IPC_TIMEOUT));
+		cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_VALIDATE, STREAM_ID,
+					   IPC_TIMEOUT);
 		WAIT_FOR(msg_cnt > last_msg_cnt);
-		zassert_true(msg_res == 1,
-			     "Expected data validation to be true from Host");
+		zassert_true(msg_res == 1, "Expected data validation to be true from Host");
 	}
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET,
-					    STREAM_ID, IPC_TIMEOUT));
+	cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, STREAM_ID, IPC_TIMEOUT);
 	cavs_hda_disable(HDA_HOST_IN_BASE, STREAM_ID);
 }
 
@@ -128,8 +126,7 @@ void test_hda_host_out_smoke(void)
 	int res;
 	bool is_ramp;
 
-	printk("smoke testing hda with fifo buffer at address %p, size %d\n",
-	       hda_fifo, FIFO_SIZE);
+	printk("smoke testing hda with fifo buffer at address %p, size %d\n", hda_fifo, FIFO_SIZE);
 
 	cavs_ipc_set_message_handler(CAVS_HOST_DEV, ipc_message, NULL);
 	cavs_ipc_set_done_handler(CAVS_HOST_DEV, ipc_done, NULL);
@@ -137,26 +134,26 @@ void test_hda_host_out_smoke(void)
 	printk("Using buffer of size %d at addr %p\n", FIFO_SIZE, hda_fifo);
 
 	cavs_hda_init(HDA_HOST_OUT_BASE, STREAM_ID);
-	printk("dsp init: "); cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
+	printk("dsp init: ");
+	cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET,
-					    (STREAM_ID + 7), IPC_TIMEOUT));
-	printk("host reset: "); cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
+	cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 7), IPC_TIMEOUT);
+	printk("host reset: ");
+	cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG,
-					    (STREAM_ID + 7) | (FIFO_SIZE << 8),
-					    IPC_TIMEOUT));
-	printk("host config: "); cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
+	cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_CONFIG,
+				   (STREAM_ID + 7) | (FIFO_SIZE << 8), IPC_TIMEOUT);
+	printk("host config: ");
+	cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
 	res = cavs_hda_set_buffer(HDA_HOST_OUT_BASE, STREAM_ID, hda_fifo, FIFO_SIZE);
-	printk("dsp set buffer: "); cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
+	printk("dsp set buffer: ");
+	cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 	zassert_ok(res, "Expected set buffer to succeed");
 
 	for (uint32_t i = 0; i < TRANSFER_COUNT; i++) {
-
-		WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_SEND,
-						    (STREAM_ID + 7) | (FIFO_SIZE << 8),
-						    IPC_TIMEOUT));
+		cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_SEND,
+					   (STREAM_ID + 7) | (FIFO_SIZE << 8), IPC_TIMEOUT);
 		printk("host send: ");
 		cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
@@ -164,8 +161,8 @@ void test_hda_host_out_smoke(void)
 		printk("dsp enable: ");
 		cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
-		WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START,
-						    (STREAM_ID + 7), IPC_TIMEOUT));
+		cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_START, (STREAM_ID + 7),
+					   IPC_TIMEOUT);
 		printk("host start: ");
 		cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
@@ -174,7 +171,7 @@ void test_hda_host_out_smoke(void)
 		cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
 #if (IS_ENABLED(CONFIG_KERNEL_COHERENCE))
-	zassert_true(arch_mem_coherent(hda_fifo), "Buffer is unexpectedly incoherent!");
+		zassert_true(arch_mem_coherent(hda_fifo), "Buffer is unexpectedly incoherent!");
 #else
 		/* The buffer is in the cached address range and must be invalidated
 		 * prior to reading.
@@ -193,14 +190,15 @@ void test_hda_host_out_smoke(void)
 		zassert_true(is_ramp, "Expected data to be a ramp");
 
 		cavs_hda_commit(HDA_HOST_OUT_BASE, STREAM_ID, FIFO_SIZE);
-		printk("dsp inc pos: "); cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
-
+		printk("dsp inc pos: ");
+		cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 	}
 
-	WAIT_FOR(cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET,
-					    (STREAM_ID + 7), IPC_TIMEOUT));
-	printk("host reset: "); cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
+	cavs_ipc_send_message_sync(CAVS_HOST_DEV, IPCCMD_HDA_RESET, (STREAM_ID + 7), IPC_TIMEOUT);
+	printk("host reset: ");
+	cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
 	cavs_hda_disable(HDA_HOST_OUT_BASE, STREAM_ID);
-	printk("dsp disable: "); cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
+	printk("dsp disable: ");
+	cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 }
