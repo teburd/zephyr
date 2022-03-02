@@ -63,9 +63,14 @@ void test_hda_host_in_dma(void)
 	for (uint32_t i = 0; i < DMA_BUF_SIZE; i++) {
 		dma_buf[i] = i & 0xff;
 	}
+
+#if (IS_ENABLED(CONFIG_KERNEL_COHERENCE))
+	zassert_true(arch_mem_coherent(dma_buf), "Buffer is unexpectedly incoherent!");
+#else
 	/* The buffer is in the cached address range and must be flushed */
 	zassert_false(arch_mem_coherent(dma_buf), "Buffer is unexpectedly coherent!");
 	z_xtensa_cache_flush(dma_buf, DMA_BUF_SIZE);
+#endif
 
 	dma = device_get_binding("HDA_HOST_IN");
 	zassert_not_null(dma, "Expected a valid DMA device pointer");
@@ -211,11 +216,16 @@ void test_hda_host_out_dma(void)
 		printk("dsp wait for full: ");
 		cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, channel);
 
+#if (IS_ENABLED(CONFIG_KERNEL_COHERENCE))
+	zassert_true(arch_mem_coherent(dma_buf), "Buffer is unexpectedly incoherent!");
+#else
 		/* The buffer is in the cached address range and must be invalidated
 		 * prior to reading.
 		 */
 		zassert_false(arch_mem_coherent(dma_buf), "Buffer is unexpectedly coherent!");
 		z_xtensa_cache_inv(dma_buf, DMA_BUF_SIZE);
+#endif
+
 		is_ramp = true;
 		for (int j = 0; j < DMA_BUF_SIZE; j++) {
 			printk("dma_buf[%d] = %d\n", j, dma_buf[j]);

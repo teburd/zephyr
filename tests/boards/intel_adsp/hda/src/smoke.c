@@ -64,9 +64,14 @@ void test_hda_host_in_smoke(void)
 	for (uint32_t i = 0; i < FIFO_SIZE; i++) {
 		hda_fifo[i] = i & 0xff;
 	}
+
+#if (IS_ENABLED(CONFIG_KERNEL_COHERENCE))
+	zassert_true(arch_mem_coherent(hda_fifo), "Buffer is unexpectedly incoherent!");
+#else
 	/* The buffer is in the cached address range and must be flushed */
 	zassert_false(arch_mem_coherent(hda_fifo), "Buffer is unexpectedly coherent!");
 	z_xtensa_cache_flush(hda_fifo, FIFO_SIZE);
+#endif
 
 	cavs_hda_init(HDA_HOST_IN_BASE, STREAM_ID);
 	printk("dsp init: "); cavs_hda_dbg("host_in", HDA_HOST_IN_BASE, STREAM_ID);
@@ -168,11 +173,16 @@ void test_hda_host_out_smoke(void)
 		printk("dsp wait for full: ");
 		cavs_hda_dbg("host_out", HDA_HOST_OUT_BASE, STREAM_ID);
 
+#if (IS_ENABLED(CONFIG_KERNEL_COHERENCE))
+	zassert_true(arch_mem_coherent(hda_fifo), "Buffer is unexpectedly incoherent!");
+#else
 		/* The buffer is in the cached address range and must be invalidated
 		 * prior to reading.
 		 */
 		zassert_false(arch_mem_coherent(hda_fifo), "Buffer is unexpectedly coherent!");
 		z_xtensa_cache_inv(hda_fifo, FIFO_SIZE);
+#endif
+
 		is_ramp = true;
 		for (int j = 0; j < FIFO_SIZE; j++) {
 			/* printk("hda_fifo[%d] = %d\n", j, hda_fifo[j]); */ /* DEBUG HELPER */

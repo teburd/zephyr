@@ -151,7 +151,11 @@ Y if the HDA stream is already enabled
 static inline int cavs_hda_set_buffer(uint32_t base, uint32_t sid,
 				     uint8_t *buf, uint32_t buf_size)
 {
-	uint32_t addr = (uint32_t)buf;
+	/* While we don't actually care if the pointer is in the cached
+	 * region or not, we do need a consistent address space to check
+	 * against for our assertion. This is cheap.
+	 */
+	uint32_t addr = (uint32_t)arch_xtensa_cached_ptr(buf);
 	uint32_t aligned_addr = addr & HDA_ALIGN_MASK;
 	uint32_t aligned_size = buf_size & HDA_ALIGN_MASK;
 
