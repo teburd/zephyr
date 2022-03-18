@@ -49,7 +49,7 @@ void work_fn(void *arg1, void *arg2, void *arg3)
 		 * updates these values, but for stats this is good
 		 * enough
 		 */
-		printk("work%d: last %d worst %d avg %d (N = %d)\n",
+		printk("work%d: last %5d worst %6d avg %5d (N = %d)\n",
 		       cpu, last_err[cpu], worst_err[cpu],
 		       (int)(err_sum[cpu]/err_count[cpu]),
 		       err_count[cpu]);
@@ -74,7 +74,7 @@ void timer_thread_fn(void *arg1, void *arg2, void *arg3)
 		last_err[cpu] = err;
 		err_sum[cpu] += err;
 		err_count[cpu] += 1;
-		if (abs(err) > worst_err[cpu]) {
+		if (err_count[cpu] > 1000 && abs(err) > worst_err[cpu]) {
 			worst_err[cpu] = abs(err);
 		}
 		last_cyc = cyc;

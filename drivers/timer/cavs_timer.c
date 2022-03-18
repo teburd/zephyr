@@ -27,7 +27,14 @@
 			/ CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 #define MAX_CYC		0xFFFFFFFFUL
 #define MAX_TICKS	((MAX_CYC - CYC_PER_TICK) / CYC_PER_TICK)
-#define MIN_DELAY	(CYC_PER_TICK / 16)
+
+/* The clock reset is surprisingly slow.  The largest delay
+ * experimentally observed (on TGL) was 150 cycles (with a median
+ * closer to 40), so round up a bit.  And also scale with ticks to
+ * give us a little extra safety on configurations with slow tick
+ * rates.
+ */
+#define MIN_DELAY	MAX(256, CYC_PER_TICK / 32)
 
 BUILD_ASSERT(MIN_DELAY < CYC_PER_TICK);
 BUILD_ASSERT(COMPARATOR_IDX >= 0 && COMPARATOR_IDX <= 1);
@@ -140,6 +147,7 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	}
 
 	set_compare(next);
+
 	k_spin_unlock(&lock, key);
 #endif
 }
