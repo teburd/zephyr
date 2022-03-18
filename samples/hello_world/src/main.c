@@ -15,9 +15,10 @@ struct k_sem timer_sems[CONFIG_MP_NUM_CPUS];
 
 struct k_timer timers[CONFIG_MP_NUM_CPUS];
 
-uint32_t worst_err[CONFIG_MP_NUM_CPUS];
-uint64_t err_sum[CONFIG_MP_NUM_CPUS];
-uint32_t err_count[CONFIG_MP_NUM_CPUS];
+int32_t last_err[CONFIG_MP_NUM_CPUS];   /* Last-computed error */
+int32_t worst_err[CONFIG_MP_NUM_CPUS];  /* Worst abs(err) seen */
+int64_t err_sum[CONFIG_MP_NUM_CPUS];    /* Signed total error  */
+int32_t err_count[CONFIG_MP_NUM_CPUS];  /* Number of samples   */
 
 uint32_t ccount(void)
 {
@@ -41,15 +42,16 @@ void work_fn(void *arg1, void *arg2, void *arg3)
 
 		uint32_t c0 = ccount();
 
-		while(ccount() - c0 < 400000000) {}
+		while(ccount() - c0 < 800000000) {}
 
 		/* Note: strictly this needs synchronization because
 		 * we can be preempted by timer_thread_fn which
 		 * updates these values, but for stats this is good
 		 * enough
 		 */
-		printk("work%d: worst %d avg %d (N = %d)\n",
-		       cpu, worst_err[cpu], (int)(err_sum[cpu]/err_count[cpu]),
+		printk("work%d: last %d worst %d avg %d (N = %d)\n",
+		       cpu, last_err[cpu], worst_err[cpu],
+		       (int)(err_sum[cpu]/err_count[cpu]),
 		       err_count[cpu]);
 	}
 }
@@ -67,12 +69,13 @@ void timer_thread_fn(void *arg1, void *arg2, void *arg3)
 		k_sem_take(&timer_sems[cpu], K_FOREVER);
 		cyc = k_cycle_get_32();
 
-		uint32_t err = abs((int32_t)(cyc - last_cyc) - tick_nominal);
+		int32_t err = (int32_t)(cyc - last_cyc) - tick_nominal;
 
+		last_err[cpu] = err;
 		err_sum[cpu] += err;
 		err_count[cpu] += 1;
-		if (err > worst_err[cpu]) {
-			worst_err[cpu] = err;
+		if (abs(err) > worst_err[cpu]) {
+			worst_err[cpu] = abs(err);
 		}
 		last_cyc = cyc;
 	}
