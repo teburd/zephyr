@@ -115,14 +115,19 @@ void main(void)
 
 	uint32_t log_type = LOG_OUTPUT_TEXT;
 
-	log_backend_format_set(log_backend_get_by_name("log_backend_uart"), log_type);
+	log_backend_format_set(log_backend_get_by_name("log_backend_adsp"), log_type);
 
 	log_msgs();
 
 	log_type = LOG_OUTPUT_SYST;
-	log_backend_format_set(log_backend_get_by_name("log_backend_uart"), log_type);
+	log_backend_format_set(log_backend_get_by_name("log_backend_adsp"), log_type);
+
+	printk("logging syst messages---------------------------------------------------------------------------------------------\n");
 
 	log_msgs();
+
+	printk("logged syst messages----------------------------------------------------------------------------------------------\n");
+
 #endif
 
 }

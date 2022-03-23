@@ -581,7 +581,6 @@ static void std_print(struct log_msg *msg,
 	uint32_t nargs = log_msg_nargs_get(msg);
 	uint32_t *args = alloca(sizeof(uint32_t)*nargs);
 	uint32_t severity = level_to_syst_severity(log_msg_level_get(msg));
-
 	for (int i = 0; i < nargs; i++) {
 		args[i] = log_msg_arg_get(msg, i);
 	}
@@ -781,7 +780,9 @@ static int mipi_formatter(cbprintf_cb out, void *ctx,
 	struct log_msg2 *msg = ctx;
 	uint32_t severity = level_to_syst_severity(log_msg2_get_level(msg));
 
+	printk("%s:%d\n", __func__, __LINE__);
 	MIPI_SYST_VPRINTF(&log_syst_handle, severity, fmt, ap);
+	printk("%s:%d\n", __func__, __LINE__);
 
 	return 0;
 }
@@ -791,19 +792,36 @@ void log_output_msg2_syst_process(const struct log_output *output,
 {
 	size_t len, hexdump_len;
 
+	printk("%s:%d\n", __func__, __LINE__);
+
 	update_systh_platform_data(&log_syst_handle, output, flag);
+
+	printk("%s:%d\n", __func__, __LINE__);
 
 	uint8_t *data = log_msg2_get_package(msg, &len);
 
+	printk("%s:%d\n", __func__, __LINE__);
+
 	if (len) {
+		printk("%s:%d\n", __func__, __LINE__);
+
 		(void)cbpprintf_external(NULL, mipi_formatter, msg, data);
+
+		printk("%s:%d\n", __func__, __LINE__);
 	}
+	printk("%s:%d\n", __func__, __LINE__);
 
 	data = log_msg2_get_data(msg, &hexdump_len);
+	printk("%s:%d\n", __func__, __LINE__);
+
 	if (hexdump_len) {
+		printk("%s:%d\n", __func__, __LINE__);
+
 		uint32_t severity = level_to_syst_severity(log_msg2_get_level(msg));
+		printk("%s:%d\n", __func__, __LINE__);
 
 		hexdump2_print(data, hexdump_len, severity);
+		printk("%s:%d\n", __func__, __LINE__);
 	}
 }
 #endif /* !CONFIG_LOG2 */
