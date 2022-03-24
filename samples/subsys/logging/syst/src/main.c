@@ -56,6 +56,7 @@ void log_msgs(void)
 	LOG_DBG("Debug message example.");
 
 	LOG_DBG("Debug message example, %d", 1);
+	k_msleep(10000);
 	LOG_DBG("Debug message example, %d, %d", 1, 2);
 	LOG_DBG("Debug message example, %d, %d, %d", 1, 2, 3);
 	LOG_DBG("Debug message example, %d, %d, %d, 0x%x", 1, 2, 3, 4);

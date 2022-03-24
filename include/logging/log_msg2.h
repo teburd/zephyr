@@ -81,6 +81,8 @@ struct log_msg2_hdr {
 	 */
 	uint32_t padding;
 #endif
+	va_list args;
+	char * fmt;
 };
 
 struct log_msg2 {

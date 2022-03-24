@@ -780,7 +780,15 @@ static int mipi_formatter(cbprintf_cb out, void *ctx,
 	struct log_msg2 *msg = ctx;
 	uint32_t severity = level_to_syst_severity(log_msg2_get_level(msg));
 
-	printk("%s:%d\n", __func__, __LINE__);
+	printk("%s:%d fmt %s, ap %p, args %p\n", __func__, __LINE__, fmt, ap, msg->hdr.args);
+	printk("msg->hdr.args\n");
+	vprintk(fmt, msg->hdr.args);
+	printk("\nap\n");
+	va_list copy;
+	va_copy(copy, ap);
+	vprintk(fmt, copy);
+	va_end(copy);
+	printk("\ncalling mipi\n");
 	MIPI_SYST_VPRINTF(&log_syst_handle, severity, fmt, ap);
 	printk("%s:%d\n", __func__, __LINE__);
 
