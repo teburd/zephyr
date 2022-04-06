@@ -41,7 +41,7 @@ BUILD_ASSERT(COMPARATOR_IDX >= 0 && COMPARATOR_IDX <= 1);
 
 static struct k_spinlock lock;
 static uint64_t last_count;
-static uint64_t last_isr;
+static uint64_t last_isr[CONFIG_MP_NUM_CPUS];
 
 static uint64_t count(void);
 
@@ -57,9 +57,10 @@ static void set_compare(uint64_t time)
 	/* Arm the timer */
 	*WCTCS |= DSP_WCT_CS_TA(COMPARATOR_IDX);
 
-	uint64_t diff = time - last_isr;
+	uint64_t last = last_isr[arch_curr_cpu()->id];
+	uint64_t diff = time - last;
 	uint64_t tdiff = (diff * 1000000)/38400000;
-	printk("cpu %d compare %llu, count %llu, cyc per tick %u, last isr %llu, timer set for %llu uS from last interrupt\n", arch_curr_cpu()->id, time, count(), CYC_PER_TICK, last_isr, tdiff);
+	printk("cpu %d compare %llu, count %llu, last count %llu, cyc per tick %u, last isr %llu, timer set for %llu uS from last interrupt\n", arch_curr_cpu()->id, time, count(), last_count, CYC_PER_TICK, last, tdiff);
 }
 
 static uint64_t count(void)
@@ -95,8 +96,13 @@ static void compare_isr(const void *arg)
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	curr = count();
-	last_isr = curr;
+	last_isr[arch_curr_cpu()->id] = curr;
 	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
+
+	if (dticks == 0) {
+		k_spin_unlock(&lock, key);
+		return;
+	}
 
 	/* Clear the triggered bit */
 	*WCTCS |= DSP_WCT_CS_TT(COMPARATOR_IDX);
