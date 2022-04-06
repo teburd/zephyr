@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "sys/arch_interface.h"
 #include <device.h>
 #include <drivers/timer/system_timer.h>
 #include <sys_clock.h>
@@ -40,9 +41,13 @@ BUILD_ASSERT(COMPARATOR_IDX >= 0 && COMPARATOR_IDX <= 1);
 
 static struct k_spinlock lock;
 static uint64_t last_count;
+static uint64_t last_isr;
+
+static uint64_t count(void);
 
 static void set_compare(uint64_t time)
 {
+
 	/* Disarm the comparator to prevent spurious triggers */
 	*WCTCS &= ~DSP_WCT_CS_TA(COMPARATOR_IDX);
 
@@ -51,6 +56,10 @@ static void set_compare(uint64_t time)
 
 	/* Arm the timer */
 	*WCTCS |= DSP_WCT_CS_TA(COMPARATOR_IDX);
+
+	uint64_t diff = time - last_isr;
+	uint64_t tdiff = (diff * 1000000)/38400000;
+	printk("cpu %d compare %llu, count %llu, cyc per tick %u, last isr %llu, timer set for %llu uS from last interrupt\n", arch_curr_cpu()->id, time, count(), CYC_PER_TICK, last_isr, tdiff);
 }
 
 static uint64_t count(void)
@@ -86,6 +95,7 @@ static void compare_isr(const void *arg)
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	curr = count();
+	last_isr = curr;
 	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
 
 	/* Clear the triggered bit */
