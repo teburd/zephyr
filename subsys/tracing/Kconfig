@@ -161,6 +161,14 @@ config TRACING_BACKEND_RAM
 	  be dumped to a file at runtime with a debugger.
 	  See gdb dump binary memory documentation for example.
 
+
+config TRACING_BACKEND_ADSP
+	bool "Intel ADSP backend"
+	help
+	  Intel ADSP backend.
+
+endchoice
+
 config RAM_TRACING_BUFFER_SIZE
 	int "Ram Tracing buffer size"
 	default 4096
@@ -168,8 +176,6 @@ config RAM_TRACING_BUFFER_SIZE
 	help
 	  Size of the RAM trace buffer. Trace will be discarded if the
 	  length is exceeded.
-
-endchoice
 
 config TRACING_BACKEND_UART_NAME
 	string "Device Name of UART Device for UART backend"
