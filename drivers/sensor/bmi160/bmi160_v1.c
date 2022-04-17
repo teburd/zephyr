@@ -23,6 +23,7 @@ LOG_MODULE_DECLARE(BMI160, CONFIG_SENSOR_LOG_LEVEL);
 #if DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 0
 #warning "BMI160 driver enabled without any devices"
 #endif
+
 #if !defined(CONFIG_BMI160_ACCEL_PMU_SUSPEND)
 /*
  * Accelerometer offset scale, taken from pg. 79, converted to micro m/s^2:
@@ -273,37 +274,11 @@ static int bmi160_attr_set(const struct device *dev, enum sensor_channel chan,
 	return 0;
 }
 
-static int bmi160_sample_fetch(const struct device *dev,
-			       enum sensor_channel chan)
+static int bmi160_sample_fetch_impl(const struct device *dev,
+				    enum sensor_channel chan)
 {
-	struct bmi160_data *data = dev->data;
-	uint8_t status;
-	size_t i;
-
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL);
-
-	status = 0;
-	while ((status & BMI160_DATA_READY_BIT_MASK) == 0) {
-
-		if (bmi160_byte_read(dev, BMI160_REG_STATUS, &status) < 0) {
-			return -EIO;
-		}
-	}
-
-	if (bmi160_read(dev, BMI160_SAMPLE_BURST_READ_ADDR, data->sample.raw,
-			BMI160_BUF_SIZE) < 0) {
-		return -EIO;
-	}
-
-	/* convert samples to cpu endianness */
-	for (i = 0; i < BMI160_SAMPLE_SIZE; i += 2) {
-		uint16_t *sample =
-			(uint16_t *) &data->sample.raw[i];
-
-		*sample = sys_le16_to_cpu(*sample);
-	}
-
-	return 0;
+	return bmi160_sample_fetch(dev);
 }
 
 static void bmi160_to_fixed_point(int16_t raw_val, uint16_t scale,

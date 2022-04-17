@@ -296,8 +296,10 @@ enum bmi160_odr {
 #define BMI160_GYR_RANGE_125DPS		4
 
 #ifdef CONFIG_SENSOR_VERSION_2
-#define BMI160_ACC_SCALE(range_g)   fp_div(INT_TO_FP(range_g), INT_TO_FP(INT16_MAX))
-#define BMI160_GYR_SCALE(range_dps) fp_div(INT_TO_FP(range_dps), INT_TO_FP(INT16_MAX))
+#define BMI160_ACC_SCALE(range_g)                                                                  \
+	fp_div(fp_mul(INT_TO_FP(range_g), SENSOR_G), INT_TO_FP(INT16_MAX))
+#define BMI160_GYR_SCALE(range_dps)                                                                \
+	fp_div(sensor_degrees_to_rad(INT_TO_FP(range_dps)), INT_TO_FP(INT16_MAX))
 #else
 #define BMI160_ACC_SCALE(range_g) ((2 * range_g * SENSOR_G) / 65536LL)
 #define BMI160_GYR_SCALE(range_dps) ((2 * range_dps * SENSOR_PI) / 180LL / 65536LL)
@@ -496,6 +498,11 @@ struct bmi160_data {
 	const struct device *dev;
 	const struct device *gpio;
 	struct gpio_callback gpio_cb;
+	int64_t interrupt_timestamp_ticks;
+#endif
+#ifdef CONFIG_SENSOR_STREAMING_MODE
+	struct sensor_raw_data *raw_data_buffer;
+	sensor_process_data_callback_t process_data_callback;
 #endif
 	union bmi160_pmu_status pmu_sts;
 	union bmi160_sample sample;

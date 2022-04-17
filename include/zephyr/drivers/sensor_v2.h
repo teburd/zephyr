@@ -26,6 +26,7 @@
 
 #include <errno.h>
 #include <string.h>
+
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor_types.h>
 #include <zephyr/drivers/sensor_utils.h>
@@ -122,8 +123,7 @@ struct sensor_fifo_iterator {
  */
 #define SENSOR_FIFO_ITERATOR_OF(raw_data)                                                          \
 	{                                                                                          \
-		.data = raw_data,                                                                  \
-		.offset = 0,                                                                       \
+		.data = raw_data, .offset = 0,                                                     \
 	}
 
 /**
@@ -149,8 +149,7 @@ typedef int (*sensor_fifo_iterator_get_sensor_type_t)(const struct sensor_fifo_i
  *
  * @see sensor_fifo_iterator_api.read for argument description
  */
-typedef int (*sensor_fifo_iterator_read_t)(const struct sensor_fifo_iterator *iterator,
-					   void *out);
+typedef int (*sensor_fifo_iterator_read_t)(const struct sensor_fifo_iterator *iterator, void *out);
 
 /**
  * @brief The FIFO iterator API as described by the individual sensor
@@ -223,7 +222,7 @@ typedef int (*sensor_set_range_t)(const struct device *sensor, uint32_t sensor_t
  * @see sensor_get_bias() for argument description
  */
 typedef int (*sensor_get_bias_t)(const struct device *sensor, uint32_t sensor_type,
-				 int8_t *temperature, fp_t *bias_x, fp_t *bias_y, fp_t *bias_z);
+				 int16_t *temperature, fp_t *bias_x, fp_t *bias_y, fp_t *bias_z);
 
 /**
  * @typedef sensor_set_bias_t
@@ -232,7 +231,8 @@ typedef int (*sensor_get_bias_t)(const struct device *sensor, uint32_t sensor_ty
  * @see sensor_set_bias() for argument description
  */
 typedef int (*sensor_set_bias_t)(const struct device *sensor, uint32_t sensor_type,
-				 int8_t temperature, fp_t bias_x, fp_t bias_y, fp_t bias_z);
+				 int16_t temperature, fp_t bias_x, fp_t bias_y, fp_t bias_z,
+				 bool round_up);
 
 /**
  * @typedef sensor_set_resolution_t
@@ -299,15 +299,26 @@ typedef int (*sensor_flush_fifo_t)(const struct device *sensor);
 typedef int (*sensor_get_fifo_iterator_api_t)(const struct device *sensor,
 					      struct sensor_fifo_iterator_api *api);
 
+#define BUILD_SAMPLE_RATE_INFO(type, mhz)                                                          \
+	{                                                                                          \
+		.sensor_type = (type), .sample_rate_mhz = (mhz),                                   \
+	}
+
+/** A single entry of sample rate allowed on the device. */
+struct sensor_sample_rate_info {
+	uint32_t sensor_type;	 /**< The sensor type that this sample rate applies to */
+	uint32_t sample_rate_mhz; /**< The sample rate in mHz */
+};
+
 /**
  * @typedef sensor_get_sample_rate_available_t
  * @brief Sensor API function for getting the various available sensor rates
  *
  * @see sensor_get_sample_rate_available() for argument description
  */
-typedef int (*sensor_get_sample_rate_available_t)(const struct device *sensor, uint32_t sensor_type,
-						  uint32_t *sample_rates, uint8_t offset,
-						  uint8_t max_count);
+typedef int (*sensor_get_sample_rate_available_t)(
+	const struct device *sensor, const struct sensor_sample_rate_info **sample_rates,
+	uint8_t *count);
 
 /**
  * @typedef sensor_get_sample_rate_t
@@ -392,6 +403,18 @@ __subsystem struct sensor_driver_api_v2 {
 	sensor_perform_calibration_t perform_calibration;
 #endif /* CONFIG_SENSOR_HW_CALIBRATION */
 };
+
+/**
+ * @brief A common API allowing the application to control sensor processing
+ *
+ * @note This is only valid if CONFIG_SENSOR_STREAMING_MODE is enabled
+ *
+ * @param work The work object to schedule
+ * @return 0 on success
+ * @return -ENOSYS if streaming mode isn't enabled
+ * @return Other < 0 values on failure
+ */
+int sensor_submit_work(struct k_work *work);
 
 /**
  * @brief Read sensor data.
@@ -484,7 +507,8 @@ static inline int z_impl_sensor_set_range(const struct device *sensor, uint32_t 
  *
  * @param sensor Pointer to the sensor device
  * @param sensor_type The type of sensor to read
- * @param temperature Pointer to the temperature variable that will be set on success
+ * @param temperature Pointer to the temperature variable that will be set on success, INT16_MIN if
+ *        not supported
  * @param bias_x Pointer to the X component of the bias that will be set on success
  * @param bias_y Pointer to the Y component of the bias that will be set on success
  * @param bias_z Pointer to the Z component of the bias that will be set on success
@@ -492,10 +516,10 @@ static inline int z_impl_sensor_set_range(const struct device *sensor, uint32_t 
  * @return < 0 on failure
  */
 __syscall int sensor_get_bias(const struct device *sensor, uint32_t sensor_type,
-			      int8_t *temperature, fp_t *bias_x, fp_t *bias_y, fp_t *bias_z);
+			      int16_t *temperature, fp_t *bias_x, fp_t *bias_y, fp_t *bias_z);
 
 static inline int z_impl_sensor_get_bias(const struct device *sensor, uint32_t sensor_type,
-					 int8_t *temperature, fp_t *bias_x, fp_t *bias_y,
+					 int16_t *temperature, fp_t *bias_x, fp_t *bias_y,
 					 fp_t *bias_z)
 {
 	const struct sensor_driver_api_v2 *api = sensor->api;
@@ -519,14 +543,17 @@ static inline int z_impl_sensor_get_bias(const struct device *sensor, uint32_t s
  * @param bias_x The X component of the bias
  * @param bias_y The Y component of the bias
  * @param bias_z The Z component of the bias
+ * @param round_up Whether or not to round up the bias values
  * @return 0 on success
  * @return < 0 on failure
  */
-__syscall int sensor_set_bias(const struct device *sensor, uint32_t sensor_type, int8_t temperature,
-			      fp_t bias_x, fp_t bias_y, fp_t bias_z);
+__syscall int sensor_set_bias(const struct device *sensor, uint32_t sensor_type,
+			      int16_t temperature, fp_t bias_x, fp_t bias_y, fp_t bias_z,
+			      bool round_up);
 
 static inline int z_impl_sensor_set_bias(const struct device *sensor, uint32_t sensor_type,
-					 int8_t temperature, fp_t bias_x, fp_t bias_y, fp_t bias_z)
+					 int16_t temperature, fp_t bias_x, fp_t bias_y, fp_t bias_z,
+					 bool round_up)
 {
 	const struct sensor_driver_api_v2 *api = sensor->api;
 
@@ -534,7 +561,7 @@ static inline int z_impl_sensor_set_bias(const struct device *sensor, uint32_t s
 		return -ENOSYS;
 	}
 
-	return api->set_bias(sensor, sensor_type, temperature, bias_x, bias_y, bias_z);
+	return api->set_bias(sensor, sensor_type, temperature, bias_x, bias_y, bias_z, round_up);
 }
 
 /**
@@ -688,32 +715,23 @@ static inline int z_impl_sensor_get_fifo_iterator_api(const struct device *senso
 /**
  * @brief Get the available sample rates for the sensor
  *
- * Get the various available sample rates for the sensor (in mHz). This API
- * supports pagination by making use of the max_count argument. If the sensor, for
- * example, has 10 different supported sample rates and max_count is 5; the first
- * call can fetch the first 5 possible values, and the second call can fetch the
- * last 5 via the offset argument. The function should be re-attempted if the
- * return value is the same as max_count.
+ * Get the various available sample rates for the sensor (in mHz).
  *
  * @param sensor Pointer to the sensor device
- * @param sensor_type The type of sensor to read
- * @param sample_rates Pointer to the first entry in an array of sample rates that
- *        will be written to on success. The array must be at least max_count long.
- * @param offset An offset into the available sample rates to get.
- * @param max_count The maximum number of sample rates to fetch
- * @return 0 if no sample rates are available at the given offset
- * @return > 0 if available sample rates were written to the sample_rates argument
+ * @param sample_rates Pointer to an array that will be mapped to the internal list of sample rates.
+ * @param count The number of sample_rates
+ * @return 0 on success
  * @return < 0 on error
 
  */
-__syscall int sensor_get_sample_rate_available(const struct device *sensor, uint32_t sensor_type,
-					       uint32_t *sample_rates, uint8_t offset,
-					       uint8_t max_count);
+__syscall int sensor_get_sample_rate_available(const struct device *sensor,
+					       const struct sensor_sample_rate_info **sample_rates,
+					       uint8_t *count);
 
-static inline int z_impl_sensor_get_sample_rate_available(const struct device *sensor,
-							  uint32_t sensor_type,
-							  uint32_t *sample_rates, uint8_t offset,
-							  uint8_t max_count)
+static inline int
+z_impl_sensor_get_sample_rate_available(const struct device *sensor,
+					const struct sensor_sample_rate_info **sample_rates,
+					uint8_t *count)
 {
 #ifdef CONFIG_SENSOR_STREAMING_MODE
 	const struct sensor_driver_api_v2 *api = sensor->api;
@@ -722,7 +740,7 @@ static inline int z_impl_sensor_get_sample_rate_available(const struct device *s
 		return -ENOSYS;
 	}
 
-	return api->get_sample_rate_available(sensor, sensor_type, sample_rates, offset, max_count);
+	return api->get_sample_rate_available(sensor, sample_rates, count);
 #else
 	return -ENOSYS;
 #endif
@@ -947,8 +965,7 @@ static inline int z_impl_sensor_perform_calibration(const struct device *sensor,
  */
 static inline void
 sensor_sample_to_three_axis_data(const struct sensor_scale_metadata *scale_metadata,
-				 struct sensor_three_axis_data *data,
-				 size_t readings_offset)
+				 struct sensor_three_axis_data *data, size_t readings_offset)
 {
 	fp_t resolution = INT_TO_FP((1 << (scale_metadata->resolution - 1)) - 1);
 	fp_t out[3];
