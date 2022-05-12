@@ -96,7 +96,7 @@ int32_t z_sched_prio_cmp(struct k_thread *thread_1,
 	/* `prio` is <32b, so the below cannot overflow. */
 	int32_t b1 = thread_1->base.prio;
 	int32_t b2 = thread_2->base.prio;
-
+	
 	if (b1 != b2) {
 		return b2 - b1;
 	}
