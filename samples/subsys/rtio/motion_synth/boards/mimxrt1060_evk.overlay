@@ -1,0 +1,21 @@
+/*
+ * Copyright (c) 2022 Intel Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+  aliases {
+    codec0 = &wm8960;
+  };
+};
+
+&lpi2c1 {
+   wm8960: wm8960@1a {
+     compatible = "wolfson,wm8960";
+     reg = <0x1a>;
+     label = "WM8960";
+     i2s = <&sai1>;
+     status = "okay";
+   };
+};

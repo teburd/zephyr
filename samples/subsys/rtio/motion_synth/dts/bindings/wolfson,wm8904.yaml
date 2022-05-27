@@ -1,0 +1,18 @@
+# Copyright (c) 2022 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+description: Wolfson WM8904 Audio Codec
+
+include: base.yaml
+
+compatible: "wolfson,wm8904"
+
+properties:
+  i2c:
+    type: phandle
+    required: true
+
+  i2s:
+    type: phandle
+    required: true
