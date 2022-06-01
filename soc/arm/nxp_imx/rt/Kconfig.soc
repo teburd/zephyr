@@ -29,6 +29,7 @@ config SOC_MIMXRT1011
 	select HAS_MCUX_DCDC
 	select HAS_MCUX_PMU
 	select HAS_MCUX_IOMUXC
+	select HAS_MCUX_I2S
 
 config SOC_MIMXRT1015
 	bool "SOC_MIMXRT1015"

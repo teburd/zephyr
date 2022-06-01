@@ -97,6 +97,7 @@ zephyr_udc0: &usb1 {
 };
 
 &sai1 {
+	status = "okay";
 	pinctrl-0 = <&pinmux_sai1>;
 	pinctrl-names = "default";
 };

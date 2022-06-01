@@ -1160,10 +1160,14 @@ static int i2s_mcux_initialize(const struct device *dev)
 	int err;
 #endif
 
+	LOG_INF("setting up sai");
+
 	if (!dev_data->dev_dma) {
 		LOG_ERR("DMA device not found");
 		return -ENODEV;
 	}
+
+	LOG_INF("dma set, initializing queues");
 
 	/* Initialize the buffer queues */
 	k_msgq_init(&dev_data->tx.in_queue, (char *)dev_data->tx_in_msgs,
@@ -1175,8 +1179,12 @@ static int i2s_mcux_initialize(const struct device *dev)
 	k_msgq_init(&dev_data->rx.out_queue, (char *)dev_data->rx_out_msgs,
 		    sizeof(void *), CONFIG_I2S_RX_BLOCK_COUNT);
 
+	LOG_INF("connecting irq");
+
 	/* register ISR */
 	dev_cfg->irq_connect(dev);
+
+	LOG_INF("adjusting pinctl");
 	/* pinctrl */
 #ifdef CONFIG_PINCTRL
 	err = pinctrl_apply_state(dev_cfg->pinctrl, PINCTRL_STATE_DEFAULT);
@@ -1186,8 +1194,12 @@ static int i2s_mcux_initialize(const struct device *dev)
 	}
 #endif
 
+	LOG_INF("updating audio clock settings");
+
 	/*clock configuration*/
 	audio_clock_settings(dev);
+
+	LOG_INF("SAI_Init");
 
 	SAI_Init(base);
 
@@ -1207,6 +1219,8 @@ static int i2s_mcux_initialize(const struct device *dev)
 #endif
 	};
 #endif
+
+	LOG_INF("Getting mclk");
 
 	get_mclk_rate(dev, &mclk);
 /* master clock configurations */

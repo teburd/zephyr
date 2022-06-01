@@ -348,12 +348,12 @@
 			#gpio-cells = <2>;
 		};
 
-		lpi2c1: i2c@403f0000 {
+		lpi2c1: i2c@401a4000 {
 			compatible = "nxp,imx-lpi2c";
 			clock-frequency = <I2C_BITRATE_STANDARD>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x403f0000 0x4000>;
+			reg = <0x401a4000 0x4000>;
 			interrupts = <28 0>;
 			clocks = <&ccm IMX_CCM_LPI2C_CLK 0x70 6>;
 			label = "I2C_1";
@@ -930,12 +930,12 @@
 			#pinmux-cells = <2>;
 		};
 
-		sai1: sai@40384000 {
+		sai1: sai@401e0000 {
 			compatible = "nxp,mcux-i2s";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			#pinmux-cells = <2>;
-			reg = <0x40384000 0x4000>;
+			reg = <0x401e0000 0x4000>;
 			clocks = <&ccm IMX_CCM_SAI1_CLK 0x7C 2>;
 			/* Audio PLL Output Frequency is determined by:
 			 * (Fref * (DIV_SELECT + NUM/DENOM)) / POST_DIV
