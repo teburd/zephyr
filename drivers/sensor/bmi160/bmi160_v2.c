@@ -246,25 +246,61 @@ static int bmi160_get_sample_rate_available(const struct device *sensor,
 	return 0;
 }
 
-static int bmi160_set_watermark(const struct device *sensor, uint8_t watermark_percent, bool round_up)
+static int bmi160_set_watermark(const struct device *sensor, uint8_t watermark_percent,
+				bool round_up)
 {
 	const struct bmi160_cfg *cfg = sensor->config;
+	uint8_t watermark_reg_value = 0;
 	uint8_t int_status_1;
 
-	if (watermark_percent == 0) {
-		/* Disable watermark interrupts */
-		if (cfg->bus_io->read(sensor, BMI160_REG_INT_STATUS1, &int_status_1, 1) != 0) {
+	watermark_percent = CLAMP(watermark_percent, 0, 100);
+
+	if (watermark_percent != 0) {
+		/* BMI160 watermark is 4 bytes per 1 value in the register.
+		 * First convert the watermark_percent to an actual value relative to the FIFO size
+		 * (1024):
+		 *     1024 * watermark_percent / 100
+		 * Then divide by 4 to get:
+		 *     (1024 * watermark_percent) / 400
+		 */
+		watermark_reg_value = (1024 * watermark_percent) / 400;
+		if (round_up && ((1024 * watermark_percent) / 400) != 0) {
+			watermark_reg_value++;
+		}
+		if (cfg->bus_io->write(sensor, BMI160_REG_FIFO_CONFIG0, &watermark_reg_value, 1) !=
+		    0) {
 			return -EIO;
 		}
-		/* Remove the full and watermark interrupts */
-		int_status_1 &= ~(BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM);
-		if (cfg->bus_io->write(sensor, BMI160_REG_INT_STATUS1, &int_status_1, 1) != 0) {
+	} else {
+		if (cfg->bus_io->write(sensor, BMI160_REG_FIFO_CONFIG0, &watermark_reg_value, 1) !=
+		    0) {
 			return -EIO;
 		}
-		return 0;
 	}
 
-	return -ENOSYS;
+	/* Read the current watermark config */
+	if (cfg->bus_io->read(sensor, BMI160_REG_INT_STATUS1, &int_status_1, 1) != 0) {
+		return -EIO;
+	}
+	/* Update the status register */
+	if (watermark_percent == 0) {
+		if ((int_status_1 & (BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM)) == 0) {
+			/* Interrupts are already disabled, do nothing */
+			return 0;
+		}
+		int_status_1 &= ~(BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM);
+	} else {
+		if ((int_status_1 & (BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM)) ==
+		    (BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM)) {
+			/* Interrupts are already enabled, do thing */
+			return 0;
+		}
+		int_status_1 |= (BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM);
+	}
+	if (cfg->bus_io->write(sensor, BMI160_REG_INT_STATUS1, &int_status_1, 1) != 0) {
+		return -EIO;
+	}
+	return 0;
 }
 
 static int bmi160_get_watermark(const struct device *sensor, uint8_t *watermark_percent)

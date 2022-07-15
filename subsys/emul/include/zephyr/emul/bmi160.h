@@ -18,4 +18,8 @@ int bmi160_emul_set_int_status_reg(const struct emul *sensor, int offset, uint8_
 
 int bmi160_emul_get_int_status_reg(const struct emul *sensor, int offset, uint8_t *value);
 
+int bmi160_emul_set_watermark_reg(const struct emul *sensor, uint8_t watermark_val);
+
+int bmi160_emul_get_watermark_reg(const struct emul *sensor, uint8_t *watermark_val);
+
 #endif /* SUBSYS_EMUL_INCLUDE_ZEPHYR_EMUL_BMI160_EMUL_H_ */

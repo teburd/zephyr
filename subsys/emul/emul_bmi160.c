@@ -31,6 +31,8 @@ struct bmi160_emul_data {
 	int8_t accel_bias[3];
 	/** Interrupt status register */
 	uint8_t int_status[3];
+	/** watermark register */
+	uint8_t watermark;
 };
 
 /** Static configuration for the emulator */
@@ -94,6 +96,22 @@ int bmi160_emul_get_int_status_reg(const struct emul *sensor, int offset, uint8_
 		return -ENOSYS;
 	}
 	*value = data->int_status[offset];
+	return 0;
+}
+
+int bmi160_emul_get_watermark_reg(const struct emul *sensor, uint8_t *watermark_val)
+{
+	struct bmi160_emul_data *data = sensor->data;
+
+	*watermark_val = data->watermark;
+	return 0;
+}
+
+int bmi160_emul_set_watermark_reg(const struct emul *sensor, uint8_t watermark_val)
+{
+	struct bmi160_emul_data *data = sensor->data;
+
+	data->watermark = watermark_val;
 	return 0;
 }
 
@@ -162,6 +180,10 @@ static void reg_write(const struct emul *target, int regn, int val)
 	case BMI160_REG_INT_STATUS2:
 		LOG_INF("    * int_status2 = %x", (uint8_t)val);
 		data->int_status[2] = (uint8_t)val;
+		break;
+	case BMI160_REG_FIFO_CONFIG0:
+		LOG_INF("    * fifo_config0 = %x", (uint8_t)val);
+		data->watermark = (uint8_t)val;
 		break;
 	case BMI160_REG_CMD:
 		switch (val) {
@@ -259,6 +281,10 @@ static int reg_read(const struct emul *target, int regn)
 	case BMI160_REG_INT_STATUS2:
 		LOG_INF("    * int_status2");
 		val = data->int_status[2];
+		break;
+	case BMI160_REG_FIFO_CONFIG0:
+		LOG_INF("    * fifo_config0");
+		val = data->watermark;
 		break;
 	default:
 		LOG_INF("Unknown read %x", regn);

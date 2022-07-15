@@ -16,6 +16,7 @@
 #include <zephyr/emul/bmi160.h>
 #include <zephyr/math/util.h>
 #include <zephyr/ztest.h>
+
 #include <bmi160.h>
 
 struct sensor_accel_fixture {
@@ -259,9 +260,11 @@ ZTEST_F(sensor_accel, test_get_sample_rates)
 ZTEST_F(sensor_accel, test_set_watermark_0)
 {
 	uint8_t int_status;
+	uint8_t watermark_reg_val;
 
 	/* Set all the bits */
 	zassert_ok(bmi160_emul_set_int_status_reg(fixture->accel_emul_1, 1, UINT8_MAX), NULL);
+	zassert_ok(bmi160_emul_set_watermark_reg(fixture->accel_emul_1, UINT8_MAX), NULL);
 
 	/* Set the watermark to 0 */
 	zassert_ok(sensor_fifo_set_watermark(fixture->accel_1, 0, false), NULL);
@@ -269,6 +272,28 @@ ZTEST_F(sensor_accel, test_set_watermark_0)
 	/* Check that watermark and fifo full interrupts are 0 */
 	zassert_ok(bmi160_emul_get_int_status_reg(fixture->accel_emul_1, 1, &int_status), NULL);
 	zassert_true((int_status & (BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM)) == 0, NULL);
+
+	/* Check that the watermark was set to 0 */
+	zassert_ok(bmi160_emul_get_watermark_reg(fixture->accel_emul_1, &watermark_reg_val), NULL);
+	zassert_equal(0, watermark_reg_val, NULL);
+}
+
+ZTEST_F(sensor_accel, test_set_watermark_50)
+{
+	uint8_t int_status;
+	uint8_t watermark_reg_val;
+
+	/* Set the watermark to 50% */
+	zassert_ok(sensor_fifo_set_watermark(fixture->accel_1, 50, false), NULL);
+
+	/* Check that watermark and fifo full interrupts are 1 */
+	zassert_ok(bmi160_emul_get_int_status_reg(fixture->accel_emul_1, 1, &int_status), NULL);
+	zassert_equal((int_status & (BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM)),
+		      (BMI160_INT_STATUS1_FFULL | BMI160_INT_STATUS1_FWM), NULL);
+
+	/* Check that the watermark was set to 0 */
+	zassert_ok(bmi160_emul_get_watermark_reg(fixture->accel_emul_1, &watermark_reg_val), NULL);
+	zassert_equal(128, watermark_reg_val, NULL);
 }
 
 static void *sensor_accel_setup(void)
