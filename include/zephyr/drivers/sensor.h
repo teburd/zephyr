@@ -13,8 +13,8 @@
 #define ZEPHYR_INCLUDE_DRIVERS_SENSOR_H_
 
 #ifdef CONFIG_SENSOR_VERSION_2
-#include "drivers/sensor_v2.h"
+#include <zephyr/drivers/sensor_v2.h>
 #else
-#include "drivers/sensor_v1.h"
+#include <zephyr/drivers/sensor_v1.h>
 #endif
 #endif /* ZEPHYR_INCLUDE_DRIVERS_SENSOR_H_ */
