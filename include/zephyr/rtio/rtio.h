@@ -125,6 +125,7 @@ struct rtio_sqe {
 	 */
 	void *userdata;
 
+	/* Op dependent data */
 	union {
 		struct {
 			uint32_t buf_len; /**< Length of buffer */

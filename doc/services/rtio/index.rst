@@ -375,9 +375,9 @@ video.
 		struct sensor_reader reader;
 		struct sensor_channels channels[4] = {
 			SENSOR_TIMESTAMP_CHANNEL,
-			SENSOR_CHANNEL(int32_t, SENSOR_ACC_X, 0, SENSOR_RAW),
-			SENSOR_CHANNEL(int32_t SENSOR_ACC_Y, 0, SENSOR_RAW),
-			SENSOR_CHANNEL(int32_t, SENSOR_ACC_Z, 0, SENSOR_RAW),
+			SENSOR_CHANNEL(struct sensor_value, SENSOR_ACC_X, 0, SENSOR_SI),
+			SENSOR_CHANNEL(struct sensor_value, SENSOR_ACC_Y, 0, SENSOR_SI),
+			SENSOR_CHANNEL(struct sensor_value, SENSOR_ACC_Z, 0, SENSOR_SI),
 		};
 		while (true) {
 			/* call will wait for one completion event */
@@ -403,8 +403,8 @@ video.
 			__ASSERT(res == 0);
 			while(sensor_reader_next(&reader)) {
 				printf("time(raw): %d, acc (x,y,z): (%d, %d, %d)\n",
-				channels[0].value.u32, channels[1].value.i32,
-				channels[2].value.i32, channels[3].value.i32);
+				channels[0].value.f64, channels[1].value.f64,
+				channels[2].value.f64, channels[3].value.f64);
 			}
 
 	next:

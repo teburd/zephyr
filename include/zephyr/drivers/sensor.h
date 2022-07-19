@@ -21,6 +21,7 @@
 
 #include <zephyr/types.h>
 #include <zephyr/device.h>
+#include <zephyr/rtio/rtio.h>
 #include <errno.h>
 
 #ifdef __cplusplus
@@ -403,11 +404,19 @@ typedef int (*sensor_iodev_checkout_t)(const struct device *dev,
 				   struct rtio_iodev **iodev);
 
 /**
- * @type sensor_stream_return_t
+ * @type sensor_iodev_checkin_t
  * @brief Callback API for checking in an rtio_iodev for return. 
  */
 typedef int (*sensor_iodev_checkin_t)(const struct device *dev,
 				   struct rtio_iodev *iodev);
+
+/**
+ * @type sensor_iodev_start_t
+ * @brief Callback API for starting an iodev
+ */
+typedef int (*sensor_iodev_start_t)(const struct device *dev,
+				   struct rtio_iodev *iodev);
+
 
 #endif /* CONFIG_RTIO */
 
@@ -421,6 +430,7 @@ __subsystem struct sensor_driver_api {
 #ifdef CONFIG_RTIO
 	sensor_iodev_checkout_t iodev_checkout;
 	sensor_iodev_checkin_t iodev_checkin;
+	sensor_iodev_start_t iodev_start;
 #endif /* CONFIG_RTIO */
 };
 
@@ -622,6 +632,21 @@ static inline int sensor_iodev_checkout(const struct device *dev, struct rtio_io
 		(const struct sensor_driver_api *)dev->api;
 	
 	return api->iodev_checkout(dev, iodev);
+#else
+	return -ENOSYS;
+#endif
+}
+
+/**
+ * @brief Start a sensor iodev stream.
+ */
+static inline int sensor_iodev_start(const struct device *dev, struct rtio_iodev *iodev)
+{
+#ifdef CONFIG_RTIO
+	const struct sensor_driver_api *api =
+		(const struct sensor_driver_api *)dev->api;
+
+	return api->iodev_start(dev, iodev);
 #else
 	return -ENOSYS;
 #endif

@@ -84,23 +84,30 @@
 	dmas = <&xdmac 0 DMA_PERID_SPI0_TX>, <&xdmac 1 DMA_PERID_SPI0_RX>;
 	dma-names = "tx", "rx";
 	cs-gpios =<&pioa 31 GPIO_ACTIVE_LOW>;
-	status = "okay";
+	dma-names = "tx", "rx";
+	dmas = <&xdmac 0 DMA_PERID_SPI0_TX>, <&xdmac 1 DMA_PERID_SPI0_RX>;
 
 	icm42688p@0 {
 		compatible = "invensense,icm42688";
 		reg = <0>;
+		int-gpios = <&pioc 5 GPIO_ACTIVE_HIGH>;
 		spi-max-frequency = <24000000>;
 		accel-hz = <32000>;
 		accel-fs = <16>;
 		gyro-hz = <32000>;
 		gyro-fs = <2000>;
 	};
+
+	status = "okay";
 };
 
 &spi1 {
 	pinctrl-0 = <&spi1_default>;
 	pinctrl-names = "default";
 	cs-gpios = <&pioc 25 GPIO_ACTIVE_LOW>;
+	dma-names = "rx", "tx";
+	dmas = <&xdmac 3 DMA_PERID_SPI0_TX>, <&xdmac 4 DMA_PERID_SPI0_RX>;
+
 	status = "okay";
 };
 
