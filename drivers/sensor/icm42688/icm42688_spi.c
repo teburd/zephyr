@@ -7,6 +7,12 @@
 #include <zephyr/sys/util.h>
 #include "icm42688_spi.h"
 #include "icm42688_reg.h"
+#include "zephyr/logging/log_core.h"
+
+
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(ICM42688_SPI, LOG_LEVEL_ERR);
+
 
 static inline int spi_write_register(const struct spi_dt_spec *bus, uint8_t reg, uint8_t data)
 {
@@ -68,6 +74,7 @@ int icm42688_spi_read(const struct spi_dt_spec *bus, uint16_t reg, uint8_t *data
 	int res = 0;
 	uint8_t address = FIELD_GET(REG_ADDRESS_MASK, reg);
 
+	LOG_DBG("SPI Read Bank %lu, Addr 0x%02x, Len %d", FIELD_GET(REG_BANK_MASK, reg), address, len);
 	res = spi_read_register(bus, address, data, len);
 
 	return res;
@@ -93,6 +100,8 @@ int icm42688_spi_single_write(const struct spi_dt_spec *bus, uint16_t reg, uint8
 {
 	int res = 0;
 	uint8_t address = FIELD_GET(REG_ADDRESS_MASK, reg);
+
+	LOG_DBG("SPI Write Bank %lu, Addr 0x%02x, Value 0x%02x", FIELD_GET(REG_BANK_MASK, reg), address, data);
 
 	res = spi_write_register(bus, address, data);
 

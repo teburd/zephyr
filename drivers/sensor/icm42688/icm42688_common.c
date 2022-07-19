@@ -171,6 +171,7 @@ int icm42688_configure(const struct device *dev, struct icm42688_cfg *cfg)
 					BIT_INT1_DRIVE_CIRCUIT | BIT_INT1_POLARITY);
 	if (res) {
 		LOG_ERR("Error writing to INT_CONFIG");
+
 		return res;
 	}
 

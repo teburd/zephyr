@@ -13,7 +13,7 @@
 #include <zephyr/sys/byteorder.h>
 #include <stdlib.h>
 
-/**
+/** 
  * @brief Accelerometer power modes
  */
 enum icm42688_accel_mode {
@@ -648,6 +648,55 @@ static inline void icm42688_temp_c(int32_t in, int32_t *out_c, uint32_t *out_uc)
 
 	/* Shift whole celsius 25 degress */
 	*out_c = *out_c + 25;
+}
+
+/**
+ * @brief Convert and print out read all data in the native units (G's and deg/s)
+ *
+ * Uses integer math to convert values and prints out both the raw readings and
+ * converted numerical values.
+ *
+ * @param cfg icm42688_cfg current device configuration
+ * @param data Array of data including temperature data
+ */
+static inline void icm42688_read_all_dbg(struct icm42688_cfg *cfg, uint8_t data[14])
+{
+	int32_t c, xa, ya, za, xg, yg, zg;
+	uint32_t uc, uxa, uya, uza, uxg, uyg, uzg;
+
+	int16_t raw[7];
+	
+	for (int i = 0; i < 7; i++) {
+		raw[i] = sys_le16_to_cpu((data[i*2] << 8) | data[i*2 + 1]);
+	}
+			
+	printk("temp raw %d, accel x %d, y %d, z %d, gyro x %d, y %d, z %d\n", raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6]);
+
+	icm42688_temp_c(raw[0], &c, &uc);
+
+	icm42688_accel_g(cfg, raw[1], &xa, &uxa);
+	icm42688_accel_g(cfg, raw[2], &ya, &uya);
+	icm42688_accel_g(cfg, raw[3], &za, &uza);
+
+	icm42688_gyro_dps(cfg, raw[4], &xg, &uxg);
+	icm42688_gyro_dps(cfg, raw[5], &yg, &uyg);
+	icm42688_gyro_dps(cfg, raw[6], &zg, &uzg);
+		
+	printk("temp %d.%06u C, accel G %d.%06u, %d.%06u, %d.%06u gyro deg/s %d.%06u, %d.%06u, %d.%06u\n",
+		c, uc, xa, uxa, ya, uya, za, uza, xg, uxg, yg, uyg, zg, uzg);
+
+	icm42688_accel_ms(cfg, raw[1], &xa, &uxa);
+	icm42688_accel_ms(cfg, raw[2], &ya, &uya);
+	icm42688_accel_ms(cfg, raw[3], &za, &uza);
+
+	icm42688_gyro_rads(cfg, raw[4], &xg, &uxg);
+	icm42688_gyro_rads(cfg, raw[5], &yg, &uyg);
+	icm42688_gyro_rads(cfg, raw[6], &zg, &uzg);
+		
+
+	printk("temp %d.%06u C, accel m/s^2 %d.%06u, %d.%06u, %d.%06u gyro rad/s %d.%06u, %d.%06u, %d.%06u\n",
+		c, uc, xa, uxa, ya, uya, za, uza, xg, uxg, yg, uyg, zg, uzg);
+
 }
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_ICM42688_H_ */

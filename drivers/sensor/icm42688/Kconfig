@@ -4,10 +4,44 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-config ICM42688
+DT_COMPAT_ICM42688 := invensense,icm42688
+
+menuconfig ICM42688
 	bool "ICM42688 Six-Axis Motion Tracking Device"
-	default y
-	depends on DT_HAS_INVENSENSE_ICM42688_ENABLED
-	select SPI
+	default $(dt_compat_enabled,$(DT_COMPAT_ICM42688))
+	depends on SPI
 	help
 	  Enable driver for ICM42688 SPI-based six-axis motion tracking device.
+
+if ICM42688
+
+config ICM42688_THREAD_PRIORITY
+	int "Thread priority"
+	default 10
+	help
+	  Priority of thread used by the driver to handle interrupts.
+
+config ICM42688_THREAD_STACK_SIZE
+	int "Thread stack size"
+	default 1024
+	help
+	  Stack size of thread used by the driver to handle interrupts.
+
+menuconfig ICM42688_RTIO
+	bool "ICM42688 RTIO Support"
+	depends on RTIO
+	help
+	  Enable RTIO support for ICM42688 allowing for scatter gather like requests against the fifo.
+
+if ICM42688_RTIO
+
+config ICM42688_RTIO_QUEUE_SIZE
+	int "Power of 2 queue size of pending read requests allowed for the rtio stream"
+	depends on RTIO
+	default 4
+	help
+	  Size of fixed size queue for pending requests to the iodev
+
+endif # ICM42688_RTIO
+
+endif # ICM42688
