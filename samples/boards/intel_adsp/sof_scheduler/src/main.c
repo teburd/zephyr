@@ -34,13 +34,15 @@ void work_fn(void *arg1, void *arg2, void *arg3)
 	}
 }
 
-static uint32_t last_ccount = 0;
+static uint64_t timer_start = 0;
+static uint64_t last_ccount = 0;
+static uint64_t isr_count = 0;
 
 static void timer_fn(struct k_timer *t)
 {
 	int core;
-	uint32_t enter_ccount, exit_ccount;
-	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
+	uint64_t enter_ccount, exit_ccount;
+	enter_ccount = k_cycle_get_64();
 
 	struct zephyr_domain *zephyr_domain = k_timer_user_data_get(t);
 
@@ -52,13 +54,17 @@ static void timer_fn(struct k_timer *t)
 		k_sem_give(&zephyr_domain->sem[core]);
 	}
 
-	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
+	exit_ccount = k_cycle_get_64();
+	//__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
 
 	/* Assume 400MHz cpu clock since none is defined in dts */
-	uint32_t last_tdiff = (last_ccount - enter_ccount)/400;
-	uint32_t tdiff = (exit_ccount - enter_ccount)/400;
-	printk("CPU[%d] timer_fn took %u ns, time since last timer_fn %u ns\n", arch_curr_cpu()->id, tdiff, last_tdiff);	
+	uint64_t cycle_diff = enter_ccount - last_ccount;
+	uint64_t time_diff = (cycle_diff*1000000)/38400000;
+	uint64_t total_cycle_diff = (enter_ccount - timer_start);
+	uint64_t  total_time_diff = (total_cycle_diff*1000000)/38400000;
+	printk("CPU[%d] cycle %llu, last %llu, cycle diff %llu, time diff %llu, total time diff %llu, isrs %llu\n", arch_curr_cpu()->id, enter_ccount, last_ccount, cycle_diff, time_diff, total_time_diff, isr_count);	
 	last_ccount = enter_ccount;
+	isr_count += 1;
 }
 
 void main(void)
@@ -85,5 +91,7 @@ void main(void)
 
 		k_thread_start(&zd.domain_thread[i]);
 	}
+	timer_start = k_cycle_get_64();
+	
 	k_timer_start(&timer, start, timeout);
 }
