@@ -83,7 +83,7 @@ static void set_compare(uint64_t time)
 	uint64_t last = last_isr[arch_curr_cpu()->id];
 	uint64_t diff = time - last;
 	uint64_t tdiff = (diff * 1000000)/38400000;
-	printk("cpu %d compare %llu, count %llu, last count %llu, cyc per tick %u, last isr %llu, timer set for %llu uS from last interrupt\n", arch_curr_cpu()->id, time, count(), last_count, CYC_PER_TICK, last, tdiff);
+	printk("cpu %d set compare to %llu, count %llu, last count %llu, cyc per tick %u, last isr %llu, timer set for %llu uS from last interrupt\n", arch_curr_cpu()->id, time, count(), last_count, CYC_PER_TICK, last, tdiff);
 }
 
 static uint64_t count(void)
@@ -115,17 +115,25 @@ static void compare_isr(const void *arg)
 	ARG_UNUSED(arg);
 	uint64_t curr;
 	uint32_t dticks;
+	uint32_t enter_ccount, lock_ccount, exit_ccount;
 
+	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
+	
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
+	__asm__ __volatile__("rsr %0,ccount":"=a" (lock_ccount));
+
 	curr = count();
-	last_isr[arch_curr_cpu()->id] = curr;
+
 	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
 
+	/* The fix! */
+	/* 
 	if (dticks == 0) {
 		k_spin_unlock(&lock, key);
 		return;
 	}
+	*/
 
 	/* Clear the triggered bit */
 	*WCTCS |= DSP_WCT_CS_TT(COMPARATOR_IDX);
@@ -144,6 +152,13 @@ static void compare_isr(const void *arg)
 	k_spin_unlock(&lock, key);
 
 	sys_clock_announce(dticks);
+
+	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
+
+	printk("cpu %d enter count %u, lock count %u, exit count %u, current timer %llu, timer last isr %llu, spin time %u, isr time %u\n",
+		arch_curr_cpu()->id, enter_ccount, lock_ccount, exit_ccount, curr, last_isr[arch_curr_cpu()->id], lock_ccount - enter_ccount, exit_ccount - enter_ccount);
+	last_isr[arch_curr_cpu()->id] = curr;
+
 }
 
 void sys_clock_set_timeout(int32_t ticks, bool idle)
