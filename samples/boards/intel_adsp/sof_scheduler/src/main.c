@@ -34,13 +34,13 @@ void work_fn(void *arg1, void *arg2, void *arg3)
 	}
 }
 
-static uint32_t last_cycle_count = 0;
-static uint32_t tcount = 0;;
+static uint32_t last_ccount = 0;
 
 static void timer_fn(struct k_timer *t)
 {
 	int core;
-
+	uint32_t enter_ccount, exit_ccount;
+	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
 
 	struct zephyr_domain *zephyr_domain = k_timer_user_data_get(t);
 
@@ -52,18 +52,13 @@ static void timer_fn(struct k_timer *t)
 		k_sem_give(&zephyr_domain->sem[core]);
 	}
 
+	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
 
-	tcount++;
-	
-	uint32_t cycle_count = k_cycle_get_32();
-	//uint32_t tdiff_ns = k_cyc_to_ns_near32(cycle_count - last_cycle_count);
-
-	if (tcount >= 1000) {
-		LOG_INF("CPU[%d] +/- 5 percent off expected cycle diff, cycle count: %u, last count %u\n", arch_curr_cpu()->id, cycle_count, last_cycle_count);	
-		tcount = 0;
-	}
-
-	last_cycle_count = cycle_count;
+	/* Assume 400MHz cpu clock since none is defined in dts */
+	uint32_t last_tdiff = (last_ccount - enter_ccount)/400;
+	uint32_t tdiff = (exit_ccount - enter_ccount)/400;
+	printk("CPU[%d] timer_fn took %u ns, time since last timer_fn %u ns\n", arch_curr_cpu()->id, tdiff, last_tdiff);	
+	last_ccount = enter_ccount;
 }
 
 void main(void)
