@@ -65,6 +65,17 @@ static uint64_t last_count;
 static uint64_t last_isr[CONFIG_MP_NUM_CPUS];
 static uint64_t last_compare[CONFIG_MP_NUM_CPUS];
 
+struct timer_isr_data {
+	uint32_t cpu_id;
+	uint32_t ccount;
+	uint64_t tcount;
+	uint64_t entries;
+};
+
+
+struct timer_isr_data timer_log[4000];
+uint32_t timer_log_idx = 0;
+
 static uint64_t count(void);
 
 #if defined(CONFIG_TEST)
@@ -130,6 +141,8 @@ static uint32_t count32(void)
 	return *COUNTER_LO;
 }
 
+static uint32_t entries = 0;
+
 static void compare_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
@@ -139,10 +152,22 @@ static void compare_isr(const void *arg)
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
 	
-	//k_spinlock_key_t out_key = k_spin_lock(&out_lock);
+	k_spinlock_key_t out_key = k_spin_lock(&out_lock);
 	k_spinlock_key_t key = k_spin_lock(&lock);
-
+	
+	struct timer_isr_data *data = &timer_log[timer_log_idx];
+	
 	__asm__ __volatile__("rsr %0,ccount":"=a" (lock_ccount));
+	data->cpu_id = arch_curr_cpu()->id;
+	data->ccount = lock_ccount;
+	data->tcount = count();
+	data->entries = entries++;
+
+	timer_log_idx++;
+	if (timer_log_idx >= 4000) {
+		timer_log_idx = 3999;
+	}
+	//__asm__ __volatile__("rsr %0,ccount":"=a" (lock_ccount));
 
 	curr = count();
 
@@ -161,24 +186,15 @@ static void compare_isr(const void *arg)
 
 	last_count += dticks * CYC_PER_TICK;
 
-#ifndef CONFIG_TICKLESS_KERNEL
-	uint64_t next = last_count + CYC_PER_TICK;
-
-	if ((int64_t)(next - curr) < MIN_DELAY) {
-		next += CYC_PER_TICK;
-	}
-	set_compare(next);
-#endif
-
 	k_spin_unlock(&lock, key);
 
 	sys_clock_announce(dticks);
 	
-	//k_spin_unlock(&out_lock, out_key);
+	k_spin_unlock(&out_lock, out_key);
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
 
-	/*
+	
 	uint64_t cpu_isr = last_isr[arch_curr_cpu()->id];
 	uint64_t cpu_compare = last_compare[arch_curr_cpu()->id];
 	uint32_t spin_cycles = lock_ccount - enter_ccount;
@@ -192,7 +208,7 @@ static void compare_isr(const void *arg)
 
 	printk("cpu %d: cpu curr %llu, cpu last isr %llu, cpu compare %llu, compare reg %llu, time til next compare %llu uS, spin cycles %u, isr cycles %u)\n",
 		arch_curr_cpu()->id, curr, cpu_isr, cpu_compare, curr_compare, tdiff, spin_cycles, isr_cycles);
-	*/
+	
 	last_isr[arch_curr_cpu()->id] = curr;
 
 }

@@ -9,7 +9,7 @@
 LOG_MODULE_REGISTER(sample, LOG_LEVEL_INF);
 
 #define STACK_SIZE	2048
-#define TIMER_PERIOD_US 100000
+#define TIMER_PERIOD_US 500000
 
 K_THREAD_STACK_ARRAY_DEFINE(work_stacks, CONFIG_MP_NUM_CPUS, STACK_SIZE);
 
@@ -21,26 +21,54 @@ struct zephyr_domain {
 struct k_timer timer;
 static struct zephyr_domain zd = {};
 
+struct timer_isr_data {
+	uint32_t cpu_id;
+	uint32_t ccount;
+	uint64_t tcount;
+	uint64_t entries;
+};
+
+extern struct timer_isr_data timer_log[];
+extern uint32_t timer_log_idx;
+
 void work_fn(void *arg1, void *arg2, void *arg3)
 {
+	uint32_t last_ccount, enter_ccount, exit_ccount;
 	int cpu = (int)arg1;
 	struct zephyr_domain *zephyr_domain = arg2;
 
+	__asm__ __volatile__("rsr %0,ccount":"=a" (last_ccount));
+
 	while (true) {
+
+		__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
+
 		k_sem_take(&zephyr_domain->sem[cpu], K_FOREVER);
 
 		/* Lets spinning to simulate some work */
 		k_busy_wait(TIMER_PERIOD_US * 0.7);
+
+		__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
+
+		if (arch_curr_cpu()->id == 0)
+		{
+			printk("idx %d\n", timer_log_idx);
+
+			if(timer_log_idx >= 1000) {
+				for (int i = 0; i < 10; i++) {
+					struct timer_isr_data *data = &timer_log[i];
+					printk("cpu[%d] ccount(%u), tcount(%llu), entries (%llu)\n", data->cpu_id, data->ccount, data->tcount, data->entries);
+				};
+			}
+		}
 	}
 }
 
-static uint32_t last_ccount = 0;
+
 
 static void timer_fn(struct k_timer *t)
 {
 	int core;
-	uint32_t enter_ccount, exit_ccount;
-	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
 
 	struct zephyr_domain *zephyr_domain = k_timer_user_data_get(t);
 
@@ -51,14 +79,6 @@ static void timer_fn(struct k_timer *t)
 	for (core = 0; core < CONFIG_MP_NUM_CPUS; core++) {
 		k_sem_give(&zephyr_domain->sem[core]);
 	}
-
-	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
-
-	/* Assume 400MHz cpu clock since none is defined in dts */
-	uint32_t last_tdiff = (last_ccount - enter_ccount)/400;
-	uint32_t tdiff = (exit_ccount - enter_ccount)/400;
-	printk("CPU[%d] timer_fn took %u ns, time since last timer_fn %u ns\n", arch_curr_cpu()->id, tdiff, last_tdiff);	
-	last_ccount = enter_ccount;
 }
 
 void main(void)
