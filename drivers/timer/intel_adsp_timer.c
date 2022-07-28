@@ -50,8 +50,11 @@ BUILD_ASSERT(COMPARATOR_IDX >= 0 && COMPARATOR_IDX <= 1);
 
 
 static struct k_spinlock lock;
+static struct k_spinlock out_lock;
+
 static uint64_t last_count;
 static uint64_t last_isr[CONFIG_MP_NUM_CPUS];
+static uint64_t last_compare[CONFIG_MP_NUM_CPUS];
 
 static uint64_t count(void);
 
@@ -71,10 +74,27 @@ static void set_compare(uint64_t time)
 	/* Arm the timer */
 	*WCTCS |= DSP_WCT_CS_TA(COMPARATOR_IDX);
 
-	uint64_t last = last_isr[arch_curr_cpu()->id];
-	uint64_t diff = time - last;
-	uint64_t tdiff = (diff * 1000000)/38400000;
-	printk("cpu %d set compare to %llu, count %llu, last count %llu, cyc per tick %u, last isr %llu, timer set for %llu uS from last interrupt\n", arch_curr_cpu()->id, time, count(), last_count, CYC_PER_TICK, last, tdiff);
+	last_compare[arch_curr_cpu()->id] = time;
+}
+
+
+static uint64_t compare(void)
+{
+	/* The compare register is 64 bits, but we're a 32 bit CPU that
+	 * can only read four bytes at a time, so a bit of care is
+	 * needed to prevent racing against a wraparound of the low
+	 * word.  Wrap the low read between two reads of the high word
+	 * and make sure it didn't change.
+	 */
+	uint32_t hi0, hi1, lo;
+
+	do {
+		hi0 = *COMPARE_HI;
+		lo = *COMPARE_LO;
+		hi1 = *COMPARE_HI;
+	} while (hi0 != hi1);
+
+	return (((uint64_t)hi0) << 32) | lo;
 }
 
 static uint64_t count(void)
@@ -110,6 +130,7 @@ static void compare_isr(const void *arg)
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
 	
+	k_spinlock_key_t out_key = k_spin_lock(&out_lock);
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (lock_ccount));
@@ -143,13 +164,22 @@ static void compare_isr(const void *arg)
 	k_spin_unlock(&lock, key);
 
 	sys_clock_announce(dticks);
+	
+	k_spin_unlock(&out_lock, out_key);
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
 
-	printk("cpu %d enter count %u, lock count %u, exit count %u, current timer %llu, timer last isr %llu, spin time %u, isr time %u\n",
-		arch_curr_cpu()->id, enter_ccount, lock_ccount, exit_ccount, curr, last_isr[arch_curr_cpu()->id], lock_ccount - enter_ccount, exit_ccount - enter_ccount);
-	last_isr[arch_curr_cpu()->id] = curr;
+	uint64_t cpu_isr = last_isr[arch_curr_cpu()->id];
+	uint64_t cpu_compare = last_compare[arch_curr_cpu()->id];
+	uint32_t spin_cycles = lock_ccount - enter_ccount;
+	uint32_t isr_cycles = exit_ccount - enter_ccount;
+	uint64_t curr_compare = compare();
+	uint64_t diff = curr_compare - curr;
+	uint64_t tdiff = (diff * 1000000)/38400000;
 
+	printk("cpu %d: cpu curr %llu, cpu last isr %llu, cpu compare %llu, compare reg %llu, time til next compare %llu uS, spin cycles %u, isr cycles %u)\n",
+		arch_curr_cpu()->id, curr, cpu_isr, cpu_compare, curr_compare, tdiff, spin_cycles, isr_cycles);
+	last_isr[arch_curr_cpu()->id] = curr;
 }
 
 void sys_clock_set_timeout(int32_t ticks, bool idle)
