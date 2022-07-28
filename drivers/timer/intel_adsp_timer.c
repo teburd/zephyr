@@ -139,7 +139,7 @@ static void compare_isr(const void *arg)
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
 	
-	k_spinlock_key_t out_key = k_spin_lock(&out_lock);
+	//k_spinlock_key_t out_key = k_spin_lock(&out_lock);
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (lock_ccount));
@@ -174,10 +174,11 @@ static void compare_isr(const void *arg)
 
 	sys_clock_announce(dticks);
 	
-	k_spin_unlock(&out_lock, out_key);
+	//k_spin_unlock(&out_lock, out_key);
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
 
+	/*
 	uint64_t cpu_isr = last_isr[arch_curr_cpu()->id];
 	uint64_t cpu_compare = last_compare[arch_curr_cpu()->id];
 	uint32_t spin_cycles = lock_ccount - enter_ccount;
@@ -191,7 +192,9 @@ static void compare_isr(const void *arg)
 
 	printk("cpu %d: cpu curr %llu, cpu last isr %llu, cpu compare %llu, compare reg %llu, time til next compare %llu uS, spin cycles %u, isr cycles %u)\n",
 		arch_curr_cpu()->id, curr, cpu_isr, cpu_compare, curr_compare, tdiff, spin_cycles, isr_cycles);
+	*/
 	last_isr[arch_curr_cpu()->id] = curr;
+
 }
 
 void sys_clock_set_timeout(int32_t ticks, bool idle)
