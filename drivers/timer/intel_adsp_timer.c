@@ -130,7 +130,7 @@ static void compare_isr(const void *arg)
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (enter_ccount));
 	
-	//k_spinlock_key_t out_key = k_spin_lock(&out_lock);
+	k_spinlock_key_t out_key = k_spin_lock(&out_lock);
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (lock_ccount));
@@ -165,7 +165,7 @@ static void compare_isr(const void *arg)
 
 	sys_clock_announce(dticks);
 	
-	//k_spin_unlock(&out_lock, out_key);
+	k_spin_unlock(&out_lock, out_key);
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (exit_ccount));
 
