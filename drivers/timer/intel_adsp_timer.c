@@ -182,7 +182,10 @@ static void compare_isr(const void *arg)
 	uint64_t cpu_compare = last_compare[arch_curr_cpu()->id];
 	uint32_t spin_cycles = lock_ccount - enter_ccount;
 	uint32_t isr_cycles = exit_ccount - enter_ccount;
+	
+	//key = k_spin_lock(&lock);
 	uint64_t curr_compare = compare();
+	//k_spin_unlock(&lock, key);
 	uint64_t diff = curr_compare - curr;
 	uint64_t tdiff = (diff * 1000000)/38400000;
 

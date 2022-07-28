@@ -9,10 +9,7 @@
 static uint32_t busy = 0;
 void timer_fn(struct k_timer *tm)
 {
-	/* Wait an increasing amount of time from ~1mS to ~9mS */
-	printk("delaying %u uS\n", busy);
-	busy = (busy + 1) & 0x00001FFF;
-	k_busy_wait(busy + 1024);
+	k_sem_give()
 }
 
 K_TIMER_DEFINE(timer, timer_fn, NULL);
