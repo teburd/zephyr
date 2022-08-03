@@ -219,8 +219,9 @@ ZTEST(timer_behavior, test_periodic_behavior)
 		 periodic_start, periodic_end, actual_time_us, expected_time_us, time_diff_us);
 
 	
-	k_msleep(100);
+	k_msleep(1000);
 	
+	printk("===TIMER TRACE BEGIN===\n\n");
 	/* Dump time trace data */
 	uint32_t trace_idx = atomic_get(&timer_trace_idx);
 	uint32_t len = trace_idx >= 10000 ? 10000 : trace_idx - 1;
@@ -230,6 +231,21 @@ ZTEST(timer_behavior, test_periodic_behavior)
 			timer_trace[i].tcount, timer_trace[i].tcompare, timer_trace[i].data);
 		k_msleep(10); /* don't overload the logger... */
 	}
+	
+
+	printk("===TIMER TRACE END===\n\n");
+
+	/* Measure difference in cycles between set timer compares, this should match the desired period */
+	uint64_t last_compare = timer_trace[0].tcompare;
+	
+	for (int i = 1; i < len; i++) {
+		if (timer_trace[i].kind == COMPARE_ENTER && timer_trace[i-1].kind == COMPARE_EXIT) {
+			uint64_t next_compare = timer_trace[i-1].tcompare;
+			uint64_t compare_diff = next_compare - last_compare;
+			printk("timer compare from previous is %llu cycles or %f microseconds, expected %f\n", compare_diff, cycles_to_us(compare_diff), expected_period);
+			last_compare = timer_trace[i-1].tcompare;
+		}
+	}	
 	
 	/* Validate the maximum/minimum timer period is off by no more than 10% */
 	double test_period = (double)CONFIG_TIMER_TEST_PERIOD;
