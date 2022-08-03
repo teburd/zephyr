@@ -56,16 +56,49 @@ static uint64_t last_count;
 const int32_t z_sys_timer_irq_for_test = TIMER_IRQ; /* See tests/kernel/context */
 #endif
 
-static void set_compare(uint64_t time)
+
+enum timer_event_kind {
+	COMPARE_ENTER,
+	COMPARE_LOCKED,
+	COMPARE_ANNOUNCE,
+	COMPARE_EXIT,
+	ELAPSED_ENTER,
+	ELAPSED_LOCKED,
+	ELAPSED_EXIT,
+	SET_TIMEOUT_ENTER,
+	SET_TIMEOUT_CLAMPED,
+	SET_TIMEOUT_LOCKED,
+	SET_TIMEOUT_EXIT,
+	SET_COMPARE_ENTER,
+	SET_COMPARE_EXIT,
+};
+
+struct timer_event {
+	enum timer_event_kind kind;
+	int cpu;
+	uint32_t ccount;
+	uint64_t tcount;
+	uint64_t tcompare;
+	
+	/* given only for timeout enter events */
+	int64_t data;
+};
+
+#define TRACE_COUNT 10000
+atomic_t timer_trace_idx = ATOMIC_INIT(-1);
+struct timer_event timer_trace[TRACE_COUNT];
+
+static uint64_t compare(void)
 {
-	/* Disarm the comparator to prevent spurious triggers */
-	*WCTCS &= ~DSP_WCT_CS_TA(COMPARATOR_IDX);
+	uint32_t hi0, hi1, lo;
 
-	*COMPARE_LO = (uint32_t)time;
-	*COMPARE_HI = (uint32_t)(time >> 32);
+	do {
+		hi0 = *COMPARE_HI;
+		lo = *COMPARE_LO;
+		hi1 = *COMPARE_HI;
+	} while (hi0 != hi1);
 
-	/* Arm the timer */
-	*WCTCS |= DSP_WCT_CS_TA(COMPARATOR_IDX);
+	return (((uint64_t)hi0) << 32) | lo;
 }
 
 static uint64_t count(void)
@@ -92,13 +125,65 @@ static uint32_t count32(void)
 	return *COUNTER_LO;
 }
 
+
+/**
+ * The current index is always considered the write ptr
+ *
+ * Every write therefore needs to obtain the next index to write to
+ */
+static int32_t next_trace_idx() {
+	uint32_t curr;
+
+	do {
+		curr = atomic_get(&timer_trace_idx);
+	} while (!atomic_cas(&timer_trace_idx, curr, curr+1));
+
+	return curr+1;
+}
+
+static inline void record_trace(enum timer_event_kind kind, int64_t data)
+{
+	uint32_t trace_idx = next_trace_idx();
+	if (trace_idx >= TRACE_COUNT) {
+		return;
+	}
+
+	__asm__ __volatile__("rsr %0,ccount":"=a" (timer_trace[trace_idx].ccount));
+	timer_trace[trace_idx].kind = kind;
+	timer_trace[trace_idx].cpu = arch_curr_cpu()->id;
+	timer_trace[trace_idx].tcount = count();
+	timer_trace[trace_idx].tcompare = compare();
+	timer_trace[trace_idx].data = data;
+}
+
+
+static void set_compare(uint64_t time)
+{
+	record_trace(SET_COMPARE_ENTER, time);
+
+	/* Disarm the comparator to prevent spurious triggers */
+	*WCTCS &= ~DSP_WCT_CS_TA(COMPARATOR_IDX);
+
+	*COMPARE_LO = (uint32_t)time;
+	*COMPARE_HI = (uint32_t)(time >> 32);
+
+	/* Arm the timer */
+	*WCTCS |= DSP_WCT_CS_TA(COMPARATOR_IDX);
+	
+	record_trace(SET_COMPARE_EXIT, -1);
+}
+
 static void compare_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
 	uint64_t curr;
 	uint32_t dticks;
 
+	record_trace(COMPARE_ENTER, -1);
+
 	k_spinlock_key_t key = k_spin_lock(&lock);
+
+	record_trace(COMPARE_LOCKED, -1);
 
 	curr = count();
 	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
@@ -119,7 +204,11 @@ static void compare_isr(const void *arg)
 
 	k_spin_unlock(&lock, key);
 
+	record_trace(COMPARE_ANNOUNCE, dticks);
+
 	sys_clock_announce(dticks);
+
+	record_trace(COMPARE_EXIT, -1);
 }
 
 void sys_clock_set_timeout(int32_t ticks, bool idle)
@@ -127,10 +216,17 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	ARG_UNUSED(idle);
 
 #ifdef CONFIG_TICKLESS_KERNEL
+	record_trace(SET_TIMEOUT_ENTER, ticks);
+	
 	ticks = ticks == K_TICKS_FOREVER ? MAX_TICKS : ticks;
 	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
 
+	record_trace(SET_TIMEOUT_CLAMPED, ticks);
+	
 	k_spinlock_key_t key = k_spin_lock(&lock);
+
+	record_trace(SET_TIMEOUT_LOCKED, -1);
+
 	uint64_t curr = count();
 	uint64_t next;
 	uint32_t adj, cyc = ticks * CYC_PER_TICK;
@@ -152,6 +248,7 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	set_compare(next);
 	k_spin_unlock(&lock, key);
 #endif
+	record_trace(SET_TIMEOUT_EXIT, -1);
 }
 
 uint32_t sys_clock_elapsed(void)
@@ -159,10 +256,17 @@ uint32_t sys_clock_elapsed(void)
 	if (!IS_ENABLED(CONFIG_TICKLESS_KERNEL)) {
 		return 0;
 	}
+	record_trace(ELAPSED_ENTER, -1);
+
 	k_spinlock_key_t key = k_spin_lock(&lock);
+
+	record_trace(ELAPSED_LOCKED, -1);
+
 	uint32_t ret = (count32() - (uint32_t)last_count) / CYC_PER_TICK;
 
 	k_spin_unlock(&lock, key);
+
+	record_trace(ELAPSED_EXIT, ret);
 	return ret;
 }
 
