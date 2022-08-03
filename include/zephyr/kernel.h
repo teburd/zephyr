@@ -1334,6 +1334,9 @@ struct k_timer {
 	/* runs in the context of the thread that calls k_timer_stop() */
 	void (*stop_fn)(struct k_timer *timer);
 
+	/* last scheduled tick */
+	uint64_t last_scheduled;
+	
 	/* timer period */
 	k_timeout_t period;
 
