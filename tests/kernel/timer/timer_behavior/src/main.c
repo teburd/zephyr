@@ -13,6 +13,36 @@
 #include <tc_util.h>
 #include <ztest.h>
 
+
+
+enum timer_event_kind {
+	COMPARE_ENTER,
+	COMPARE_LOCKED,
+	COMPARE_ANNOUNCE,
+	COMPARE_EXIT,
+	ELAPSED_ENTER,
+	ELAPSED_LOCKED,
+	ELAPSED_EXIT,
+	SET_TIMEOUT_ENTER,
+	SET_TIMEOUT_CLAMPED,
+	SET_TIMEOUT_LOCKED,
+	SET_TIMEOUT_EXIT,
+	SET_COMPARE_ENTER,
+	SET_COMPARE_EXIT,
+};
+
+struct timer_event {
+	enum timer_event_kind kind;
+	int cpu;
+	uint32_t ccount;
+	uint64_t tcount;
+	uint64_t tcompare;
+	int64_t data;
+};
+
+extern atomic_t timer_trace_idx;
+extern struct timer_event timer_trace[10000];
+
 static uint32_t periodic_idx;
 static uint32_t periodic_rollovers;
 static uint64_t periodic_data[CONFIG_TIMER_TEST_SAMPLES + 1];
@@ -56,6 +86,38 @@ uint64_t periodic_diff(uint64_t later, uint64_t earlier)
 double cycles_to_us(double cycles)
 {
 	return 1000000.0 * (cycles / (double)CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC);
+}
+
+const char * timer_event_str(enum timer_event_kind kind) {
+	switch(kind) {
+		case COMPARE_ENTER: 
+			return "COMPARE_ENTER";
+		case COMPARE_LOCKED:
+			return "COMPARE_LOCKED"; 
+		case COMPARE_ANNOUNCE:
+			return "COMPARE_ANNOUNCE"; 
+		case COMPARE_EXIT:
+			return "COMPARE_EXIT";
+		case ELAPSED_ENTER:
+			return "ELAPSED_ENTER";
+		case ELAPSED_LOCKED:
+			return "ELAPSED_LOCKED";
+		case ELAPSED_EXIT:
+			return "ELAPSED_EXIT";
+		case SET_TIMEOUT_ENTER:
+			return "SET_TIMEOUT_ENTER";
+		case SET_TIMEOUT_CLAMPED:
+			return "SET_TIMEOUT_CLAMPED";
+		case SET_TIMEOUT_LOCKED:
+			return "SET_TIMEOUT_LOCKED";
+		case SET_TIMEOUT_EXIT:
+			return "SET_TIMEOUT_EXIT";
+		case SET_COMPARE_ENTER:
+			return "SET_COMPARE_ENTER";
+		case SET_COMPARE_EXIT:
+			return "SET_COMPARE_EXIT";
+	}
+	return "UNKNOWN";
 }
 
 ZTEST(timer_behavior, test_periodic_behavior)
@@ -156,6 +218,19 @@ ZTEST(timer_behavior, test_periodic_behavior)
 		 "difference %f\n",
 		 periodic_start, periodic_end, actual_time_us, expected_time_us, time_diff_us);
 
+	
+	k_msleep(100);
+	
+	/* Dump time trace data */
+	uint32_t trace_idx = atomic_get(&timer_trace_idx);
+	uint32_t len = trace_idx >= 10000 ? 10000 : trace_idx - 1;
+	for (int i = 0; i < len; i++) {
+		printk("TTRACE[%d]: event %s, cpu %d, ccount %d, tcount %llu, tcompare %llu, data %lld\n",
+			i, timer_event_str(timer_trace[i].kind), timer_trace[i].cpu, timer_trace[i].ccount,
+			timer_trace[i].tcount, timer_trace[i].tcompare, timer_trace[i].data);
+		k_msleep(10); /* don't overload the logger... */
+	}
+	
 	/* Validate the maximum/minimum timer period is off by no more than 10% */
 	double test_period = (double)CONFIG_TIMER_TEST_PERIOD;
 	double min_us_bound = test_period - 0.10 * test_period;
