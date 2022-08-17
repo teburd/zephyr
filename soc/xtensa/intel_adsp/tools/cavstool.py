@@ -418,11 +418,13 @@ class IntelADSP:
         self.dsp.HIPCIDD = 0x0004C if hwversion.is_cavs15() else 0x000D8
         self.dsp.SRAM_FW_STATUS = 0x80000  # Start of first SRAM window
         self.dsp.freeze()
-
         self.input_stream_cnt = (self.hda.GCAP >> 8) & 0x0F  # number of input streams
         self.output_stream_cnt = (
             self.hda.GCAP >> 12
         ) & 0x0F  # number of output streams
+        log.info(
+            f"HDA Streams, Host In: {self.input_stream_cnt}, Host Out: {self.output_stream_cnt}"
+        )
 
         # keep tabs on what streams have been used
         self.input_streams = dict()
@@ -500,7 +502,7 @@ def mask(bit):
         return 0b11 << bit
 
 
-def load_firmware(audio_dev, fw_file):
+def load_firmware(adsp, fw_file):
     try:
         fw_bytes = open(fw_file, "rb").read()
     except Exception as e:
@@ -514,48 +516,33 @@ def load_firmware(audio_dev, fw_file):
         fw_bytes = fw_bytes[sz : len(fw_bytes)]
 
     # This actually means "enable access to BAR4 registers"!
-    hda.PPCTL |= 1 << 30  # GPROCEN, "global processing enable"
+    adsp.hda.PPCTL |= 1 << 30  # GPROCEN, "global processing enable"
 
     log.info("Resetting HDA device")
-    hda.GCTL = 0
-    while hda.GCTL & 1:
+    adsp.hda.GCTL = 0
+    while adsp.hda.GCTL & 1:
         pass
-    hda.GCTL = 1
-    while not hda.GCTL & 1:
+    adsp.hda.GCTL = 1
+    while not adsp.hda.GCTL & 1:
         pass
 
-    log.info(f"Stalling and Resetting DSP cores, ADSPCS = 0x{dsp.ADSPCS:x}")
-    dsp.ADSPCS |= mask(CSTALL)
-    dsp.ADSPCS |= mask(CRST)
-    while (dsp.ADSPCS & mask(CRST)) == 0:
+    log.info(f"Stalling and Resetting DSP cores, ADSPCS = 0x{adsp.dsp.ADSPCS:x}")
+    adsp.dsp.ADSPCS |= mask(CSTALL)
+    adsp.dsp.ADSPCS |= mask(CRST)
+    while (adsp.dsp.ADSPCS & mask(CRST)) == 0:
         pass
 
     log.info(f"Powering down DSP cores, ADSPCS = 0x{dsp.ADSPCS:x}")
-    dsp.ADSPCS &= ~mask(SPA)
-    while dsp.ADSPCS & mask(CPA):
+    adsp.dsp.ADSPCS &= ~mask(SPA)
+    while adsp.dsp.ADSPCS & mask(CPA):
         pass
 
-    log.info(f"Configuring HDA stream {hda_ostream_id} to transfer firmware image")
-    (buf_list_addr, num_bufs) = setup_dma_mem(fw_bytes)
-    sd.CTL = 1
-    while (sd.CTL & 1) == 0:
-        pass
-    sd.CTL = 0
-    while (sd.CTL & 1) == 1:
-        pass
-    sd.CTL = 1 << 20  # Set stream ID to anything non-zero
-    sd.BDPU = (buf_list_addr >> 32) & 0xFFFFFFFF
-    sd.BDPL = buf_list_addr & 0xFFFFFFFF
-    sd.CBL = len(fw_bytes)
-    sd.LVI = num_bufs - 1
-    hda.PPCTL |= 1 << hda_ostream_id
-
-    # SPIB ("Software Position In Buffer") is an Intel HDA extension
-    # that puts a transfer boundary into the stream beyond which the
-    # other side will not read.  The ROM wants to poll on a "buffer
-    # full" bit on the other side that only works with this enabled.
-    hda.SPBFCTL |= 1 << hda_ostream_id
-    hda.SD_SPIB = len(fw_bytes)
+    ostream_id = 0
+    log.info(f"Configuring HDA stream {ostream_id} to transfer firmware image")
+    ostream = adsp.hda_out_stream(ostream_id, [len(fw_bytes)])
+    # copy the firmware into the DMA buffer
+    ostream.bufs[0][0 : len(fw_bytes)] = fw_bytes
+    ostream.start()
 
     # Start DSP.  Host needs to provide power to all cores on 1.5
     # (which also starts them) and 1.8 (merely gates power, DSP also
@@ -588,7 +575,8 @@ def load_firmware(audio_dev, fw_file):
     # index within the array of output streams (and we always use the
     # first one by construction).  But with 1.5 it's the HDA index,
     # and depends on the number of input streams on the device.
-    stream_idx = hda_ostream_id if cavs15 else 0
+
+    stream_idx = ostream_id if cavs15 else 0
     ipcval = (
         (1 << 31)  # BUSY bit
         | (0x01 << 24)  # type = PURGE_FW
@@ -603,16 +591,8 @@ def load_firmware(audio_dev, fw_file):
 
     wait_fw_entered()
 
-    # Turn DMA off and reset the stream.  Clearing START first is a
-    # noop per the spec, but absolutely required for stability.
-    # Apparently the reset doesn't stop the stream, and the next load
-    # starts before it's ready and kills the load (and often the DSP).
-    # The sleep too is required, on at least one board (a fast
-    # chromebook) putting the two writes next each other also hangs
-    # the DSP!
-    sd.CTL &= ~2  # clear START
-    time.sleep(0.1)
-    sd.CTL |= 1
+    ostream.stop()
+
     log.info(f"cAVS firmware load complete")
 
 
