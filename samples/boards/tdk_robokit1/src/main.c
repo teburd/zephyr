@@ -131,7 +131,7 @@ void main(void)
 	}
 	
 	/* What context does the callback run in? Can I pass userdata? */
-	if (sensor_set_process_data_callback(dev, data_callback) != 0) {
+	if (sensor_set_process_data_callback(icm42688, data_callback) != 0) {
 		printf("Trouble setting process callback\n");
 	}
 	

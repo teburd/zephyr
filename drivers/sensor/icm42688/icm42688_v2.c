@@ -26,7 +26,8 @@ LOG_MODULE_REGISTER(ICM42688, CONFIG_SENSOR_LOG_LEVEL);
 struct icm42688_sensor_data {
 	struct icm42688_dev_data dev_data;
 
-	int16_t readings[7];
+	sensor_process_data_callback_t process_callback;
+	struct sensor_raw_data *fifo_buf;
 };
 
 struct icm42688_sensor_config {
@@ -579,30 +580,104 @@ out:
 int icm42688_set_fifo_data_buffer(const struct device *dev, 
 				  struct sensor_raw_data *buffer)
 {
-	return -ENOTSUP;
+	struct icm42688_sensor_data *data = dev->data;
+
+	/* Possible hazard here, if fifo's are already enabled, and the buffer is already set
+	 * and we are in the callback, we need to lock around the process callback
+	 * but that is... not very nice */
+	data->fifo_buf = buffer;
+	
+		
+	return 0;
 }
 
 int icm42688_set_process_data_callback(const struct device *dev,
 				       sensor_process_data_callback_t callback)
 {
-	return -ENOTSUP;
+	struct icm42688_sensor_data *data = dev->data;
+
+	
+	/* This should be pretty safe without a lock */
+	data->process_callback = callback;
+			
+	return 0;
 }
 
 int icm42688_flush_fifo(const struct device *dev)
 {
-	return -ENOTSUP;
+	struct icm42688_sensor_data *data = dev->data;
+
+	/* Reconfiguring the sensor flushes the FIFO */
+	return icm42688_configure(dev, &data->dev_data.cfg);
+}
+
+
+int icm42688_iter_next(struct sensor_fifo_iterator *iter)
+{
+	if(iter->data->header.reading_count < iter->offset) {
+		return -EINVAL
+	}
+
+	/
+	iter->offset++;
+	return 0;
+}
+
+/* This isn't that nice to write honestly */
+int icm42688_iter_sensor_type(const struct sensor_fifo_iterator *iter, uint32_t *sensor_type)
+{
+	if(iter->data->header.reading_count < iter->offset) {
+		return -EINVAL;
+	}
+
+	if (iter->offset % 3 == 0) {
+		*sensor_type = SENSOR_TYPE_GYROSCOPE;
+	} else if (iter->offset % 2 == 0) {
+		*sensor_type = SENSOR_TYPE_ACCELEROMETER;
+	} else {
+		*sensor_type = SENSOR_TYPE_ACCELEROMETER_TEMPERATURE;
+	}
+
+	return 0;
+}
+
+int icm42688_iter_read(const struct sensor_fifo_iterator *iter, void *out)
+{
+	int idx = (iter->offset - 1)/3;
+
+	if (iter->offset % 3 == 0) {
+		/* Return gyroscope data */
+	} else if (iter->offset % 2 == 0) {
+		/* Return accelerometer data */
+	} else {
+		/* Return temperature data */
+	}
+	
+	return 0;
 }
 
 int icm42688_get_fifo_iterator(const struct device *dev,
-			       struct sensor_fifo_iterator_api *iter)
+			       struct sensor_fifo_iterator_api *iter_api)
 {
-	return -ENOTSUP;
+	/* No way to attach the configuration of the sensor currently for an iterator
+	 * so it can't outlive the buffer... different callbacks could be given
+	 * depending on the config? maybe that's the intent?
+	 */
+	iter_api->next = icm42688_iter_next;
+	iter_api->get_sensor_type = icm42688_iter_sensor_type;
+	iter_api->read = icm42688_iter_read;
+	
+	return 0;
+		
 }
 
 int icm42688_get_watermark(const struct device *dev,
 			   uint8_t *wm_pct)
 
 {
+	
+	struct icm42688_sensor_data *data = dev->data;
+	
 	return -ENOTSUP;
 }
 
