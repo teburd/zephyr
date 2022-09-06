@@ -617,12 +617,13 @@ int icm42688_flush_fifo(const struct device *dev)
 
 int icm42688_iter_next(struct sensor_fifo_iterator *iter)
 {
-	if(iter->data->header.reading_count < iter->offset) {
-		return -EINVAL
+	if(iter->data->header.reading_count*4 < iter->offset) {
+		return -EINVAL;
 	}
 
-	/
-	iter->offset++;
+	if (iter->offset == 0 && iter->data->header.reading_count > 0) {
+		iter->offset++;
+	}
 	return 0;
 }
 
@@ -633,12 +634,25 @@ int icm42688_iter_sensor_type(const struct sensor_fifo_iterator *iter, uint32_t 
 		return -EINVAL;
 	}
 
-	if (iter->offset % 3 == 0) {
-		*sensor_type = SENSOR_TYPE_GYROSCOPE;
-	} else if (iter->offset % 2 == 0) {
-		*sensor_type = SENSOR_TYPE_ACCELEROMETER;
-	} else {
-		*sensor_type = SENSOR_TYPE_ACCELEROMETER_TEMPERATURE;
+	int sample_idx = (iter->offset - 1)/4;
+	int type_pos = (iter->offset - 1) - sample_idx;
+	
+	switch (type_pos) {
+		case 0:
+			*sensor_type = SENSOR_TYPE_ACCELEROMETER;
+			break;
+		case 1:
+			*sensor_type = SENSOR_TYPE_GYROSCOPE;
+			break;
+		case 2:
+			*sensor_type = SENSOR_TYPE_ACCELEROMETER_TEMPERATURE;
+			break;
+		/* FIXME */
+		/*
+		case 3:
+			*sensor_type = SENSOR_TYPE_TIMESTAMP;
+			break;
+		*/
 	}
 
 	return 0;
@@ -646,15 +660,30 @@ int icm42688_iter_sensor_type(const struct sensor_fifo_iterator *iter, uint32_t 
 
 int icm42688_iter_read(const struct sensor_fifo_iterator *iter, void *out)
 {
-	int idx = (iter->offset - 1)/3;
+	int sample_idx = (iter->offset - 1)/4;
+	int type_pos = (iter->offset - 1) - sample_idx;
 
-	if (iter->offset % 3 == 0) {
-		/* Return gyroscope data */
-	} else if (iter->offset % 2 == 0) {
-		/* Return accelerometer data */
-	} else {
-		/* Return temperature data */
+	/* This really should depend more on the FIFO format and sensor configuration.
+	   The gyro/accel may be enabled/disabled, 20 bit may be enabled/disabled.
+	   There are 4 possible layouts. The layout is self described in each packet
+	   header.
+	 */
+
+	switch (type_pos) {
+		case 0:
+			/* take byte position (idx-1) + [1:6] as accelerometer data */
+			break;
+		case 1:
+			/* take byte position (idx-1) + [7:13]  as gyroscope data */
+			break;
+		case 2:
+			/* take byte position (idx-1) + [14] as temperature data */
+			break;
+		case 3:
+			/* take byte position (idx-1) + [15:16] as timestamp data */
+			break;
 	}
+
 	
 	return 0;
 }
