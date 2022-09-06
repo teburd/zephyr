@@ -28,6 +28,9 @@ struct icm42688_sensor_data {
 
 	sensor_process_data_callback_t process_callback;
 	struct sensor_raw_data *fifo_buf;
+	
+	struct gpio_callback gpio_cb1;
+	struct k_sem int1_sem;
 };
 
 struct icm42688_sensor_config {
@@ -726,6 +729,7 @@ int icm42688_set_streaming_mode(const struct device *dev,
 				bool enabled)
 {
 	struct icm42688_sensor_data *data = dev->data;
+	const struct icm42688_sensor_config *cfg = dev->cfg;
 	int res;
 
 	/* copy configuration */
@@ -733,10 +737,14 @@ int icm42688_set_streaming_mode(const struct device *dev,
 	
 	/* TODO Might be cool to enable this */
 	mcfg.fifo_hires = false;
-	mcfg.fifo_en = true;
-	
+	mcfg.fifo_en = enabled;
+
+	/* Enable the gpio irq */
+	gpio_pin_interrupt_configure_dt(&cfg->dev_cfg.gpio_int1, GPIO_INT_EDGE_TO_ACTIVE);
+
 	/* reconfigure sensor, making the modified config the new sensor config if valid */
 	res = icm42688_configure(dev, &mcfg);
+		
 
 out:
 	return res;		
@@ -746,6 +754,45 @@ int icm42688_perform_calibration(const struct device *dev,
 				bool enabled)
 {
 	return -ENOTSUP;
+}
+
+/**
+ * Thread waiting on sensor events
+ */
+static void icm42688_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+	
+	struct device *dev = p1;
+	struct icm42688_sensor_data *data = dev->data;
+	const struct icm42688_sensor_config *cfg = dev->cfg;
+	
+	while (1) {
+		k_sem_take(&data->int1_sem, K_FOREVER);
+		/* Read the interrupt cause */
+		
+		/* If cause is FIFO FULL or Watermark then... */
+
+		/* Read fifo length then... */
+
+		/* Read fifo into struct sensor_raw_data then... */
+		//icm42688_spi_read()
+
+		/* Call the sensor process callback */
+	}
+}
+
+/** This is unfortunately needed */
+static void icm42688_gpio_callback(const struct device *dev,
+				   struct gpio_callback *cb, uint32_t pins)
+{
+	struct icm42688_sensor_data *data =
+		CONTAINER_OF(cb, struct icm42688_sensor_data, gpio_cb);
+
+	ARG_UNUSED(pins);
+
+	k_sem_give(&data->int1_sem);
 }
 
 static int icm42688_init(const struct device *dev)
@@ -758,12 +805,33 @@ static int icm42688_init(const struct device *dev)
 		LOG_ERR("SPI bus is not ready");
 		return -ENODEV;
 	}
-
+		
+	if (!device_is_ready(cfg->dev_cfg.gpio_int1.port)) {
+		LOG_ERR("gpio_int1 gpio not ready");
+		return -ENODEV;
+	}
 	
+	gpio_pin_configure_dt(&cfg->dev_cfg.gpio_int1, GPIO_INPUT);
+	gpio_init_callback(&data->gpio_cb1, icm42688_gpio_callback, BIT(cfg->dev_cfg.gpio_int1.pin));
+	res = gpio_add_callback(cfg->dev_cfg.gpio_int1.port, &data->gpio_cb1);
+	
+	if (res != 0) {
+		LOG_ERR("could not configure gpio callback");
+		return res;
+	}
+	
+	k_sem_init(&data->int1_sem, 0, K_SEM_MAX_LIMIT);
+
+	k_thread_create(&data->thread, data->thread_stack,
+		CONFIG_ICM42688_THREAD_STACK_SIZE, icm42688_thread, dev, NULL, NULL,
+		K_PRIO_COOP(CONFIG_ICM42688_THREAD_PRIORITY), 0, K_NO_WAIT);
+	
+	gpio_pin_interrupt_configure_dt(&cfg->gpio_int, GPIO_INT_EDGE_TO_INACTIVE);
+
 	res = icm42688_reset(dev);
 	if (res != 0) {
 		LOG_ERR("could not initialize sensor");
-		return -EIO;
+		return res;
 	}
 
 	// TODO interpret the config params from DT here using the X to Y conversions.
@@ -790,7 +858,7 @@ static const struct sensor_driver_api_v2 icm42688_driver_api = {
 	.get_bias = icm42688_get_bias,
 	.set_bias = icm42688_set_bias,
 #ifdef CONFIG_SENSOR_STREAMING_MODE
-	.set_fifo_data_buffer = icm42688_set_fifo_data_buffer,
+	set_fifo_data_buffer = icm42688_set_fifo_data_buffer,
 	.set_process_data_callback = icm42688_set_process_data_callback,
 	.flush_fifo = icm42688_flush_fifo,
 	.get_fifo_iterator_api = icm42688_get_fifo_iterator,
