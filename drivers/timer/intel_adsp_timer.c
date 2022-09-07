@@ -92,13 +92,17 @@ static uint32_t count32(void)
 	return *COUNTER_LO;
 }
 
+uint32_t timer_isrs, timer_lock_take_cycle, timer_lock_taken_cycle, timer_unlock_cycle, timer_announced_cycle;
+
 static void compare_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
 	uint64_t curr;
 	uint32_t dticks;
 
+	timer_lock_take_cycle = count32();
 	k_spinlock_key_t key = k_spin_lock(&lock);
+	timer_lock_taken_cycle = count32();
 
 	curr = count();
 	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
@@ -118,8 +122,11 @@ static void compare_isr(const void *arg)
 #endif
 
 	k_spin_unlock(&lock, key);
+	timer_unlock_cycle = count32();
 
+	timer_isrs++;
 	sys_clock_announce(dticks);
+	timer_announced_cycle = count32();
 }
 
 void sys_clock_set_timeout(int32_t ticks, bool idle)

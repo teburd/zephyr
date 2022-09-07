@@ -52,6 +52,14 @@ static ALWAYS_INLINE void cavs_ictl_dispatch_child_isrs(uint32_t intr_status,
 	}
 }
 
+static const struct device *last_isr_dev;
+static uint32_t last_isr_time, last_enabled, last_status, total_isrs;
+static uint32_t last_timeouts;
+
+extern uint32_t adsp_timer_isrs, kernel_timeout_loops, kernel_timeouts;
+extern uint32_t timer_isrs, timer_lock_take_cycle, timer_lock_taken_cycle, timer_unlock_cycle, timer_announced_cycle;
+extern uint32_t ipc_isrs, ipc_lock_take_cycle, ipc_lock_taken_cycle, ipc_unlocked_cycle;
+
 static void cavs_ictl_isr(const struct device *port)
 {
 	struct cavs_ictl_runtime *context = port->data;
@@ -59,9 +67,36 @@ static void cavs_ictl_isr(const struct device *port)
 	const struct cavs_ictl_config *config = port->config;
 
 	volatile struct cavs_registers * const regs =  get_base_address(context);
+	uint32_t start = k_cycle_get_32();
+	uint32_t timeouts = kernel_timeouts;
+	uint32_t loops = kernel_timeout_loops;
 
+	uint32_t enabled = regs->enable_il;
+	uint32_t status = regs->status_il;
 	cavs_ictl_dispatch_child_isrs(regs->status_il,
 				      config->isr_table_offset);
+	uint32_t end = k_cycle_get_32();
+	uint32_t cycles = end - start;
+	if (cycles > 16400) {
+		printk("isr handling for ictl %p (enabled %x, status %x) took %u cycles!\n"
+			"last isr from ictl %p (enabled %x, status %x) took %u cycles\n"
+			"total isrs %u, adsp timer isrs %u, ipc isrs %u\n"
+			"kernel timeout loops before isr %u, after isr %u, timeouts before isr %u, after isr %u, at end of last isr %u\n"
+			"timer isr lock take %u, taken %u, unlock %u, announced %u\n"
+			"ipc isr lock take %u, taken %u, unlock %u\n",
+			port, enabled, status, cycles,
+			last_isr_dev, last_enabled, last_status, last_isr_time,
+			total_isrs, timer_isrs, ipc_isrs,
+			loops, kernel_timeout_loops, timeouts, kernel_timeouts, last_timeouts,
+			timer_lock_take_cycle, timer_lock_taken_cycle, timer_unlock_cycle, timer_announced_cycle,
+			ipc_lock_take_cycle, ipc_lock_taken_cycle, ipc_unlocked_cycle);
+	}
+	last_isr_dev = port;
+	last_isr_time = cycles;
+	last_enabled = enabled;
+	last_status = status;
+	last_timeouts = kernel_timeouts;
+	total_isrs++;
 }
 
 static void cavs_ictl_irq_enable(const struct device *dev,
@@ -72,6 +107,7 @@ static void cavs_ictl_irq_enable(const struct device *dev,
 	volatile struct cavs_registers * const regs = get_base_address(context);
 
 	regs->enable_il = 1 << irq;
+	
 }
 
 static void cavs_ictl_irq_disable(const struct device *dev,

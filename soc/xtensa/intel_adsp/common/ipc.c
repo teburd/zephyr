@@ -29,6 +29,8 @@ void intel_adsp_ipc_set_done_handler(const struct device *dev,
 	k_spin_unlock(&devdata->lock, key);
 }
 
+uint32_t ipc_isrs, ipc_lock_take_cycle, ipc_lock_taken_cycle, ipc_unlocked_cycle;
+
 void z_intel_adsp_ipc_isr(const void *devarg)
 {
 	const struct device *dev = devarg;
@@ -36,7 +38,9 @@ void z_intel_adsp_ipc_isr(const void *devarg)
 	struct intel_adsp_ipc_data *devdata = dev->data;
 
 	volatile struct intel_adsp_ipc *regs = config->regs;
+	ipc_lock_take_cycle = k_cycle_get_32();
 	k_spinlock_key_t key = k_spin_lock(&devdata->lock);
+	ipc_lock_taken_cycle = k_cycle_get_32();
 
 	if (regs->tdr & INTEL_ADSP_IPC_BUSY) {
 		bool done = true;
@@ -70,7 +74,9 @@ void z_intel_adsp_ipc_isr(const void *devarg)
 		}
 	}
 
+	ipc_isrs++;
 	k_spin_unlock(&devdata->lock, key);
+	ipc_unlocked_cycle = k_cycle_get_32();
 }
 
 int intel_adsp_ipc_init(const struct device *dev)

@@ -50,6 +50,8 @@ static struct _timeout *next(struct _timeout *t)
 	return n == NULL ? NULL : CONTAINER_OF(n, struct _timeout, node);
 }
 
+uint32_t kernel_timeouts;
+
 static void remove_timeout(struct _timeout *t)
 {
 	if (next(t) != NULL) {
@@ -57,6 +59,7 @@ static void remove_timeout(struct _timeout *t)
 	}
 
 	sys_dlist_remove(&t->node);
+	kernel_timeouts--;
 }
 
 static int32_t elapsed(void)
@@ -84,6 +87,7 @@ static int32_t next_timeout(void)
 #endif
 	return ret;
 }
+
 
 void z_add_timeout(struct _timeout *to, _timeout_func_t fn,
 		   k_timeout_t timeout)
@@ -124,6 +128,8 @@ void z_add_timeout(struct _timeout *to, _timeout_func_t fn,
 			sys_dlist_append(&timeout_list, &to->node);
 		}
 
+		kernel_timeouts++;
+		
 		if (to == first()) {
 #if CONFIG_TIMESLICING
 			/*
@@ -236,6 +242,8 @@ void z_set_timeout_expiry(int32_t ticks, bool is_idle)
 	}
 }
 
+uint32_t kernel_timeout_loops;
+
 void sys_clock_announce(int32_t ticks)
 {
 #ifdef CONFIG_TIMESLICING
@@ -266,6 +274,7 @@ void sys_clock_announce(int32_t ticks)
 		t->dticks = 0;
 		remove_timeout(t);
 
+		kernel_timeout_loops++;
 		k_spin_unlock(&timeout_lock, key);
 		t->fn(t);
 		key = k_spin_lock(&timeout_lock);

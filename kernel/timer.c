@@ -107,7 +107,6 @@ void k_timer_init(struct k_timer *timer,
 	z_object_init(timer);
 }
 
-
 void z_impl_k_timer_start(struct k_timer *timer, k_timeout_t duration,
 			  k_timeout_t period)
 {

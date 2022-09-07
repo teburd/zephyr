@@ -14,11 +14,32 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(hda_test, LOG_LEVEL_DBG);
 
+
+
+static struct k_timer some_timer;
+
+static int x = 0;
+static int last_mod;
+void periodic_work(struct k_timer *tm) 
+{
+	x++;
+	last_mod = x%100;
+	
+	if (last_mod == 0 ) {
+		printk("last mod %u\n", last_mod);
+	}
+}
+
 ZTEST(intel_adsp_hda_log, test_hda_logger)
 {
 	TC_PRINT("Testing hda log backend\n");
 
-	/* Wait a moment so the output isn't mangled */
+
+	k_timer_init(&some_timer, periodic_work, NULL);
+	k_timer_start(&some_timer,
+		      K_MSEC(1),
+		      K_MSEC(1));	/* Wait a moment so the output isn't mangled */
+
 	k_msleep(100);
 
 	/* Ensure multiple wraps and many many logs are written without delays */
