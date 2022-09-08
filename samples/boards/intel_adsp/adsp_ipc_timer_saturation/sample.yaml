@@ -1,0 +1,5 @@
+sample:
+  description: ADSP IPC and Timer Saturation Sample Application
+  name: adsp ipc timer saturation
+common:
+    tags: adsp
