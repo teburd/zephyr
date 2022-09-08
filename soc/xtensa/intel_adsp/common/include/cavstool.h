@@ -49,7 +49,10 @@ enum cavstool_cmd {
 	IPCCMD_HDA_SEND,
 
 	/* Host prints some data */
-	IPCCMD_HDA_PRINT
+	IPCCMD_HDA_PRINT,
+	
+	/* Host delays a random amount of time until returning done */
+	IPCCMD_RAND_DELAY
 };
 
 #endif /* ZEPHYR_INCLUDE_CAVS_TEST_H */

@@ -14,6 +14,7 @@ import argparse
 import socketserver
 import threading
 import hashlib
+import random
 from urllib.parse import urlparse
 
 # Global variable use to sync between log and request services.
@@ -644,6 +645,8 @@ def ipc_command(data, ext_data):
             sys.stdout.write(hda_msg1)
         pos = hda_str.mem.tell()
         sys.stdout.flush()
+    elif data == 13: # Random delay
+        delay_to_done = random.randrange(1, 1000, 1)
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
         if not fw_is_alive():
