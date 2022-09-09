@@ -30,9 +30,11 @@ static adsp_hda_log_hook_t hook;
 static uint32_t write_idx;
 static struct k_spinlock hda_log_lock;
 
+
 /* atomic bit flags for state */
 #define HDA_LOG_DMA_READY 0
 #define HDA_LOG_PANIC_MODE 1
+#define HDA_LOG_FLUSHING 2
 static atomic_t hda_log_flags;
 
 
@@ -45,6 +47,8 @@ static atomic_t hda_log_flags;
  */
 static uint32_t hda_log_flush(void)
 {
+	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
+
 	if (hda_log_buffered == 0) {
 		return 0;
 	}
@@ -74,13 +78,43 @@ static uint32_t hda_log_flush(void)
 
 	hda_log_buffered = hda_log_buffered - nearest128;
 
+	k_spin_unlock(&hda_log_lock, key);
+
 	return nearest128;
+}
+
+bool adsp_hda_log_flush(void)
+{
+	bool ret;
+
+	uint32_t written = 0;
+
+	/* If DMA_READY changes from unset to set during this call, that is
+	 * perfectly acceptable. The default values for write_pos and dma_free
+	 * are the correct values if that occurs.
+	 */
+	bool do_log_flush = ((hda_log_buffered > sizeof(hda_log_buf)/2) ||
+			  atomic_test_bit(&hda_log_flags, HDA_LOG_PANIC_MODE))
+			  && hook != NULL
+			  && atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY);
+
+	/* Flush the dma if no one else is already flushing the buffer */
+	if (do_log_flush && atomic_test_and_set_bit(&hda_log_flags, HDA_LOG_FLUSHING)) {
+		written = hda_log_flush();
+		if (written > 0) {
+			hook(written);
+		}
+		atomic_clear_bit(&hda_log_flags, HDA_LOG_FLUSHING);
+
+		ret = true;
+	}
+
+	return ret;
 }
 
 static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 {
 	int ret;
-	bool do_log_flush;
 	struct dma_status status;
 
 	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
@@ -152,32 +186,10 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 	ret = length;
 	hda_log_buffered += length;
 
-	uint32_t written = 0;
-
 out:
-	/* If DMA_READY changes from unset to set during this call, that is
-	 * perfectly acceptable. The default values for write_pos and dma_free
-	 * are the correct values if that occurs.
-	 */
-	do_log_flush = ((hda_log_buffered > sizeof(hda_log_buf)/2) ||
-			  atomic_test_bit(&hda_log_flags, HDA_LOG_PANIC_MODE))
-			  && atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY);
-
-	/* Flush if there's a hook set AND dma is ready */
-	if (do_log_flush && hook != NULL) {
-		written = hda_log_flush();
-	}
-
 	k_spin_unlock(&hda_log_lock, key);
 
-	/* The hook may have log calls and needs to be done outside of the spin
-	 * lock to avoid recursion on the spin lock (deadlocks) in cases of
-	 * direct logging.
-	 */
-	if (hook != NULL && written  > 0) {
-		hook(written);
-	}
-
+	adsp_hda_log_flush();
 	return ret;
 }
 /**
@@ -193,24 +205,7 @@ static void hda_log_periodic(struct k_timer *tm)
 {
 	ARG_UNUSED(tm);
 
-	uint32_t written = 0;
-	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
-
-
-	if (hook != NULL) {
-		written = hda_log_flush();
-	}
-
-
-	/* The hook may have log calls and needs to be done outside of the spin
-	 * lock to avoid recursion on the spin lock (deadlocks) in cases of
-	 * direct logging.
-	 */
-	if (hook != NULL && written  > 0) {
-		hook(written);
-	}
-
-	k_spin_unlock(&hda_log_lock, key);
+	adsp_hda_log_flush();
 }
 
 static inline void dropped(const struct log_backend *const backend,
@@ -336,7 +331,6 @@ static inline void hda_ipc_msg(const struct device *dev, uint32_t data,
 	__ASSERT(intel_adsp_ipc_send_message_sync(dev, data, ext, timeout),
 		"Unexpected ipc send message failure, try increasing IPC_TIMEOUT");
 }
-
 
 void adsp_hda_log_cavstool_hook(uint32_t written)
 {
