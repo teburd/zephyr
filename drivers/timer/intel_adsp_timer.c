@@ -84,7 +84,8 @@ struct timer_event {
 	int64_t data;
 };
 
-#define TRACE_COUNT 10000
+#define TRACE_COUNT 8192
+#define TRACE_IDX_MASK (8192-1)
 atomic_t timer_trace_idx = ATOMIC_INIT(-1);
 struct timer_event timer_trace[TRACE_COUNT];
 
@@ -149,11 +150,11 @@ static inline void record_trace(enum timer_event_kind kind, int64_t data)
 	}
 
 	__asm__ __volatile__("rsr %0,ccount":"=a" (timer_trace[trace_idx].ccount));
-	timer_trace[trace_idx].kind = kind;
-	timer_trace[trace_idx].cpu = arch_curr_cpu()->id;
-	timer_trace[trace_idx].tcount = count();
-	timer_trace[trace_idx].tcompare = compare();
-	timer_trace[trace_idx].data = data;
+	timer_trace[trace_idx & TRACE_IDX_MASK].kind = kind;
+	timer_trace[trace_idx &  TRACE_IDX_MASK].cpu = arch_curr_cpu()->id;
+	timer_trace[trace_idx & TRACE_IDX_MASK].tcount = count();
+	timer_trace[trace_idx & TRACE_IDX_MASK].tcompare = compare();
+	timer_trace[trace_idx & TRACE_IDX_MASK].data = data;
 }
 
 
