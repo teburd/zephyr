@@ -635,6 +635,7 @@ def ipc_command(data, ext_data):
         assert (read_lens[0] + pos) <= (hda_str.buf_len*2)
         assert read_lens[0] % 128 == 0
         assert read_lens[1] % 128 == 0
+        log.info(f"hda print stream_id: {stream_id} buf_len: {buf_len}, pos: {pos}, read_lens: {read_lens}")
         buf_data0 = hda_str.mem.read(read_lens[0])
         hda_msg0 = buf_data0.decode("utf-8", "replace")
         sys.stdout.write(hda_msg0)
