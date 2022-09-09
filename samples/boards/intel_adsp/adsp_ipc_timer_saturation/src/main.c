@@ -89,8 +89,9 @@ struct timer_event {
 extern atomic_t timer_trace_idx;
 extern struct timer_event timer_trace[TRACE_COUNT];
 
-uint32_t ipc_idx = 0;
-uint32_t ipc_diffs[SAMPLES];
+extern uint32_t last_ipc_isr;
+extern uint32_t ipc_idx;
+extern uint32_t ipc_diffs[8192];
 
 uint32_t periodic_idx = 0;
 uint32_t periodic_diffs[SAMPLES];
@@ -104,10 +105,8 @@ void ipc_awaiting_thread(void *p1, void *p2, void *p3)
 	struct k_sem *sem = p1;
 	
 	while (true) {
-		k_sem_take(sem, K_FOREVER);
-
 		/* Setup the next IPC interrupt */
-		intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_RETURN_MSG, ipc_idx);
+		intel_adsp_ipc_send_message_sync(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_RETURN_MSG, ipc_idx, K_FOREVER);
 
 		k_busy_wait(IPC_BUSY);
 	}
@@ -140,20 +139,6 @@ K_THREAD_DEFINE(periodic_work, 1024, periodic_awaiting_thread, &periodic_sem, NU
 	K_PRIO_PREEMPT(2), K_ESSENTIAL, 0);
 K_THREAD_DEFINE(absolute_work, 1024, absolute_awaiting_thread, &absolute_sem, NULL, NULL,
 	K_PRIO_PREEMPT(1), K_ESSENTIAL, 0);
-
-uint32_t last_ipc_isr;
-
-void ipc_done_cb(const struct device *dev, void *arg)
-{
-	uint32_t now = k_cycle_get_32();
-	
-	ipc_diffs[ipc_idx & IDX_MASK] = now - last_ipc_isr;
-	last_ipc_isr = now;
-	ipc_idx++;
-
-	/* Notify the worker thread */
-	k_sem_give(&ipc_sem);
-}
 
 uint32_t last_periodic_isr;
 
@@ -275,6 +260,7 @@ static inline void update_stats(uint32_t local_idx, uint32_t *vals, uint32_t val
 	stats->stddev = sqrtf(stats->variance);
 }
 
+
 void main(void)
 {
 	uint32_t trace_reader_idx = 0;
@@ -284,20 +270,15 @@ void main(void)
 	last_periodic_isr = start_cycle;
 	last_absolute_isr = start_cycle;
 	
-	/* Set ipc handler */
-	intel_adsp_ipc_set_done_handler(INTEL_ADSP_IPC_HOST_DEV, ipc_done_cb, &ipc_sem);
-
 	/* Schedule timers */
 	k_timer_start(&periodic_tm, K_MSEC(1), K_MSEC(1));
 
 	absolute_scheduled_tick = k_uptime_ticks() + ABSOLUTE_TIMER_TICKS;
 	k_timer_start(&absolute_tm, K_TIMEOUT_ABS_CYC(absolute_scheduled_tick), K_NO_WAIT);
 	
-	/* Send command to host for a *random duration* IPC command */
-	intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_RETURN_MSG, ipc_idx);
 
 	while (true) {
-		update_stats(ipc_idx, ipc_diffs, SAMPLES, &ipc_stats);
+		update_stats(ipc_idx, ipc_diffs, 8192, &ipc_stats);
 		update_stats(periodic_idx, periodic_diffs, SAMPLES, &periodic_stats);
 		update_stats(absolute_idx, absolute_diffs, SAMPLES, &absolute_stats);
 
