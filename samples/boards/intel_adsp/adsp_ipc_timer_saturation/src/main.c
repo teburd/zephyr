@@ -282,14 +282,13 @@ void main(void)
 		update_stats(periodic_idx, periodic_diffs, SAMPLES, &periodic_stats);
 		update_stats(absolute_idx, absolute_diffs, SAMPLES, &absolute_stats);
 
-		uint64_t kern_tick = k_uptime_ticks();
+	uint64_t kern_tick = k_uptime_ticks();
 		uint64_t abs_sched_tick = absolute_scheduled_tick;
 		int64_t diff_ticks = (int64_t)abs_sched_tick-(int64_t)kern_tick;
 
 		/* Update the screen without interrupts */	
 		unsigned int key = irq_lock();
-		printk("\033[2J\033[1;1H");
-
+		printk("===TRACE BEGIN===\n");
 		printk("ADSP IPC & Timer Saturation: ipc isrs %u, periodic isrs %u, absolute isrs %u, misses %u, ticks %u\n", ipc_idx, periodic_idx, absolute_idx, absolute_misses, ABSOLUTE_TIMER_TICKS);
 		printk("IPC ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", ipc_stats.min, ipc_stats.max, ipc_stats.mean, ipc_stats.variance, ipc_stats.stddev);
 		printk("Periodic ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", periodic_stats.min, periodic_stats.max, periodic_stats.mean, periodic_stats.variance, periodic_stats.stddev);
@@ -299,8 +298,9 @@ void main(void)
 		
 		
 
+		printk("\n");
+		
 		const uint32_t display = 32;
-		printk("===TIMER TRACE BEGIN===\n\n");
 		/* Dump time trace data */
 		uint32_t trace_writer_idx = atomic_get(&timer_trace_idx);
 		uint32_t trace_start_idx = trace_writer_idx < display ? trace_reader_idx 
@@ -316,7 +316,7 @@ void main(void)
 				timer_trace[i & TRACE_IDX_MASK].data);
 			trace_reader_idx = i;
 		}
-		printk("===TIMER TRACE END===\n\n");
+		printk("===TRACE END===\n\n");
 
 		irq_unlock(key);
 
