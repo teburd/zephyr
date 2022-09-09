@@ -41,7 +41,7 @@ struct timer_event {
 };
 
 extern atomic_t timer_trace_idx;
-extern struct timer_event timer_trace[10000];
+extern struct timer_event timer_trace[8192];
 
 static uint32_t periodic_idx;
 static uint32_t periodic_rollovers;

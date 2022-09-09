@@ -26,6 +26,69 @@ K_SEM_DEFINE(absolute_sem, 0, K_SEM_MAX_LIMIT);
 
 uint64_t start_cycle;
 
+
+enum timer_event_kind {
+	COMPARE_ENTER,
+	COMPARE_LOCKED,
+	COMPARE_ANNOUNCE,
+	COMPARE_EXIT,
+	ELAPSED_ENTER,
+	ELAPSED_LOCKED,
+	ELAPSED_EXIT,
+	SET_TIMEOUT_ENTER,
+	SET_TIMEOUT_CLAMPED,
+	SET_TIMEOUT_LOCKED,
+	SET_TIMEOUT_EXIT,
+	SET_COMPARE_ENTER,
+	SET_COMPARE_EXIT,
+};
+
+const char * timer_event_str(enum timer_event_kind kind) {
+	switch(kind) {
+		case COMPARE_ENTER: 
+			return "COMPARE_ENTER";
+		case COMPARE_LOCKED:
+			return "COMPARE_LOCKED"; 
+		case COMPARE_ANNOUNCE:
+			return "COMPARE_ANNOUNCE"; 
+		case COMPARE_EXIT:
+			return "COMPARE_EXIT";
+		case ELAPSED_ENTER:
+			return "ELAPSED_ENTER";
+		case ELAPSED_LOCKED:
+			return "ELAPSED_LOCKED";
+		case ELAPSED_EXIT:
+			return "ELAPSED_EXIT";
+		case SET_TIMEOUT_ENTER:
+			return "SET_TIMEOUT_ENTER";
+		case SET_TIMEOUT_CLAMPED:
+			return "SET_TIMEOUT_CLAMPED";
+		case SET_TIMEOUT_LOCKED:
+			return "SET_TIMEOUT_LOCKED";
+		case SET_TIMEOUT_EXIT:
+			return "SET_TIMEOUT_EXIT";
+		case SET_COMPARE_ENTER:
+			return "SET_COMPARE_ENTER";
+		case SET_COMPARE_EXIT:
+			return "SET_COMPARE_EXIT";
+	}
+	return "UNKNOWN";
+}
+
+struct timer_event {
+	enum timer_event_kind kind;
+	int cpu;
+	uint32_t ccount;
+	uint64_t tcount;
+	uint64_t tcompare;
+	int64_t data;
+};
+
+#define TRACE_COUNT 8192
+#define TRACE_IDX_MASK (8192-1)
+extern atomic_t timer_trace_idx;
+extern struct timer_event timer_trace[TRACE_COUNT];
+
 uint32_t ipc_idx = 0;
 uint32_t ipc_diffs[SAMPLES];
 
@@ -214,6 +277,8 @@ static inline void update_stats(uint32_t local_idx, uint32_t *vals, uint32_t val
 
 void main(void)
 {
+	uint32_t trace_reader_idx = 0;
+	
 	start_cycle = k_cycle_get_64();
 	last_ipc_isr = start_cycle;
 	last_periodic_isr = start_cycle;
@@ -250,6 +315,28 @@ void main(void)
 		printk("Absolute ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", absolute_stats.min, absolute_stats.max, absolute_stats.mean, absolute_stats.variance, absolute_stats.stddev);
 		printk("Current: %llu (ticks), Next Absolute: %llu (ticks) Diff: %lld (ticks)\n", 
 			kern_tick, absolute_scheduled_tick, diff_ticks);
+		
+		
+
+		const uint32_t display = 32;
+		printk("===TIMER TRACE BEGIN===\n\n");
+		/* Dump time trace data */
+		uint32_t trace_writer_idx = atomic_get(&timer_trace_idx);
+		uint32_t trace_start_idx = trace_writer_idx < display ? trace_reader_idx 
+			: MAX(trace_reader_idx, trace_writer_idx - display);
+		for (uint32_t i = trace_start_idx; i < trace_writer_idx; i++) {
+			printk("TTRACE[%d]: event %s, cpu %d, ccount %d, tcount %llu, tcompare %llu, data %lld\n",
+				i, 
+				timer_event_str(timer_trace[i & TRACE_IDX_MASK].kind),
+				timer_trace[i & TRACE_IDX_MASK].cpu,
+				timer_trace[i & TRACE_IDX_MASK].ccount,
+				timer_trace[i & TRACE_IDX_MASK].tcount,
+				timer_trace[i & TRACE_IDX_MASK].tcompare,
+				timer_trace[i & TRACE_IDX_MASK].data);
+			trace_reader_idx = i;
+		}
+		printk("===TIMER TRACE END===\n\n");
+
 		irq_unlock(key);
 
 
