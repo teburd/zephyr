@@ -6,6 +6,11 @@
 #include <intel_adsp_ipc.h>
 #include <adsp_ipc_regs.h>
 
+#define IPC_COUNT 8192
+#define IDX_MASK (IPC_COUNT-1)
+uint32_t ipc_idx = 0;
+uint32_t ipc_diffs[IPC_COUNT];
+
 
 void intel_adsp_ipc_set_message_handler(const struct device *dev,
 	intel_adsp_ipc_handler_t fn, void *arg)
@@ -29,6 +34,10 @@ void intel_adsp_ipc_set_done_handler(const struct device *dev,
 	k_spin_unlock(&devdata->lock, key);
 }
 
+
+uint32_t last_ipc_isr;
+
+
 void z_intel_adsp_ipc_isr(const void *devarg)
 {
 	const struct device *dev = devarg;
@@ -36,7 +45,13 @@ void z_intel_adsp_ipc_isr(const void *devarg)
 	struct intel_adsp_ipc_data *devdata = dev->data;
 
 	volatile struct intel_adsp_ipc *regs = config->regs;
+	
 	k_spinlock_key_t key = k_spin_lock(&devdata->lock);
+	uint32_t now = k_cycle_get_32();
+	
+	ipc_diffs[ipc_idx & IDX_MASK] = now - last_ipc_isr;
+	last_ipc_isr = now;
+	ipc_idx++;
 
 	if (regs->tdr & INTEL_ADSP_IPC_BUSY) {
 		bool done = true;
