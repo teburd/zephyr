@@ -260,13 +260,120 @@ static inline void update_stats(uint32_t local_idx, uint32_t *vals, uint32_t val
 	stats->stddev = sqrtf(stats->variance);
 }
 
+#define IPC_INFO_BUILD		BIT(0)
+#define IPC_INFO_LOCKS		BIT(1)
+#define IPC_INFO_LOCKSV		BIT(2)
+#define IPC_INFO_GDB		BIT(3)
+#define IPC_INFO_D3_PERSISTENT	BIT(4)
+
+/* ipc4 notification msg */
+enum sof_ipc4_notification_type {
+	SOF_IPC4_NOTIFY_PHRASE_DETECTED		= 4,
+	SOF_IPC4_NOTIFY_RESOURCE_EVENT		= 5,
+	SOF_IPC4_NOTIFY_LOG_BUFFER_STATUS	= 6,
+	SOF_IPC4_NOTIFY_TIMESTAMP_CAPTURED	= 7,
+	SOF_IPC4_NOTIFY_FW_READY		= 8,
+	SOF_IPC4_FW_AUD_CLASS_RESULT		= 9,
+	SOF_IPC4_EXCEPTION_CAUGHT		= 10,
+	SOF_IPC4_MODULE_NOTIFICATION		= 12,
+	SOF_IPC4_UAOL_RSVD_		= 13,
+	SOF_IPC4_PROBE_DATA_AVAILABLE		= 14,
+	SOF_IPC4_WATCHDOG_TIMEOUT		= 15,
+	SOF_IPC4_MANAGEMENT_SERVICE		= 16,
+};
+
+#define SOF_IPC4_GLB_NOTIFY_DIR_MASK		BIT(29)
+#define SOF_IPC4_REPLY_STATUS_MASK		0xFFFFFF
+#define SOF_IPC4_GLB_NOTIFY_TYPE_SHIFT		16
+#define SOF_IPC4_GLB_NOTIFY_MSG_TYPE_SHIFT		24
+
+#define SOF_IPC4_FW_READY \
+		(((SOF_IPC4_NOTIFY_FW_READY) << (SOF_IPC4_GLB_NOTIFY_TYPE_SHIFT)) |\
+		((SOF_IPC4_GLB_NOTIFICATION) << (SOF_IPC4_GLB_NOTIFY_MSG_TYPE_SHIFT)))
+
+
+
+#define GLB_TYPE_SHIFT			28
+#define GLB_TYPE_MASK			(0xfUL << GLB_TYPE_SHIFT)
+#define GLB_TYPE(x)			((x) << GLB_TYPE_SHIFT)
+
+#define IPC_FW_READY			GLB_TYPE(0x7U)
+
+struct ipc_hdr {
+	uint32_t size;			/**< size of structure */
+} __attribute__((packed, aligned(4)));
+
+struct ipc_cmd_hdr {
+	uint32_t size;			/**< size of structure */
+	uint32_t cmd;			/**< SOF_IPC_GLB_ + cmd */
+} __attribute__((packed, aligned(4)));
+
+
+/* fw version */
+struct ipc_fw_version {
+	struct ipc_hdr hdr;
+	uint16_t major;
+	uint16_t minor;
+	uint16_t micro;
+	uint16_t build;
+	uint8_t date[12];
+	uint8_t time[10];
+	uint8_t tag[6];
+	uint32_t abi_version;
+	/** used to check FW and ldc file compatibility, reproducible value (ABI3.17) */
+	uint32_t src_hash;
+
+	/* reserved for future use */
+	uint32_t reserved[3];
+} __attribute__((packed, aligned(4)));
+
+/* FW ready Message - sent by firmware when boot has completed */
+struct ipc_fw_ready {
+	struct ipc_cmd_hdr hdr;
+	uint32_t dspbox_offset;	 /* dsp initiated IPC mailbox */
+	uint32_t hostbox_offset; /* host initiated IPC mailbox */
+	uint32_t dspbox_size;
+	uint32_t hostbox_size;
+	struct ipc_fw_version version;
+
+	/* Miscellaneous flags */
+	uint64_t flags;
+
+	/* reserved for future use */
+	uint32_t reserved[4];
+} __attribute__((packed, aligned(4)));
+
+
+static const struct ipc_fw_ready ready = {
+	.hdr = {
+		.cmd = IPC_FW_READY,
+		.size = sizeof(struct ipc_fw_ready),
+	},
+	.version = {
+		.hdr.size = sizeof(struct ipc_fw_version),
+		.micro = 0,
+		.minor = 0,
+		.major = 0,
+		.build = -1,
+		.date = "dtermin.\0",
+		.time = "fwready.\0",
+		.tag = SOF_TAG,
+		.abi_version = SOF_ABI_VERSION,
+		.src_hash = SOF_SRC_HASH,
+	},
+	.flags = IPC_INFO_BUILD,
+};
 
 void main(void)
 {
 	uint32_t trace_reader_idx = 0;
-	
-	/* Tell linux kernel we are ready */
-	intel_adsp_ipc_send_message_sync(INTEL_ADSP_IPC_HOST_DEV, (8 << 16) | (27 << 24), 0, K_MSEC(1000));
+
+	/* Copy the "fw ready" message to the mailbox */
+	void *mbox = (void *)(uintptr_t)(HP_SRAM_WIN0_BASE + 0x4000);
+	memcpy(mbox, &ready, sizeof(ready));
+
+	/* Notify the kernel we are ready */
+	intel_adsp_ipc_send_message_sync(INTEL_ADSP_IPC_HOST_DEV, SOF_IPC4_FW_READY, 0, K_MSEC(1000));
 	
 	start_cycle = k_cycle_get_64();
 	last_ipc_isr = start_cycle;
