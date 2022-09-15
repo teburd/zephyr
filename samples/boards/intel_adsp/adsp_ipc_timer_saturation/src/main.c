@@ -265,6 +265,9 @@ void main(void)
 {
 	uint32_t trace_reader_idx = 0;
 	
+	/* Tell linux kernel we are ready */
+	intel_adsp_ipc_send_message_sync(INTEL_ADSP_IPC_HOST_DEV, (8 << 16) | (27 << 24), 0, K_MSEC(1000));
+	
 	start_cycle = k_cycle_get_64();
 	last_ipc_isr = start_cycle;
 	last_periodic_isr = start_cycle;
@@ -272,13 +275,12 @@ void main(void)
 	
 	/* Schedule timers */
 	k_timer_start(&periodic_tm, K_MSEC(1), K_MSEC(1));
-
 	absolute_scheduled_tick = k_uptime_ticks() + ABSOLUTE_TIMER_TICKS;
 	k_timer_start(&absolute_tm, K_TIMEOUT_ABS_CYC(absolute_scheduled_tick), K_NO_WAIT);
 	
 
 	while (true) {
-		update_stats(ipc_idx, ipc_diffs, 8192, &ipc_stats);
+		//update_stats(ipc_idx, ipc_diffs, 8192, &ipc_stats);
 		update_stats(periodic_idx, periodic_diffs, SAMPLES, &periodic_stats);
 		update_stats(absolute_idx, absolute_diffs, SAMPLES, &absolute_stats);
 
