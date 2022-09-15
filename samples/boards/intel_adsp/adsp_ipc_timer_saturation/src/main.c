@@ -7,6 +7,7 @@
 #include <zephyr/kernel.h>
 #include <stdbool.h>
 #include <intel_adsp_ipc.h>
+#include <adsp_memory.h>
 #include <cavstool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -266,6 +267,39 @@ static inline void update_stats(uint32_t local_idx, uint32_t *vals, uint32_t val
 #define IPC_INFO_GDB		BIT(3)
 #define IPC_INFO_D3_PERSISTENT	BIT(4)
 
+/** \brief SOF ABI version major, minor and patch numbers */
+#define SOF_ABI_MAJOR 3
+#define SOF_ABI_MINOR 24
+#define SOF_ABI_PATCH 0
+
+/** \brief SOF ABI version number. Format within 32bit word is MMmmmppp */
+#define SOF_ABI_MAJOR_SHIFT	24
+#define SOF_ABI_MAJOR_MASK	0xff
+#define SOF_ABI_MINOR_SHIFT	12
+#define SOF_ABI_MINOR_MASK	0xfff
+#define SOF_ABI_PATCH_SHIFT	0
+#define SOF_ABI_PATCH_MASK	0xfff
+
+#define SOF_ABI_VER(major, minor, patch) \
+	(((major) << SOF_ABI_MAJOR_SHIFT) | \
+	((minor) << SOF_ABI_MINOR_SHIFT) | \
+	((patch) << SOF_ABI_PATCH_SHIFT))
+
+#define SOF_ABI_VERSION_MAJOR(version) \
+	(((version) >> SOF_ABI_MAJOR_SHIFT) & SOF_ABI_MAJOR_MASK)
+#define SOF_ABI_VERSION_MINOR(version)	\
+	(((version) >> SOF_ABI_MINOR_SHIFT) & SOF_ABI_MINOR_MASK)
+#define SOF_ABI_VERSION_PATCH(version)	\
+	(((version) >> SOF_ABI_PATCH_SHIFT) & SOF_ABI_PATCH_MASK)
+
+#define SOF_ABI_VERSION_INCOMPATIBLE(sof_ver, client_ver)		\
+	(SOF_ABI_VERSION_MAJOR((sof_ver)) !=				\
+		SOF_ABI_VERSION_MAJOR((client_ver))			\
+	)
+
+#define SOF_ABI_VERSION SOF_ABI_VER(SOF_ABI_MAJOR, SOF_ABI_MINOR, SOF_ABI_PATCH)
+#define SOF_SRC_HASH 0xbaadf00d
+
 /* ipc4 notification msg */
 enum sof_ipc4_notification_type {
 	SOF_IPC4_NOTIFY_PHRASE_DETECTED		= 4,
@@ -286,6 +320,8 @@ enum sof_ipc4_notification_type {
 #define SOF_IPC4_REPLY_STATUS_MASK		0xFFFFFF
 #define SOF_IPC4_GLB_NOTIFY_TYPE_SHIFT		16
 #define SOF_IPC4_GLB_NOTIFY_MSG_TYPE_SHIFT		24
+
+#define SOF_IPC4_GLB_NOTIFICATION 27
 
 #define SOF_IPC4_FW_READY \
 		(((SOF_IPC4_NOTIFY_FW_READY) << (SOF_IPC4_GLB_NOTIFY_TYPE_SHIFT)) |\
@@ -350,14 +386,16 @@ static const struct ipc_fw_ready ready = {
 		.size = sizeof(struct ipc_fw_ready),
 	},
 	.version = {
-		.hdr.size = sizeof(struct ipc_fw_version),
+		.hdr = {
+			.size = sizeof(struct ipc_fw_version),
+		},
 		.micro = 0,
 		.minor = 0,
 		.major = 0,
 		.build = -1,
 		.date = "dtermin.\0",
 		.time = "fwready.\0",
-		.tag = SOF_TAG,
+		.tag = {0},
 		.abi_version = SOF_ABI_VERSION,
 		.src_hash = SOF_SRC_HASH,
 	},
