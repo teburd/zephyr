@@ -168,15 +168,11 @@ out:
 		written = hda_log_flush();
 	}
 
-	k_spin_unlock(&hda_log_lock, key);
-
-	/* The hook may have log calls and needs to be done outside of the spin
-	 * lock to avoid recursion on the spin lock (deadlocks) in cases of
-	 * direct logging.
-	 */
 	if (hook != NULL && written  > 0) {
 		hook(written);
 	}
+
+	k_spin_unlock(&hda_log_lock, key);
 
 	return ret;
 }
@@ -201,11 +197,6 @@ static void hda_log_periodic(struct k_timer *tm)
 		written = hda_log_flush();
 	}
 
-
-	/* The hook may have log calls and needs to be done outside of the spin
-	 * lock to avoid recursion on the spin lock (deadlocks) in cases of
-	 * direct logging.
-	 */
 	if (hook != NULL && written  > 0) {
 		hook(written);
 	}
