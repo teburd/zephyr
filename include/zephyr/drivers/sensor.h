@@ -394,12 +394,34 @@ typedef int (*sensor_channel_get_t)(const struct device *dev,
 				    enum sensor_channel chan,
 				    struct sensor_value *val);
 
+#ifdef CONFIG_RTIO
+/**
+ * @type sensor_iodev_checkout_t
+ * @brief Callback API for checking out an rtio_iodev for use. 
+ */
+typedef int (*sensor_iodev_checkout_t)(const struct device *dev,
+				   struct rtio_iodev **iodev);
+
+/**
+ * @type sensor_stream_return_t
+ * @brief Callback API for checking in an rtio_iodev for return. 
+ */
+typedef int (*sensor_iodev_checkin_t)(const struct device *dev,
+				   struct rtio_iodev *iodev);
+
+#endif /* CONFIG_RTIO */
+
 __subsystem struct sensor_driver_api {
 	sensor_attr_set_t attr_set;
 	sensor_attr_get_t attr_get;
 	sensor_trigger_set_t trigger_set;
 	sensor_sample_fetch_t sample_fetch;
 	sensor_channel_get_t channel_get;
+
+#ifdef CONFIG_RTIO
+	sensor_iodev_checkout_t iodev_checkout;
+	sensor_iodev_checkin_t iodev_checkin;
+#endif /* CONFIG_RTIO */
 };
 
 /**
@@ -587,6 +609,37 @@ static inline int z_impl_sensor_channel_get(const struct device *dev,
 		(const struct sensor_driver_api *)dev->api;
 
 	return api->channel_get(dev, chan, val);
+}
+
+
+/**
+ * @brief Checkout a rtio_iodev pointer for this sensor, only one per device.
+ */
+static inline int sensor_iodev_checkout(const struct device *dev, struct rtio_iodev **iodev)
+{
+#ifdef CONFIG_RTIO
+	const struct sensor_driver_api *api =
+		(const struct sensor_driver_api *)dev->api;
+	
+	return api->iodev_checkout(dev, iodev);
+#else
+	return -ENOSYS;
+#endif
+}
+
+/**
+ * @brief Checkin a rtio_iodev pointer for this sensor, only one per device.
+ */
+static inline int sensor_iodev_checkin(const struct device *dev, struct rtio_iodev *iodev)
+{
+#ifdef CONFIG_RTIO
+	const struct sensor_driver_api *api =
+		(const struct sensor_driver_api *)dev->api;
+	
+	return api->iodev_checkin(dev, iodev);
+#else
+	return -ENOSYS;
+#endif
 }
 
 /**
