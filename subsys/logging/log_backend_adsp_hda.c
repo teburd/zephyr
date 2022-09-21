@@ -83,7 +83,7 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 	bool do_log_flush;
 	struct dma_status status;
 
-	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
+	//k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
 
 	/* Defaults when DMA not yet initialized */
 	uint32_t dma_free = sizeof(hda_log_buf);
@@ -172,7 +172,7 @@ out:
 		hook(written);
 	}
 
-	k_spin_unlock(&hda_log_lock, key);
+	//k_spin_unlock(&hda_log_lock, key);
 
 	return ret;
 }
@@ -192,8 +192,7 @@ static void hda_log_periodic(struct k_timer *tm)
 	uint32_t written = 0;
 	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
 
-
-	if (hook != NULL) {
+	if (hook != NULL && atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
 		written = hda_log_flush();
 	}
 
@@ -209,11 +208,14 @@ static inline void dropped(const struct log_backend *const backend,
 {
 	ARG_UNUSED(backend);
 
+	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
 	if (IS_ENABLED(CONFIG_LOG_DICTIONARY_SUPPORT)) {
 		log_dict_output_dropped_process(&log_output_adsp_hda, cnt);
 	} else {
 		log_output_dropped_process(&log_output_adsp_hda, cnt);
 	}
+	k_spin_unlock(&hda_log_lock, key);
+
 }
 
 static void panic(struct log_backend const *const backend)
@@ -223,8 +225,13 @@ static void panic(struct log_backend const *const backend)
 	/* will immediately flush all future writes once set */
 	atomic_set_bit(&hda_log_flags, HDA_LOG_PANIC_MODE);
 
+	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
+
 	/* flushes the log queue */
 	log_backend_std_panic(&log_output_adsp_hda);
+
+	k_spin_unlock(&hda_log_lock, key);
+
 }
 
 static int format_set(const struct log_backend *const backend, uint32_t log_type)
@@ -246,7 +253,12 @@ static void process(const struct log_backend *const backend,
 
 	log_format_func_t log_output_func = log_format_func_t_get(log_format_current);
 
+	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
+
 	log_output_func(&log_output_adsp_hda, &msg->log, flags);
+
+	k_spin_unlock(&hda_log_lock, key);
+
 }
 
 /**
@@ -327,26 +339,52 @@ static inline void hda_ipc_msg(const struct device *dev, uint32_t data,
 		"Unexpected ipc send message failure, try increasing IPC_TIMEOUT");
 }
 
+static struct k_spinlock notify_lock;
+static atomic_t hook_written;
 
-void adsp_hda_log_cavstool_hook(uint32_t written)
-{
-	/* We *must* send this, but we may be in a timer ISR, so we are
-	 * forced into a retry loop without timeouts and such.
-	 */
+/* Spin on the ipc sends and completes here as we may be in a spin lock
+ * which prevents us from waiting on a semaphore with send_message_sync
+ */
+void adsp_hda_log_ipc_notify(struct k_work *wrk) {
+	
+	uint32_t notify_len = atomic_get(&hook_written);
+
+	uint64_t start = k_cycle_get_64();
+
+	printk("hda notify len %d\n", notify_len);
+
+	k_spinlock_key_t key = k_spin_lock(&notify_lock);	
 	bool done = false;
-
+	
+	printk("waiting on send\n");
 	/*  Send IPC message notifying log data has been written */
 	do {
 		done = intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_HDA_PRINT,
-					     (written << 8) | CHANNEL);
+					     (notify_len << 8) | CHANNEL);
 	} while (!done);
 
-
+	printk("notify sent, waiting on done\n");
 	/* Wait for confirmation log data has been received */
 	do {
 		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
 	} while (!done);
+	printk("done received\n");
+	k_spin_unlock(&notify_lock, key);
 
+
+	atomic_sub(&hook_written, notify_len);
+	uint64_t end = k_cycle_get_64();
+	uint64_t cycles = end - start;
+	printk("hda notified len %d, took %llu cycles\n", notify_len, cycles);		
+}
+
+K_WORK_DEFINE(adsp_hda_log_cavstool_wrk, adsp_hda_log_ipc_notify);
+
+void adsp_hda_log_cavstool_hook(uint32_t written)
+{
+	atomic_add(&hook_written, written);
+
+	adsp_hda_log_ipc_notify(&adsp_hda_log_cavstool_wrk);
 }
 
 int adsp_hda_log_cavstool_init(const struct device *dev)

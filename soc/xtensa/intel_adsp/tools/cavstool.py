@@ -14,7 +14,7 @@ import argparse
 
 start_output = True
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("cavs-fw")
 
 PAGESZ = 4096
@@ -637,6 +637,7 @@ def ipc_command(data, ext_data):
         time.sleep(0.01) # Needed on 1.8, or the command below won't send!
 
     if done and not cavs15:
+        log.debug("signaling done")
         dsp.HIPCTDA = 1<<31 # Signal done
     if send_msg:
         dsp.HIPCIDD = ext_data
