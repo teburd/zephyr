@@ -367,6 +367,10 @@ bool done = false;
 	/* Wait for confirmation log data has been received */
 	do {
 		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
+		if (!done) {
+			printk("HDA LOG WAITING ON DONE\n");
+			k_busy_wait(250000);
+		}
 	} while (!done);
 	printk("done received, isr? %d\n", k_is_in_isr());
 	k_spin_unlock(&notify_lock, key);
