@@ -388,11 +388,11 @@ void adsp_hda_log_cavstool_hook(uint32_t written)
 {
 	atomic_add(&hook_written, written);
 
-	if(!k_is_in_isr()) {
+	//if(!k_is_in_isr()) {
 		adsp_hda_log_ipc_notify(&adsp_hda_log_cavstool_wrk);
-	} else {
-		k_work_submit(&adsp_hda_log_cavstool_wrk);
-	}
+	//} else {
+	//	k_work_submit(&adsp_hda_log_cavstool_wrk);
+	//}
 }
 
 int adsp_hda_log_cavstool_init(const struct device *dev)

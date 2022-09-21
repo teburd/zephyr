@@ -633,12 +633,13 @@ def ipc_command(data, ext_data):
             return
 
     dsp.HIPCTDR = 1<<31 # Ack local interrupt, also signals DONE on v1.5
-    if cavs18:
-        time.sleep(0.01) # Needed on 1.8, or the command below won't send!
+    #if cavs18:
+    time.sleep(1.00) # Needed on 1.8, or the command below won't send!
 
     if done and not cavs15:
-        log.debug("signaling done")
+        log.debug("Signaling done")
         dsp.HIPCTDA = 1<<31 # Signal done
+        log.debug("Signaled done")
     if send_msg:
         dsp.HIPCIDD = ext_data
         dsp.HIPCIDR = (1<<31) | ext_data
