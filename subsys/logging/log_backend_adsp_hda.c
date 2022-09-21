@@ -168,11 +168,11 @@ out:
 		written = hda_log_flush();
 	}
 
+	//k_spin_unlock(&hda_log_lock, key);
+
 	if (hook != NULL && written  > 0) {
 		hook(written);
 	}
-
-	//k_spin_unlock(&hda_log_lock, key);
 
 	return ret;
 }
@@ -351,31 +351,31 @@ void adsp_hda_log_ipc_notify(struct k_work *wrk) {
 
 	uint64_t start = k_cycle_get_64();
 
-	printk("hda notify len %d\n", notify_len);
+	printk("hda notify len %d, isr? %d\n", notify_len, k_is_in_isr());
 
 	k_spinlock_key_t key = k_spin_lock(&notify_lock);	
-	bool done = false;
+bool done = false;
 	
-	printk("waiting on send\n");
+	printk("waiting on send, isr? %d\n", k_is_in_isr());
 	/*  Send IPC message notifying log data has been written */
 	do {
 		done = intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_HDA_PRINT,
 					     (notify_len << 8) | CHANNEL);
 	} while (!done);
 
-	printk("notify sent, waiting on done\n");
+	printk("notify sent, waiting on done, isr? %d\n", k_is_in_isr());
 	/* Wait for confirmation log data has been received */
 	do {
 		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
 	} while (!done);
-	printk("done received\n");
+	printk("done received, isr? %d\n", k_is_in_isr());
 	k_spin_unlock(&notify_lock, key);
 
 
 	atomic_sub(&hook_written, notify_len);
 	uint64_t end = k_cycle_get_64();
 	uint64_t cycles = end - start;
-	printk("hda notified len %d, took %llu cycles\n", notify_len, cycles);		
+	printk("hda notified len %d, took %llu cycles, isr? %d\n", notify_len, cycles, k_is_in_isr());		
 }
 
 K_WORK_DEFINE(adsp_hda_log_cavstool_wrk, adsp_hda_log_ipc_notify);
@@ -384,7 +384,11 @@ void adsp_hda_log_cavstool_hook(uint32_t written)
 {
 	atomic_add(&hook_written, written);
 
-	adsp_hda_log_ipc_notify(&adsp_hda_log_cavstool_wrk);
+	if(!k_is_in_isr()) {
+		adsp_hda_log_ipc_notify(&adsp_hda_log_cavstool_wrk);
+	} else {
+		k_work_submit(&adsp_hda_log_cavstool_wrk);
+	}
 }
 
 int adsp_hda_log_cavstool_init(const struct device *dev)
