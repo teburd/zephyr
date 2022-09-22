@@ -238,6 +238,7 @@ static void panic(struct log_backend const *const backend)
 {
 	ARG_UNUSED(backend);
 
+	k_sched_lock();
 	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
 
 	/* will immediately flush all future writes once set */
@@ -247,6 +248,7 @@ static void panic(struct log_backend const *const backend)
 	log_backend_std_panic(&log_output_adsp_hda);
 
 	k_spin_unlock(&hda_log_lock, key);
+	k_sched_unlock();
 
 }
 
@@ -266,6 +268,8 @@ static void process(const struct log_backend *const backend,
 {
 	ARG_UNUSED(backend);
 	
+
+	k_sched_lock();
 	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
 	
 	uint32_t flags = log_backend_std_get_flags();
@@ -275,6 +279,8 @@ static void process(const struct log_backend *const backend,
 	log_output_func(&log_output_adsp_hda, &msg->log, flags);
 
 	k_spin_unlock(&hda_log_lock, key);
+	k_sched_unlock();
+
 }
 
 /**
