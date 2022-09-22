@@ -68,6 +68,8 @@ static const log_format_func_t format_table[] = {
 						log_dict_output_msg_process : NULL
 };
 
+#define DBG(msg) printk("[%p, %d, %s:%d %llu] %s\n", arch_curr_cpu()->current, arch_curr_cpu()->id, __FILE__, __LINE__, k_cycle_get_64(), msg)
+
 log_format_func_t log_format_func_t_get(uint32_t log_type)
 {
 	return format_table[log_type];
@@ -431,7 +433,9 @@ static void msg_process(union log_msg_generic *msg)
 		backend = log_backend_get(i);
 		if (log_backend_is_active(backend) &&
 		    msg_filter_check(backend, msg)) {
+			DBG("msg backend process start");
 			log_backend_msg_process(backend, msg);
+			DBG("msg backend process end");
 		}
 	}
 }
@@ -568,6 +572,7 @@ struct log_msg *z_log_msg_alloc(uint32_t wlen)
 				K_MSEC(CONFIG_LOG_BLOCK_IN_THREAD_TIMEOUT_MS));
 }
 
+
 void z_log_msg_commit(struct log_msg *msg)
 {
 	union log_msg_generic *m = (union log_msg_generic *)msg;
@@ -575,7 +580,9 @@ void z_log_msg_commit(struct log_msg *msg)
 	msg->hdr.timestamp = timestamp_func();
 
 	if (IS_ENABLED(CONFIG_LOG_MODE_IMMEDIATE)) {
+		DBG("msg process start");
 		msg_process(m);
+		DBG("msg process end");
 
 		return;
 	}

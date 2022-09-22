@@ -33,6 +33,8 @@
  * latency threshold has been met.
  */
 
+#define DBG(msg) printk("[%p %d %d %llu] %s\n", arch_curr_cpu()->current, arch_curr_cpu()->id, __LINE__, k_cycle_get_64(), msg)
+
 static uint32_t log_format_current = CONFIG_LOG_BACKEND_ADSP_HDA_OUTPUT_DEFAULT;
 static const struct device *const hda_log_dev =
 	DEVICE_DT_GET(DT_NODELABEL(hda_host_in));
@@ -45,7 +47,9 @@ static uint32_t hda_log_chan;
 static __aligned(ALIGNMENT) uint8_t hda_log_buf[CONFIG_LOG_BACKEND_ADSP_HDA_SIZE];
 //static struct k_timer hda_log_timer;
 static adsp_hda_log_hook_t hook;
-static struct k_spinlock hda_log_lock;
+static struct k_spinlock hda_log_fmt_lock;
+static struct k_spinlock hda_log_out_lock;
+static struct k_spinlock hda_log_flush_lock;
 
 /* Simple power of 2 wrapping mask */
 #define HDA_LOG_BUF_MASK (CONFIG_LOG_BACKEND_ADSP_HDA_SIZE - 1)
@@ -165,6 +169,10 @@ static void hda_log_hook(void) {
 
 static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 {
+	DBG("out lock start");
+	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
+	DBG("out lock end");
+
 	__ASSERT( length < available_bytes, "Log buffer overflowed");
 
 	/* Copy over the formatted message to the dma buffer */
@@ -179,13 +187,31 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 	
 	/* If we've hit the watermark or are in panic mode push data out */
 	if (available_bytes < CONFIG_LOG_BACKEND_ADSP_HDA_SIZE/2 || panic_mode_set) {
+
+		DBG("pad start");
 		hda_log_pad();
+		DBG("pad end");
+
+		DBG("flush lock start");
+		k_spinlock_key_t flush_key = k_spin_lock(&hda_log_flush_lock);
+		DBG("flush lock end");
+		k_spin_unlock(&hda_log_out_lock, key);
+		DBG("out lock freed");
 
 		if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
+			DBG("dma flush start");
 			hda_log_dma_flush();
+			DBG("dma flush end");
 		}
 
+		DBG("hook start");
 		hda_log_hook();
+		DBG("hook end");
+
+		k_spin_unlock(&hda_log_flush_lock, flush_key);
+	} else {
+		k_spin_unlock(&hda_log_out_lock, key);
+		DBG("out lock freed, no flush");
 	}
 	
 	return length;
@@ -238,16 +264,12 @@ static void panic(struct log_backend const *const backend)
 {
 	ARG_UNUSED(backend);
 
-	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
 
 	/* will immediately flush all future writes once set */
 	atomic_set_bit(&hda_log_flags, HDA_LOG_PANIC_MODE);
 
 	/* flushes the log queue */
 	log_backend_std_panic(&log_output_adsp_hda);
-
-	k_spin_unlock(&hda_log_lock, key);
-
 }
 
 static int format_set(const struct log_backend *const backend, uint32_t log_type)
@@ -267,15 +289,12 @@ static void process(const struct log_backend *const backend,
 	ARG_UNUSED(backend);
 	
 
-	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
 	
 	uint32_t flags = log_backend_std_get_flags();
 
 	log_format_func_t log_output_func = log_format_func_t_get(log_format_current);
 
 	log_output_func(&log_output_adsp_hda, &msg->log, flags);
-
-	k_spin_unlock(&hda_log_lock, key);
 }
 
 /**
@@ -357,7 +376,7 @@ static inline void hda_ipc_msg(const struct device *dev, uint32_t data,
 }
 
 /* Each try is 1ms */
-#define HDA_NOTIFY_MAX_TRIES 64
+#define HDA_NOTIFY_MAX_TRIES 4
 
 
 void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
@@ -365,22 +384,28 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 	uint32_t try_loop = 0;
 	bool done = false;
 
+	DBG("send ipc start");
 	/*  Send IPC message notifying log data has been written */
 	do {
 		done = intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_HDA_PRINT,
 					     (hook_notify << 8) | CHANNEL);
 		if(!done) {
-			k_busy_wait(1000);
+			DBG("send ipc delay");
+			k_busy_wait(100000);
 		}
 		try_loop++;
 	} while (!done && try_loop < HDA_NOTIFY_MAX_TRIES);
 
 	if(try_loop >= HDA_NOTIFY_MAX_TRIES) {
-		printk("Timed out on IPC SEND, LEN %u, CORE %d, ISR %d\n", hook_notify, arch_curr_cpu()->id, k_is_in_isr());
+		DBG("send ipc fail");
 		return;
+	} else {
+		DBG("send ipc done");
 	}
 
 	try_loop = 0;
+
+	DBG("poll ipc start");
 
 	/* Wait for a reply from the host
 	 *
@@ -390,15 +415,18 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 	do {
 		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
 		if (!done) {
-			k_busy_wait(1000);
+
+			DBG("poll ipc delay");
+			k_busy_wait(100000);
 		}
 		try_loop++;
 	} while (!done);
 
 	if(try_loop >= HDA_NOTIFY_MAX_TRIES) {
-		printk("Timed out on IPC DONE LEN %u, CORE %d, ISR %d\n", hook_notify, arch_curr_cpu()->id, k_is_in_isr());
+		DBG("poll ipc fail");
+	} else {
+		DBG("poll ipc done");
 	}
-
 }
 
 int adsp_hda_log_cavstool_init(const struct device *dev)
