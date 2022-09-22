@@ -92,13 +92,19 @@ static uint32_t count32(void)
 	return *COUNTER_LO;
 }
 
+extern sys_dlist_t timeout_list;
+static uint32_t call_cnt;
 static void compare_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
 	uint64_t curr;
 	uint32_t dticks;
 
+
 	k_spinlock_key_t key = k_spin_lock(&lock);
+
+	uint32_t id = call_cnt;
+	call_cnt++;
 
 	curr = count();
 	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
@@ -119,8 +125,21 @@ static void compare_isr(const void *arg)
 
 	k_spin_unlock(&lock, key);
 
+	printk("ANN %d %llu %d %u\n", dticks, curr, arch_curr_cpu()->id, id);
+
 	sys_clock_announce(dticks);
+
+	sys_dnode_t *t = sys_dlist_peek_head(&timeout_list);
+	struct _timeout *tm = t == NULL ? NULL : CONTAINER_OF(t, struct _timeout, node);
+
+	if(tm != NULL) {
+		printk("AXX %llu %d %p %lld\n", count(), id, tm->fn, tm->dticks);
+	} else {
+		printk("ANP %llu %d\n", count(), id);
+	}
 }
+
+
 
 void sys_clock_set_timeout(int32_t ticks, bool idle)
 {

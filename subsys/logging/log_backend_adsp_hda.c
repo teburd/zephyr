@@ -202,16 +202,16 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 		//DBG("out lock freed");
 
 		if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
-			DBG("dma flush start");
+			//DBG("dma flush start");
 			hda_log_dma_flush();
-			DBG("dma flush end");
+			//DBG("dma flush end");
 		}
 
 		
 
-		DBG("hook start");
+		//DBG("hook start");
 		hda_log_hook();
-		DBG("hook end");
+		//DBG("hook end");
 
 		//k_spin_unlock(&hda_log_out_lock, key);
 		//k_spin_unlock(&hda_log_flush_lock, flush_key);
@@ -254,6 +254,8 @@ static void hda_log_periodic(struct k_timer *tm)
 	hda_log_hook();
 
 	k_spin_unlock(&hda_log_out_lock, key);
+	DBG("periodic lock released");
+
 }
 
 struct k_spinlock log_out_lock;
@@ -291,14 +293,10 @@ static int format_set(const struct log_backend *const backend, uint32_t log_type
 	return 0;
 }
 
-static volatile uint32_t counter;
-
 static void process(const struct log_backend *const backend,
 		union log_msg_generic *msg)
 {
 	ARG_UNUSED(backend);
-	
-
 	
 	uint32_t flags = log_backend_std_get_flags();
 
@@ -306,7 +304,6 @@ static void process(const struct log_backend *const backend,
 
 	log_output_func(&log_output_adsp_hda, &msg->log, flags);
 
-	DBG("process exit");
 }
 
 /**
@@ -390,7 +387,7 @@ static inline void hda_ipc_msg(const struct device *dev, uint32_t data,
 /* Each try multiplies the delay by 2, 2^4*4000 is 64000 or 64ms
  * at the longest try period. Total try period is
  * 64000 + 32000 + 16000 + 8000 + 4000 or... 124 ms  */
-#define HDA_NOTIFY_MAX_TRIES 4
+#define HDA_NOTIFY_MAX_TRIES 6
 #define DELAY_INIT 4000
 
 void adsp_hda_log_cavstool_hook2(uint32_t hook_notify)
@@ -404,33 +401,7 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 	bool done = false;
 	uint32_t delay = DELAY_INIT;
 
-	DBG("pre start");
-	/* Wait for a reply from the host
-	 *
-	 * Occasionally it seems we just lose IPC returns from the host (cavstool)
-	 * so after a few tries we can move on and assume it worked hoping for the best
-	 */
-	do {
-		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
-		if (!done) {
-
-			DBG("pre delay");
-			k_busy_wait(delay);
-			delay = delay*2; /* back off */
-		}
-		try_loop++;
-	} while (!done && try_loop < HDA_NOTIFY_MAX_TRIES);
-
-	if(try_loop >= HDA_NOTIFY_MAX_TRIES - 1) {
-		DBG("pre fail");
-	} else {
-		DBG("pre done");
-	}	
-
-	try_loop = 0;
-	delay = DELAY_INIT;
-	
-	DBG("send ipc start");
+	//DBG("send ipc start");
 
 	/*  Send IPC message notifying log data has been written */
 	do {
@@ -442,17 +413,18 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 		}
 		try_loop++;
 	} while (!done && try_loop < HDA_NOTIFY_MAX_TRIES);
+
 	if(try_loop >= HDA_NOTIFY_MAX_TRIES - 1) {
 		DBG("send ipc fail");
 		return;
 	} else {
-		DBG("send ipc done");
+		//DBG("send ipc done");
 	}
 
 	try_loop = 0;
 	delay = DELAY_INIT;
 
-	DBG("poll ipc start");
+	//DBG("poll ipc start");
 	
 	/* Wait for a reply from the host
 	 *
@@ -463,7 +435,7 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
 		if (!done) {
 			k_busy_wait(delay);
-			delay = delay*2; /* back off */
+			delay = delay*2;
 		}
 		try_loop++;
 	} while (!done && try_loop < HDA_NOTIFY_MAX_TRIES);
@@ -471,7 +443,7 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 	if(try_loop >= HDA_NOTIFY_MAX_TRIES) {
 		DBG("poll ipc fail");
 	} else {
-		DBG("poll ipc done");
+		//DBG("poll ipc done");
 	}
 }
 
