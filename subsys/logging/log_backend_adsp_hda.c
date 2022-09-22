@@ -33,8 +33,8 @@
  * latency threshold has been met.
  */
 
-#define DBG(msg)
-//#define DBG(msg) printk("[%p %d %d %llu] %s\n", arch_curr_cpu()->current, arch_curr_cpu()->id, __LINE__, k_cycle_get_64(), msg)
+//#define DBG(msg)
+#define DBG(msg) printk("[%p %d %d %d %llu] %s\n", arch_curr_cpu()->current, arch_curr_cpu()->id, k_is_in_isr(), __LINE__, k_cycle_get_64(), msg)
 
 static uint32_t log_format_current = CONFIG_LOG_BACKEND_ADSP_HDA_OUTPUT_DEFAULT;
 static const struct device *const hda_log_dev =
@@ -174,7 +174,7 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 	//DBG("out lock start");
 	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
 	//k_sem_take(&hda_log_out_lock, K_FOREVER);
-	//DBG("out lock end");
+	//DBG("out lock taken");
 
 	__ASSERT( length < available_bytes, "Log buffer overflowed");
 
@@ -220,7 +220,7 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 		//k_spin_unlock(&hda_log_out_lock, key);
 		//k_spin_unlock(&hda_log_out_lock, key);
 		//DBG("out lock freed, no flush");
-	}
+}
 	//k_sem_give(&hda_log_out_lock);
 	
 	k_spin_unlock(&hda_log_out_lock, key);
@@ -240,8 +240,9 @@ static void hda_log_periodic(struct k_timer *tm)
 {
 	ARG_UNUSED(tm);
 
+	DBG("periodic lock take");
 	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
-
+	DBG("periodic lock taken");
 	/* Always try to pad */	
 	hda_log_pad();
 
@@ -386,9 +387,11 @@ static inline void hda_ipc_msg(const struct device *dev, uint32_t data,
 		"Unexpected ipc send message failure, try increasing IPC_TIMEOUT");
 }
 
-/* Each try is 1ms */
-#define HDA_NOTIFY_MAX_TRIES 8
-#define DELAY_INIT 8000
+/* Each try multiplies the delay by 2, 2^4*4000 is 64000 or 64ms
+ * at the longest try period. Total try period is
+ * 64000 + 32000 + 16000 + 8000 + 4000 or... 124 ms  */
+#define HDA_NOTIFY_MAX_TRIES 4
+#define DELAY_INIT 4000
 
 void adsp_hda_log_cavstool_hook2(uint32_t hook_notify)
 {
@@ -434,7 +437,6 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 		done = intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_HDA_PRINT,
 					     (hook_notify << 8) | CHANNEL);
 		if(!done) {
-			DBG("send ipc delay");
 			k_busy_wait(delay);
 			delay = delay*2;
 		}
@@ -460,8 +462,6 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 	do {
 		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
 		if (!done) {
-
-			DBG("poll ipc delay");
 			k_busy_wait(delay);
 			delay = delay*2; /* back off */
 		}
