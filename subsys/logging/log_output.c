@@ -479,6 +479,9 @@ static void postfix_print(const struct log_output *output,
 	newline_print(output, flags);
 }
 
+
+struct k_spinlock lck;
+
 void log_output_process(const struct log_output *output,
 			log_timestamp_t timestamp,
 			const char *domain,
@@ -492,7 +495,8 @@ void log_output_process(const struct log_output *output,
 	bool raw_string = (level == LOG_LEVEL_INTERNAL_RAW_STRING);
 	uint32_t prefix_offset;
 	cbprintf_cb cb;
-
+	
+	
 	if (!raw_string) {
 		prefix_offset = prefix_print(output, flags, 0, timestamp, domain, source, level);
 		cb = out_func;
@@ -521,11 +525,14 @@ void log_output_process(const struct log_output *output,
 	}
 
 	log_output_flush(output);
+	
 }
 
 void log_output_msg_process(const struct log_output *output,
 			    struct log_msg *msg, uint32_t flags)
 {
+	k_spinlock_key_t key = k_spin_lock(&lck);
+
 	log_timestamp_t timestamp = log_msg_get_timestamp(msg);
 	uint8_t level = log_msg_get_level(msg);
 	void *source = (void *)log_msg_get_source(msg);
@@ -542,6 +549,8 @@ void log_output_msg_process(const struct log_output *output,
 
 	log_output_process(output, timestamp, NULL, sname, level,
 			   plen > 0 ? package : NULL, data, dlen, flags);
+
+	k_spin_unlock(&lck, key);
 }
 
 void log_output_dropped_process(const struct log_output *output, uint32_t cnt)

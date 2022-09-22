@@ -96,6 +96,8 @@ void z_impl_z_log_msg_runtime_vcreate(uint8_t domain_id, const void *source,
 	int plen;
 
 	if (fmt) {
+		printk("VCREATE FMT\n");
+
 		va_list ap2;
 
 		va_copy(ap2, ap);
@@ -121,20 +123,26 @@ void z_impl_z_log_msg_runtime_vcreate(uint8_t domain_id, const void *source,
 			pkg = msg ? msg->data : NULL;
 		}
 	} else {
+		printk("VCREATE alloca\n");
 		msg = alloca(msg_wlen * sizeof(int));
+		printk("VCREATE alloca done\n");
+
 		pkg = msg->data;
 	}
 
 	if (pkg && fmt) {
+		printk("VCREATE package into alloca\n");
 		plen = cbvprintf_package(pkg, (size_t)plen, package_flags, fmt, ap);
 		__ASSERT_NO_MSG(plen >= 0);
 	}
 
 	if (IS_ENABLED(CONFIG_LOG_FRONTEND)) {
+		printk("VCREATE fronted\n");
 		log_frontend_msg(source, desc, pkg, data);
 	}
 
 	if (BACKENDS_IN_USE()) {
+		printk("VCREATE finalize\n");
 		z_log_msg_finalize(msg, source, desc, data);
 	}
 }

@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-#define LOG_MSG2_DEBUG 0
+#define LOG_MSG2_DEBUG 1
 #define LOG_MSG2_DBG(...) IF_ENABLED(LOG_MSG2_DEBUG, (printk(__VA_ARGS__)))
 
 #ifdef CONFIG_LOG_TIMESTAMP_64BIT
@@ -387,6 +387,7 @@ do { \
 #define Z_LOG_MSG2_CREATE2(_try_0cpy, _mode,  _cstr_cnt, _domain_id, _source,\
 			  _level, _data, _dlen, ...) \
 do {\
+	LOG_MSG2_DBG("create runtime message\n"); \
 	Z_LOG_MSG2_STR_VAR(_fmt, ##__VA_ARGS__) \
 	z_log_msg_runtime_create(_domain_id, (void *)_source, \
 				  _level, (uint8_t *)_data, _dlen,\
@@ -551,6 +552,7 @@ static inline void z_log_msg_runtime_create(uint8_t domain_id,
 					     size_t dlen, uint32_t package_flags,
 					     const char *fmt, ...)
 {
+	printk("CREATE\n");
 	va_list ap;
 
 	va_start(ap, fmt);

@@ -461,11 +461,23 @@ void z_log_notify_backend_enabled(void)
 	backend_attached = true;
 }
 
+struct k_spinlock log_process_lock;
+
+uint32_t process_cnt = 0;
+
 bool z_impl_log_process(void)
 {
 	if (!IS_ENABLED(CONFIG_LOG_MODE_DEFERRED)) {
 		return false;
 	}
+
+	uint32_t call_id = process_cnt;
+	process_cnt += 1;
+
+	printk("LOG_PROCESS ENTER ID %u, CORE %d ISR %d\n", call_id, arch_curr_cpu()->id, k_is_in_isr());
+
+	
+	k_spinlock_key_t key = k_spin_lock(&log_process_lock);
 
 	union log_msg_generic *msg;
 
@@ -484,7 +496,13 @@ bool z_impl_log_process(void)
 		dropped_notify();
 	}
 
-	return z_log_msg_pending();
+	bool ret = z_log_msg_pending();
+
+	k_spin_unlock(&log_process_lock, key);
+	
+	printk("LOG_PROCESS EXIT ID %u, CORE %d ISR %d\n", call_id, arch_curr_cpu()->id, k_is_in_isr());
+
+	return ret;
 }
 
 #ifdef CONFIG_USERSPACE
