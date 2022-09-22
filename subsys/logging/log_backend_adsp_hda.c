@@ -169,71 +169,21 @@ static void hda_log_hook(void) {
 	pending_hook_bytes = 0;
 }
 
-static int hda_log_out(uint8_t *data, size_t length, void *ctx)
-{
-	//DBG("out lock start");
-	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
-	//k_sem_take(&hda_log_out_lock, K_FOREVER);
-	//DBG("out lock taken");
-
-	__ASSERT( length < available_bytes, "Log buffer overflowed");
-
-	/* Copy over the formatted message to the dma buffer */
-	for (uint32_t i = 0; i < length; i++) {
-		hda_log_buf[write_idx & HDA_LOG_BUF_MASK] = data[i];
-		write_idx++;
-	}
-	available_bytes -= length;
-	pending_dma_bytes += length;
-
-	bool panic_mode_set = atomic_test_bit(&hda_log_flags, HDA_LOG_PANIC_MODE);
-	
-	/* If we've hit the watermark or are in panic mode push data out */
-	if (available_bytes < CONFIG_LOG_BACKEND_ADSP_HDA_SIZE/2 || panic_mode_set) {
-
-		//DBG("pad start");
-		hda_log_pad();
-		//DBG("pad end");
-
-		//DBG("flush lock start");
-		//k_spinlock_key_t flush_key = k_spin_lock(&hda_log_flush_lock);
-		//DBG("flush lock end");
-		//k_spin_unlock(&hda_log_out_lock, key);
-		//DBG("out lock freed");
-
-		if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
-			//DBG("dma flush start");
-			hda_log_dma_flush();
-			//DBG("dma flush end");
-		}
-
-		
-
-		//DBG("hook start");
-		hda_log_hook();
-		//DBG("hook end");
-
-		//k_spin_unlock(&hda_log_out_lock, key);
-		//k_spin_unlock(&hda_log_flush_lock, flush_key);
-	} else {
-
-		//k_spin_unlock(&hda_log_out_lock, key);
-		//k_spin_unlock(&hda_log_out_lock, key);
-		//DBG("out lock freed, no flush");
-}
-	//k_sem_give(&hda_log_out_lock);
-	
-	k_spin_unlock(&hda_log_out_lock, key);
-	return length;
-}
-
-K_SEM_DEFINE(periodic, 0, K_SEM_MAX_LIMIT);
+K_SEM_DEFINE(hda_log_flush_sem, 0, K_SEM_MAX_LIMIT);
 
 static void hda_log_flusher(void *p1, void *p2, void *p3) 
 {
 
 	while(true) {
-		k_sem_take(&periodic, K_FOREVER);
+		k_sem_take(&hda_log_flush_sem, K_FOREVER);
+		
+		uint32_t cnt = k_sem_count_get(&hda_log_flush_sem);
+
+		k_sem_reset(&hda_log_flush_sem);
+		
+		if(cnt > 0) {
+			printk("flush count %d!\n", cnt);
+		}
 	
 		DBG("periodic lock take");
 		k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
@@ -253,10 +203,73 @@ static void hda_log_flusher(void *p1, void *p2, void *p3)
 	}	
 }
 
-K_THREAD_DEFINE(hda_log_thread, 512, hda_log_flusher,
+K_THREAD_DEFINE(hda_log_flush_thread, 512, hda_log_flusher,
 	NULL, NULL, NULL,
 	K_PRIO_COOP(1),  0, 0);
 	
+
+
+static int hda_log_out(uint8_t *data, size_t length, void *ctx)
+{
+	//DBG("out lock start");
+	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
+	//k_sem_take(&hda_log_out_lock, K_FOREVER);
+	//DBG("out lock taken");
+
+	__ASSERT( length < available_bytes, "Log buffer overflowed");
+
+	/* Copy over the formatted message to the dma buffer */
+	for (uint32_t i = 0; i < length; i++) {
+		hda_log_buf[write_idx & HDA_LOG_BUF_MASK] = data[i];
+		write_idx++;
+	}
+	available_bytes -= length;
+	pending_dma_bytes += length;
+
+	k_spin_unlock(&hda_log_out_lock, key);
+
+	bool panic_mode_set = atomic_test_bit(&hda_log_flags, HDA_LOG_PANIC_MODE);
+	
+	/* If we've hit the watermark or are in panic mode push data out */
+	if (available_bytes < CONFIG_LOG_BACKEND_ADSP_HDA_SIZE/2 || panic_mode_set) {
+		k_sem_give(&hda_log_flush_sem);
+	}
+	//	//DBG("pad start");
+	//	hda_log_pad();
+	//	//DBG("pad end");
+
+	//	//DBG("flush lock start");
+	//	//k_spinlock_key_t flush_key = k_spin_lock(&hda_log_flush_lock);
+	//	//DBG("flush lock end");
+	//	//k_spin_unlock(&hda_log_out_lock, key);
+	//	//DBG("out lock freed");
+
+	//	if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
+	//		//DBG("dma flush start");
+	//		hda_log_dma_flush();
+	//		//DBG("dma flush end");
+	//	}
+
+	//	
+
+	//	//DBG("hook start");
+	//	hda_log_hook();
+	//	//DBG("hook end");
+
+	//	//k_spin_unlock(&hda_log_out_lock, key);
+	//	//k_spin_unlock(&hda_log_flush_lock, flush_key);
+	//} else {
+
+	//	//k_spin_unlock(&hda_log_out_lock, key);
+	//	//k_spin_unlock(&hda_log_out_lock, key);
+	//	//DBG("out lock freed, no flush");
+	//}
+	////k_sem_give(&hda_log_out_lock);
+	
+	//k_spin_unlock(&hda_log_out_lock, key);
+	return length;
+}
+
 /**
  * 128 bytes is the smallest transferrable size for HDA so use that
  * and encompass almost all log lines in the formatter before flushing
@@ -270,7 +283,7 @@ static void hda_log_periodic(struct k_timer *tm)
 {
 	ARG_UNUSED(tm);
 
-	k_sem_give(&periodic);
+	k_sem_give(&hda_log_flush_sem);
 
 }
 
