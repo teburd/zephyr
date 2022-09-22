@@ -625,7 +625,10 @@ def ipc_command(data, ext_data):
         while hda_str.hda.SPIB != pos:
             hda_str.hda.SPIB = pos
         log.debug(f"HDA LOG PRINT DONE STREAM {stream_id} LEN {buf_len}, POS {pos}, SPIB {hda_str.hda.SPIB}, CBL {hda_str.regs.CBL}, READ_LENS {read_lens}")
-
+    elif data == 100: # Test Done
+        log.debug("TEST DONE! TEST DONE! TEST DONE!")
+        global start_output
+        start_output = False
     else:
         log.warning(f"cavstool: Unrecognized IPC command 0x{data:x} ext 0x{ext_data:x}")
         if not fw_is_alive():
@@ -641,7 +644,7 @@ def ipc_command(data, ext_data):
     log.debug("ACKing Interrupt")
     dsp.HIPCTDR = 1<<31 # Ack local interrupt, also signals DONE on v1.5
 
-    time.sleep(0.005) # Needed or the command below won't send!
+    time.sleep(0.05) # Needed or the command below won't send!
 
     if done and not cavs15:
         log.debug("Signaling DONE")
@@ -652,18 +655,20 @@ def ipc_command(data, ext_data):
         # Waiting for this to show seems to greatly improve
         # the chances the DSP gets an IPC DONE bit set.
         # Without it slot machine odds are in play
-        while (dsp.HIPCTDA & (1 << 31)) and retries > 0:
-            time.sleep(0.001)
-            retries -= 1
-        if retries == 0:
-            log.warning("Failed to fully signal IPC DONE")
+        #while (dsp.HIPCTDA & (1 << 31)) and retries > 0:
+        #    time.sleep(0.001)
+        #    retries -= 1
+        #if retries == 0:
+        #    log.warning("Failed to fully signal IPC DONE")
         log.debug("Signaled IPC DONE")
 
     if send_msg:
         dsp.HIPCIDD = ext_data
         dsp.HIPCIDR = (1<<31) | ext_data
 
-async def main():
+from multiprocessing import Process
+
+def main():
     #TODO this bit me, remove the globals, write a little FirmwareLoader class or something to contain.
     global hda, sd, dsp, hda_ostream_id, hda_streams
 
@@ -691,17 +696,19 @@ async def main():
     hda_streams = dict()
 
     last_seq = 0
+    #_win_log = subprocess.Popen(["./adsp_logger"])
     while start_output is True:
-        await asyncio.sleep(0.03)
-        (last_seq, output) = winstream_read(last_seq)
-        if output:
-            sys.stdout.write(output)
-            sys.stdout.flush()
+        time.sleep(0.005)
+        #for i in range(4):
+        #(last_seq, output) = winstream_read(last_seq)
+        #if output:
+        #    sys.stdout.write(output)
+        #    sys.stdout.flush()
         if not args.log_only:
-            if dsp.HIPCIDA & 0x80000000:
-                dsp.HIPCIDA = 1<<31 # must ACK any DONE interrupts that arrive!
             if dsp.HIPCTDR & 0x80000000:
                 ipc_command(dsp.HIPCTDR & ~0x80000000, dsp.HIPCTDD)
+            if dsp.HIPCIDA & 0x80000000:
+                dsp.HIPCIDA = 1<<31 # must ACK any DONE interrupts that arrive!
 
 
 ap = argparse.ArgumentParser(description="DSP loader/logger tool")
@@ -724,6 +731,6 @@ elif args.verbose:
 
 if __name__ == "__main__":
     try:
-        asyncio.get_event_loop().run_until_complete(main())
+        main()
     except KeyboardInterrupt:
         start_output = False

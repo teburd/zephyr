@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #define STACK_SIZE (2048 + CONFIG_TEST_EXTRA_STACK_SIZE)
 
-#define NUM_THREADS 8
+#define NUM_THREADS 4
 
 K_THREAD_STACK_ARRAY_DEFINE(stacks, NUM_THREADS, STACK_SIZE);
 static struct k_thread threads[NUM_THREADS];
@@ -49,6 +49,8 @@ static void thread_func(void *p1, void *p2, void *p3)
 	}
 }
 
+#include <intel_adsp_ipc.h>
+
 /*
  * Test create number of threads with different priorities. Each thread logs
  * data and sleeps. This creates environment where multiple threads are
@@ -67,12 +69,19 @@ ZTEST(log_immediate, test_log_immediate_preemption)
 				k_thread_priority_get(k_current_get()) + i,
 				0, K_MSEC(10));
 	}
-	k_msleep(3000);
+
+	k_msleep(120000);
+
+	printk("stopping threads\n");
 
 	for (int i = 0; i < NUM_THREADS; i++) {
 		k_thread_abort(tids[i]);
 	}
 	zassert_true(true, "");
+
+	printk("stopped threads\n");
+		
+	intel_adsp_ipc_send_message_sync(INTEL_ADSP_IPC_HOST_DEV, 100, 0, K_FOREVER);
 }
 
 ZTEST_SUITE(log_immediate, NULL, NULL, NULL, NULL, NULL);

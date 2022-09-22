@@ -33,7 +33,8 @@
  * latency threshold has been met.
  */
 
-#define DBG(msg) printk("[%p %d %d %llu] %s\n", arch_curr_cpu()->current, arch_curr_cpu()->id, __LINE__, k_cycle_get_64(), msg)
+#define DBG(msg)
+//#define DBG(msg) printk("[%p %d %d %llu] %s\n", arch_curr_cpu()->current, arch_curr_cpu()->id, __LINE__, k_cycle_get_64(), msg)
 
 static uint32_t log_format_current = CONFIG_LOG_BACKEND_ADSP_HDA_OUTPUT_DEFAULT;
 static const struct device *const hda_log_dev =
@@ -45,11 +46,12 @@ static uint32_t hda_log_chan;
  */
 #define ALIGNMENT DMA_BUF_ALIGNMENT(DT_NODELABEL(hda_host_in))
 static __aligned(ALIGNMENT) uint8_t hda_log_buf[CONFIG_LOG_BACKEND_ADSP_HDA_SIZE];
-//static struct k_timer hda_log_timer;
+static struct k_timer hda_log_timer;
 static adsp_hda_log_hook_t hook;
-static struct k_spinlock hda_log_fmt_lock;
+//static struct k_spinlock hda_log_fmt_lock;
 static struct k_spinlock hda_log_out_lock;
-static struct k_spinlock hda_log_flush_lock;
+//static struct k_spinlock hda_log_flush_lock;
+//K_SEM_DEFINE(hda_log_out_lock, 0, 1);
 
 /* Simple power of 2 wrapping mask */
 #define HDA_LOG_BUF_MASK (CONFIG_LOG_BACKEND_ADSP_HDA_SIZE - 1)
@@ -169,9 +171,10 @@ static void hda_log_hook(void) {
 
 static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 {
-	DBG("out lock start");
+	//DBG("out lock start");
 	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
-	DBG("out lock end");
+	//k_sem_take(&hda_log_out_lock, K_FOREVER);
+	//DBG("out lock end");
 
 	__ASSERT( length < available_bytes, "Log buffer overflowed");
 
@@ -188,15 +191,15 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 	/* If we've hit the watermark or are in panic mode push data out */
 	if (available_bytes < CONFIG_LOG_BACKEND_ADSP_HDA_SIZE/2 || panic_mode_set) {
 
-		DBG("pad start");
+		//DBG("pad start");
 		hda_log_pad();
-		DBG("pad end");
+		//DBG("pad end");
 
-		DBG("flush lock start");
-		k_spinlock_key_t flush_key = k_spin_lock(&hda_log_flush_lock);
-		DBG("flush lock end");
-		k_spin_unlock(&hda_log_out_lock, key);
-		DBG("out lock freed");
+		//DBG("flush lock start");
+		//k_spinlock_key_t flush_key = k_spin_lock(&hda_log_flush_lock);
+		//DBG("flush lock end");
+		//k_spin_unlock(&hda_log_out_lock, key);
+		//DBG("out lock freed");
 
 		if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
 			DBG("dma flush start");
@@ -204,16 +207,23 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 			DBG("dma flush end");
 		}
 
+		
+
 		DBG("hook start");
 		hda_log_hook();
 		DBG("hook end");
 
-		k_spin_unlock(&hda_log_flush_lock, flush_key);
+		//k_spin_unlock(&hda_log_out_lock, key);
+		//k_spin_unlock(&hda_log_flush_lock, flush_key);
 	} else {
-		k_spin_unlock(&hda_log_out_lock, key);
-		DBG("out lock freed, no flush");
+
+		//k_spin_unlock(&hda_log_out_lock, key);
+		//k_spin_unlock(&hda_log_out_lock, key);
+		//DBG("out lock freed, no flush");
 	}
+	//k_sem_give(&hda_log_out_lock);
 	
+	k_spin_unlock(&hda_log_out_lock, key);
 	return length;
 }
 
@@ -226,25 +236,24 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 static uint8_t log_buf[LOG_BUF_SIZE];
 LOG_OUTPUT_DEFINE(log_output_adsp_hda, hda_log_out, log_buf, LOG_BUF_SIZE);
 
-//static void hda_log_periodic(struct k_timer *tm)
-//{
-//	ARG_UNUSED(tm);
-//
-//	k_spinlock_key_t key = k_spin_lock(&hda_log_lock);
-//
-//	/* Always try to pad */	
-//	hda_log_pad();
-//
-//	/* Always write bytes to the DMA controller */
-//	if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
-//		hda_log_dma_flush();
-//	}
-//
-//	k_spin_unlock(&hda_log_lock, key);
-//
-//	hda_log_hook();
-//
-//}
+static void hda_log_periodic(struct k_timer *tm)
+{
+	ARG_UNUSED(tm);
+
+	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
+
+	/* Always try to pad */	
+	hda_log_pad();
+
+	/* Always write bytes to the DMA controller */
+	if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
+		hda_log_dma_flush();
+	}
+
+	hda_log_hook();
+
+	k_spin_unlock(&hda_log_out_lock, key);
+}
 
 struct k_spinlock log_out_lock;
 
@@ -295,6 +304,8 @@ static void process(const struct log_backend *const backend,
 	log_format_func_t log_output_func = log_format_func_t_get(log_format_current);
 
 	log_output_func(&log_output_adsp_hda, &msg->log, flags);
+
+	DBG("process exit");
 }
 
 /**
@@ -353,10 +364,10 @@ void adsp_hda_log_init(adsp_hda_log_hook_t fn, uint32_t channel)
 
 	atomic_set_bit(&hda_log_flags, HDA_LOG_DMA_READY);
 
-	//k_timer_init(&hda_log_timer, hda_log_periodic, NULL);
-	//k_timer_start(&hda_log_timer,
-	//	      K_MSEC(CONFIG_LOG_BACKEND_ADSP_HDA_FLUSH_TIME),
-	//	      K_MSEC(CONFIG_LOG_BACKEND_ADSP_HDA_FLUSH_TIME));
+	k_timer_init(&hda_log_timer, hda_log_periodic, NULL);
+	k_timer_start(&hda_log_timer,
+		      K_MSEC(CONFIG_LOG_BACKEND_ADSP_HDA_FLUSH_TIME),
+		      K_MSEC(CONFIG_LOG_BACKEND_ADSP_HDA_FLUSH_TIME));
 
 }
 
@@ -376,27 +387,60 @@ static inline void hda_ipc_msg(const struct device *dev, uint32_t data,
 }
 
 /* Each try is 1ms */
-#define HDA_NOTIFY_MAX_TRIES 4
+#define HDA_NOTIFY_MAX_TRIES 8
+#define DELAY_INIT 8000
 
+void adsp_hda_log_cavstool_hook2(uint32_t hook_notify)
+{
+	hda_ipc_msg(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_HDA_PRINT, (hook_notify << 8) | CHANNEL, K_FOREVER);
+}
 
 void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 {
 	uint32_t try_loop = 0;
 	bool done = false;
+	uint32_t delay = DELAY_INIT;
 
+	DBG("pre start");
+	/* Wait for a reply from the host
+	 *
+	 * Occasionally it seems we just lose IPC returns from the host (cavstool)
+	 * so after a few tries we can move on and assume it worked hoping for the best
+	 */
+	do {
+		done = intel_adsp_ipc_is_complete(INTEL_ADSP_IPC_HOST_DEV);
+		if (!done) {
+
+			DBG("pre delay");
+			k_busy_wait(delay);
+			delay = delay*2; /* back off */
+		}
+		try_loop++;
+	} while (!done && try_loop < HDA_NOTIFY_MAX_TRIES);
+
+	if(try_loop >= HDA_NOTIFY_MAX_TRIES - 1) {
+		DBG("pre fail");
+	} else {
+		DBG("pre done");
+	}	
+
+	try_loop = 0;
+	delay = DELAY_INIT;
+	
 	DBG("send ipc start");
+
 	/*  Send IPC message notifying log data has been written */
 	do {
 		done = intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_HDA_PRINT,
 					     (hook_notify << 8) | CHANNEL);
 		if(!done) {
 			DBG("send ipc delay");
-			k_busy_wait(100000);
+			k_busy_wait(delay);
+			delay = delay*2;
 		}
 		try_loop++;
 	} while (!done && try_loop < HDA_NOTIFY_MAX_TRIES);
-
-	if(try_loop >= HDA_NOTIFY_MAX_TRIES) {
+	if(try_loop >= HDA_NOTIFY_MAX_TRIES - 1) {
 		DBG("send ipc fail");
 		return;
 	} else {
@@ -404,9 +448,10 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 	}
 
 	try_loop = 0;
+	delay = DELAY_INIT;
 
 	DBG("poll ipc start");
-
+	
 	/* Wait for a reply from the host
 	 *
 	 * Occasionally it seems we just lose IPC returns from the host (cavstool)
@@ -417,10 +462,11 @@ void adsp_hda_log_cavstool_hook(uint32_t hook_notify)
 		if (!done) {
 
 			DBG("poll ipc delay");
-			k_busy_wait(100000);
+			k_busy_wait(delay);
+			delay = delay*2; /* back off */
 		}
 		try_loop++;
-	} while (!done);
+	} while (!done && try_loop < HDA_NOTIFY_MAX_TRIES);
 
 	if(try_loop >= HDA_NOTIFY_MAX_TRIES) {
 		DBG("poll ipc fail");

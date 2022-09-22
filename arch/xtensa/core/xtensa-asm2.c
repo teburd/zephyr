@@ -258,14 +258,14 @@ void *xtensa_excint1_c(int *interrupted_stack)
 			pc = (void *)bsa[BSA_PC_OFF/4];
 		}
 
-		LOG_ERR(" ** FATAL EXCEPTION");
-		LOG_ERR(" ** CPU %d EXCCAUSE %d (%s)",
+		printk(" ** FATAL EXCEPTION\n");
+		printk(" ** CPU %d EXCCAUSE %d (%s)\n",
 			arch_curr_cpu()->id, cause,
 			z_xtensa_exccause(cause));
-		LOG_ERR(" **  PC %p VADDR %p",
+		printk(" **  PC %p VADDR %p\n",
 			pc, (void *)vaddr);
-		LOG_ERR(" **  PS %p", (void *)bsa[BSA_PS_OFF/4]);
-		LOG_ERR(" **    (INTLEVEL:%d EXCM: %d UM:%d RING:%d WOE:%d OWB:%d CALLINC:%d)",
+		printk(" **  PS %p\n", (void *)bsa[BSA_PS_OFF/4]);
+		printk(" **    (INTLEVEL:%d EXCM: %d UM:%d RING:%d WOE:%d OWB:%d CALLINC:%d)\n",
 			get_bits(0, 4, ps), get_bits(4, 1, ps),
 			get_bits(5, 1, ps), get_bits(6, 2, ps),
 			get_bits(18, 1, ps),
