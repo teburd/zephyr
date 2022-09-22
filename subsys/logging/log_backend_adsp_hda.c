@@ -227,6 +227,36 @@ static int hda_log_out(uint8_t *data, size_t length, void *ctx)
 	return length;
 }
 
+K_SEM_DEFINE(periodic, 0, K_SEM_MAX_LIMIT);
+
+static void hda_log_flusher(void *p1, void *p2, void *p3) 
+{
+
+	while(true) {
+		k_sem_take(&periodic, K_FOREVER);
+	
+		DBG("periodic lock take");
+		k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
+		DBG("periodic lock taken");
+		/* Always try to pad */	
+		hda_log_pad();
+
+		/* Always write bytes to the DMA controller */
+		if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
+			hda_log_dma_flush();
+		}
+
+		hda_log_hook();
+
+		k_spin_unlock(&hda_log_out_lock, key);
+		DBG("periodic lock released");	
+	}	
+}
+
+K_THREAD_DEFINE(hda_log_thread, 512, hda_log_flusher,
+	NULL, NULL, NULL,
+	K_PRIO_COOP(1),  0, 0);
+	
 /**
  * 128 bytes is the smallest transferrable size for HDA so use that
  * and encompass almost all log lines in the formatter before flushing
@@ -240,21 +270,7 @@ static void hda_log_periodic(struct k_timer *tm)
 {
 	ARG_UNUSED(tm);
 
-	DBG("periodic lock take");
-	k_spinlock_key_t key = k_spin_lock(&hda_log_out_lock);
-	DBG("periodic lock taken");
-	/* Always try to pad */	
-	hda_log_pad();
-
-	/* Always write bytes to the DMA controller */
-	if (atomic_test_bit(&hda_log_flags, HDA_LOG_DMA_READY)) {
-		hda_log_dma_flush();
-	}
-
-	hda_log_hook();
-
-	k_spin_unlock(&hda_log_out_lock, key);
-	DBG("periodic lock released");
+	k_sem_give(&periodic);
 
 }
 
