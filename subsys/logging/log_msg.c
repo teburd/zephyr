@@ -15,15 +15,11 @@
 	!(IS_ENABLED(CONFIG_LOG_FRONTEND) && \
 	 (IS_ENABLED(CONFIG_LOG_FRONTEND_ONLY) || log_backend_count_get() == 0))
 
-#define DBG(msg) printk("[%p, %d, %s:%d %llu] %s\n", arch_curr_cpu()->current, arch_curr_cpu()->id, __FILE__, __LINE__, k_cycle_get_64(), msg)
-
 void z_log_msg_finalize(struct log_msg *msg, const void *source,
 			 const struct log_msg_desc desc, const void *data)
 {
 	if (!msg) {
-		DBG("log drop start");
 		z_log_dropped(false);
-		DBG("log drop end");
 
 		return;
 	}
@@ -31,18 +27,12 @@ void z_log_msg_finalize(struct log_msg *msg, const void *source,
 	if (data) {
 		uint8_t *d = msg->data + desc.package_len;
 
-		//DBG("msg copy start");
 		memcpy(d, data, desc.data_len);
-		//DBG("msg copy end");
-
-
 	}
 
-	DBG("msg commit start");
 	msg->hdr.desc = desc;
 	msg->hdr.source = source;
 	z_log_msg_commit(msg);
-	DBG("msg commit end");
 }
 
 void z_impl_z_log_msg_static_create(const void *source,
@@ -99,7 +89,6 @@ static inline void z_vrfy_z_log_msg_static_create(const void *source,
 #include <syscalls/z_log_msg_static_create_mrsh.c>
 #endif
 
-
 void z_impl_z_log_msg_runtime_vcreate(uint8_t domain_id, const void *source,
 				uint8_t level, const void *data, size_t dlen,
 				uint32_t package_flags, const char *fmt, va_list ap)
@@ -107,8 +96,6 @@ void z_impl_z_log_msg_runtime_vcreate(uint8_t domain_id, const void *source,
 	int plen;
 
 	if (fmt) {
-		DBG("fmt start");
-
 		va_list ap2;
 
 		va_copy(ap2, ap);
@@ -116,8 +103,6 @@ void z_impl_z_log_msg_runtime_vcreate(uint8_t domain_id, const void *source,
 					 package_flags, fmt, ap2);
 		__ASSERT_NO_MSG(plen >= 0);
 		va_end(ap2);
-		
-		DBG("fmt end");
 	} else {
 		plen = 0;
 	}
@@ -136,31 +121,21 @@ void z_impl_z_log_msg_runtime_vcreate(uint8_t domain_id, const void *source,
 			pkg = msg ? msg->data : NULL;
 		}
 	} else {
-
-		//DBG("alloca start");
 		msg = alloca(msg_wlen * sizeof(int));
 		pkg = msg->data;
-		//DBG("alloca end");
 	}
 
 	if (pkg && fmt) {
-		DBG("package start");
 		plen = cbvprintf_package(pkg, (size_t)plen, package_flags, fmt, ap);
 		__ASSERT_NO_MSG(plen >= 0);
-		DBG("package end");
 	}
 
 	if (IS_ENABLED(CONFIG_LOG_FRONTEND)) {
-		//DBG("frontend start");
 		log_frontend_msg(source, desc, pkg, data);
-		//DBG("frontend end");
-
 	}
 
 	if (BACKENDS_IN_USE()) {
-		DBG("finalize start");
 		z_log_msg_finalize(msg, source, desc, data);
-		DBG("finalize end");
 	}
 }
 
