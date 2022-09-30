@@ -133,8 +133,10 @@ void absolute_awaiting_thread(void *p1, void *p2, void *p3)
 }
 
 
+/*
 K_THREAD_DEFINE(ipc_work, 1024, ipc_awaiting_thread, &ipc_sem, NULL, NULL,
 	K_PRIO_PREEMPT(3), K_ESSENTIAL, 0);
+*/
 K_THREAD_DEFINE(periodic_work, 1024, periodic_awaiting_thread, &periodic_sem, NULL, NULL,
 	K_PRIO_PREEMPT(2), K_ESSENTIAL, 0);
 K_THREAD_DEFINE(absolute_work, 1024, absolute_awaiting_thread, &absolute_sem, NULL, NULL,
@@ -278,7 +280,7 @@ void main(void)
 	
 
 	while (true) {
-		update_stats(ipc_idx, ipc_diffs, 8192, &ipc_stats);
+		//update_stats(ipc_idx, ipc_diffs, 8192, &ipc_stats);
 		update_stats(periodic_idx, periodic_diffs, SAMPLES, &periodic_stats);
 		update_stats(absolute_idx, absolute_diffs, SAMPLES, &absolute_stats);
 
@@ -291,7 +293,7 @@ void main(void)
 		printk("\033[2J\033[1;1H");
 
 		printk("ADSP IPC & Timer Saturation: ipc isrs %u, periodic isrs %u, absolute isrs %u, misses %u, ticks %u\n", ipc_idx, periodic_idx, absolute_idx, absolute_misses, ABSOLUTE_TIMER_TICKS);
-		printk("IPC ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", ipc_stats.min, ipc_stats.max, ipc_stats.mean, ipc_stats.variance, ipc_stats.stddev);
+		//printk("IPC ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", ipc_stats.min, ipc_stats.max, ipc_stats.mean, ipc_stats.variance, ipc_stats.stddev);
 		printk("Periodic ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", periodic_stats.min, periodic_stats.max, periodic_stats.mean, periodic_stats.variance, periodic_stats.stddev);
 		printk("Absolute ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", absolute_stats.min, absolute_stats.max, absolute_stats.mean, absolute_stats.variance, absolute_stats.stddev);
 		printk("Current: %llu (ticks), Next Absolute: %llu (ticks) Diff: %lld (ticks)\n", 
