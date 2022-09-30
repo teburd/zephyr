@@ -58,7 +58,7 @@ const int32_t z_sys_timer_irq_for_test = TIMER_IRQ; /* See tests/kernel/context 
 
 
 enum timer_event_kind {
-	COMPARE_ENTER,
+	COMPARE_ENTER = 0,
 	COMPARE_LOCKED,
 	COMPARE_ANNOUNCE,
 	COMPARE_EXIT,

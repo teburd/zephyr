@@ -289,7 +289,7 @@ void main(void)
 		int64_t diff_ticks = (int64_t)abs_sched_tick-(int64_t)kern_tick;
 
 		/* Update the screen without interrupts */	
-		unsigned int key = irq_lock();
+		//unsigned int key = irq_lock();
 		printk("\033[2J\033[1;1H");
 
 		printk("ADSP IPC & Timer Saturation: ipc isrs %u, periodic isrs %u, absolute isrs %u, misses %u, ticks %u\n", ipc_idx, periodic_idx, absolute_idx, absolute_misses, ABSOLUTE_TIMER_TICKS);
@@ -302,7 +302,10 @@ void main(void)
 		
 
 		const uint32_t display = 32;
-		printk("===TIMER TRACE BEGIN===\n\n");
+		printk("\n===TIMER TRACE BEGIN===\n");
+		int64_t announces[32];
+		uint32_t announce_idx = 0;
+
 		/* Dump time trace data */
 		uint32_t trace_writer_idx = atomic_get(&timer_trace_idx);
 		uint32_t trace_start_idx = trace_writer_idx < display ? trace_reader_idx 
@@ -317,11 +320,20 @@ void main(void)
 				timer_trace[i & TRACE_IDX_MASK].tcompare,
 				timer_trace[i & TRACE_IDX_MASK].data);
 			trace_reader_idx = i;
+			if (timer_trace[i & TRACE_IDX_MASK].kind == 2 && announce_idx < 32) {
+				announces[announce_idx] = timer_trace[i & TRACE_IDX_MASK].data;
+				announce_idx++;
+			}
 		}
 		printk("===TIMER TRACE END===\n\n");
 
-		irq_unlock(key);
+		printk("===TIMER ANNOUNCE SAMPLING===\n");
+		for (uint32_t i = 0; i < announce_idx; i++) {
+			printk("%lld, ", announces[announce_idx]);
+		}
+		printk("\n===TIMER ANNOUNCE END===\n\n");
 
+		//irq_unlock(key);
 
 		/* Timer #3 */
 		k_msleep(500);
