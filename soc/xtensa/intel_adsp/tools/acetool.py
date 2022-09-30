@@ -27,9 +27,12 @@ HUGEPAGE_FILE = "/dev/hugepages/cavs-fw-dma.tmp."
 # Window 1 is the IPC "inbox" (host-writable memory, just 384 bytes currently)
 # Window 2 is unused by this script
 # Window 3 is winstream-formatted log output
+WINDOW_BASE = 0x180000
+WINDOW_STRIDE = 0x8000
+
 OUTBOX_OFFSET    = (512 + (0 * 128)) * 1024 + 4096
 INBOX_OFFSET     = (512 + (1 * 128)) * 1024
-WINSTREAM_OFFSET = (512 + (3 * 128)) * 1024
+WINSTREAM_OFFSET = WINDOW_BASE + WINDOW_STRIDE*3
 
 # ADSPCS bits
 CRST   = 0
@@ -243,23 +246,22 @@ def map_regs():
     sd.BDPU = 0x1c
     sd.freeze()
 
-    # Intel Audio DSP Registers
+    # Intel ACE Audio DSP Registers
     global bar4_mmap
     (bar4_mem, bar4_mmap) = bar_map(pcidir, 4)
     dsp = Regs(bar4_mem)
-    dsp.ADSPCS         = 0x00004
-    dsp.HIPCTDR        = 0x00040 if cavs15 else 0x000c0
-    dsp.HIPCTDA        =                        0x000c4 # 1.8+ only
-    dsp.HIPCTDD        = 0x00044 if cavs15 else 0x000c8
-    dsp.HIPCIDR        = 0x00048 if cavs15 else 0x000d0
-    dsp.HIPCIDA        =                        0x000d4 # 1.8+ only
-    dsp.HIPCIDD        = 0x0004c if cavs15 else 0x000d8
-    dsp.HFDSSCS        = 0x1000
-    dsp.HFSNDWIE       = 0x114c
-    dsp.HFPWRCTL       = 0x1d18
-    dsp.HFPWRSTS       = 0x1d1c
-    dsp.DSP2CXCAP_PRIMARY_CORE = 0x178D00
-    dsp.DSP2CXCTL_PRIMARY_CORE = 0x178D04
+    dsp.HFDSSCS = 0x1000
+    dsp.HFPWRCTL = 0x1d18
+    dsp.HFPWRSTS = 0x1d1c
+    dsp.DSP2CXCTL_PRIMARY = 0x178d04
+    dsp.HFIPCXTDR = 0x73200
+    dsp.HFIPCXTDA = 0x73204
+    dsp.HFIPCXIDR = 0x73210
+    dsp.HFIPCXIDA = 0x73214
+    dsp.HFIPCXCTL = 0x73228
+    dsp.HFIPCXIDDY = 0x73300
+    dsp.HFIPCXTDDY = 0x73380
+    dsp.SRAM_FW_STATUS = WINDOW_BASE
     dsp.freeze()
 
     return (hda, sd, dsp, hda_ostream_id)
@@ -369,7 +371,7 @@ def load_firmware(fw_file):
         sys.exit(1)
 
     (magic, sz) = struct.unpack("4sI", fw_bytes[0:8])
-    if magic == b'XMan':
+    if magic == b'$AE1':
         log.info(f"Trimming {sz} bytes of extended manifest")
         fw_bytes = fw_bytes[sz:len(fw_bytes)]
 
@@ -382,14 +384,37 @@ def load_firmware(fw_file):
     hda.GCTL = 1
     while not hda.GCTL & 1: pass
 
-    log.info(f"Stalling and Resetting DSP cores, ADSPCS = 0x{dsp.ADSPCS:x}")
-    #dsp.ADSPCS |= mask(CSTALL)
-    #dsp.ADSPCS |= mask(CRST)
-    #while (dsp.ADSPCS & mask(CRST)) == 0: pass
+    log.info("Turning of DSP subsystem")
+    dsp.HFDSSCS &= ~(1 << 16) # clear SPA bit
+    time.sleep(0.002)
+    # wait for CPA bit clear
+    while dsp.HFDSSCS & (1 << 24):
+        log.info("Waiting for DSP subsystem power off")
+        timer.sleep(0.1)
 
-    log.info(f"Powering down DSP cores, ADSPCS = 0x{dsp.ADSPCS:x}")
-    #dsp.ADSPCS &= ~mask(SPA)
-    #while dsp.ADSPCS & mask(CPA): pass
+    log.info("Turning on DSP subsystem")
+    dsp.HFDSSCS |= (1 << 16) # set SPA bit
+    time.sleep(0.002) # needed as the CPA bit may be unstable
+    # wait for CPA bit
+    while not (dsp.HFDSSCS & (1 << 24)):
+        log.info("Waiting for DSP subsystem power on")
+        timer.sleep(0.1)
+
+    log.info("Turning on Domain0")
+    dsp.HFPWRCTL |= 0x1 # set SPA bit
+    time.sleep(0.002) # needed as the CPA bit may be unstable
+    # wait for CPA bit
+    while not (dsp.HFPWRSTS & 0x1):
+        log.info("Waiting for DSP domain0 power on")
+        timer.sleep(0.1)
+
+    log.info("Turning off Primary Core")
+    dsp.DSP2CXCTL_PRIMARY &= ~(0x1) # clear SPA
+    time.sleep(0.002) # wait for CPA settlement
+    while dsp.DSP2CXCTL_PRIMARY & (1 << 8):
+        log.info("Waiting for DSP primary core power off")
+        timer.sleep(0.1)
+
 
     log.info(f"Configuring HDA stream {hda_ostream_id} to transfer firmware image")
     (buf_list_addr, num_bufs) = setup_dma_mem(fw_bytes)
@@ -411,28 +436,6 @@ def load_firmware(fw_file):
     hda.SPBFCTL |= (1 << hda_ostream_id)
     hda.SD_SPIB = len(fw_bytes)
 
-    # Start DSP.  Host needs to provide power to all cores on 1.5
-    # (which also starts them) and 1.8 (merely gates power, DSP also
-    # has to set PWRCTL). On 2.5 where the DSP has full control,
-    # and only core 0 is set.
-    log.info(f"Starting DSP, ADSPCS = 0x{dsp.ADSPCS:x}")
-    dsp.ADSPCS = mask(SPA)
-    while (dsp.ADSPCS & mask(CPA)) == 0: pass
-
-    log.info(f"Unresetting DSP cores, ADSPCS = 0x{dsp.ADSPCS:x}")
-    dsp.ADSPCS &= ~mask(CRST)
-    while (dsp.ADSPCS & 1) != 0: pass
-
-    log.info(f"Running DSP cores, ADSPCS = 0x{dsp.ADSPCS:x}")
-    dsp.ADSPCS &= ~mask(CSTALL)
-
-    # Wait for the ROM to boot and signal it's ready.  This not so short
-    # sleep seems to be needed; if we're banging on the memory window
-    # during initial boot (before/while the window control registers
-    # are configured?) the DSP hardware will hang fairly reliably.
-    log.info(f"Wait for ROM startup, ADSPCS = 0x{dsp.ADSPCS:x}")
-    time.sleep(1)
-    while (dsp.SRAM_FW_STATUS >> 24) != 5: pass
 
     # Send the DSP an IPC message to tell the device how to boot.
     # Note: with cAVS 1.8+ the ROM receives the stream argument as an
@@ -444,8 +447,24 @@ def load_firmware(fw_file):
                 | (0x01 << 24)       # type = PURGE_FW
                 | (1 << 14)          # purge_fw = 1
                 | (stream_idx << 9)) # dma_id
-    log.info(f"Sending IPC command, HIPIDR = 0x{ipcval:x}")
-    dsp.HIPCIDR = ipcval
+    log.info(f"Sending IPC command, HFIPCXIDR = 0x{ipcval:x}")
+    dsp.HFIPCXIDR = ipcval
+
+
+    log.info("Turning on Primary Core")
+    dsp.DSP2CXCTL_PRIMARY |= 0x1 # clear SPA
+    time.sleep(0.002) # wait for CPA settlement
+    while not (dsp.DSP2CXCTL_PRIMARY & (1 << 8)):
+        log.info("Waiting for DSP primary core power on")
+        timer.sleep(0.1)
+
+    log.info("Waiting for IPC acceptance")
+    while (dsp.HFIPCXIDR & (1 << 31)):
+        log.info("Waiting for IPC busy bit clear")
+        timer.sleep(0.1)
+
+    log.info("ACK IPC")
+    dsp.HFIPCXIDA |= (1 << 31)
 
     log.info(f"Starting DMA, FW_STATUS = 0x{dsp.SRAM_FW_STATUS:x}")
     sd.CTL |= 2 # START flag
@@ -531,7 +550,7 @@ def winstream_read(last_seq):
 
 async def ipc_delay_done():
     await asyncio.sleep(0.1)
-    dsp.HIPCTDA = 1<<31
+    dsp.HFIPCXTDA = 1<<31
 
 ipc_timestamp = 0
 
@@ -615,7 +634,6 @@ def ipc_command(data, ext_data):
         assert (read_lens[0] + pos) <= (hda_str.buf_len*2)
         assert read_lens[0] % 128 == 0
         assert read_lens[1] % 128 == 0
-        #log.info(f"hda print stream_id: {stream_id} buf_len: {buf_len}, pos: {pos}, read_lens: {read_lens}")
         buf_data0 = hda_str.mem.read(read_lens[0])
         hda_msg0 = buf_data0.decode("utf-8", "replace")
         sys.stdout.write(hda_msg0)
@@ -640,15 +658,15 @@ def ipc_command(data, ext_data):
 
             return
 
-    dsp.HIPCTDR = 1<<31 # Ack local interrupt, also signals DONE on v1.5
+    dsp.HFIPCXTDR = 1<<31 # Ack local interrupt, also signals DONE on v1.5
     if cavs18:
         time.sleep(0.01) # Needed on 1.8, or the command below won't send!
 
     if done and not cavs15:
-        dsp.HIPCTDA = 1<<31 # Signal done
+        dsp.HFIPCXTDA = 1<<31 # Signal done
     if send_msg:
-        dsp.HIPCIDD = ext_data
-        dsp.HIPCIDR = (1<<31) | ext_data
+        dsp.HFIPCXIDD = ext_data
+        dsp.HFIPCXIDR = (1<<31) | ext_data
 
 async def main():
     #TODO this bit me, remove the globals, write a little FirmwareLoader class or something to contain.
@@ -685,10 +703,10 @@ async def main():
             sys.stdout.write(output)
             sys.stdout.flush()
         if not args.log_only:
-            if dsp.HIPCIDA & 0x80000000:
-                dsp.HIPCIDA = 1<<31 # must ACK any DONE interrupts that arrive!
-            if dsp.HIPCTDR & 0x80000000:
-                ipc_command(dsp.HIPCTDR & ~0x80000000, dsp.HIPCTDD)
+            if dsp.HFIPCXIDA & 0x80000000:
+                dsp.HFIPCXIDA = 1<<31 # must ACK any DONE interrupts that arrive!
+            if dsp.HFIPCXTDR & 0x80000000:
+                ipc_command(dsp.HFIPCXTDR & ~0x80000000, dsp.HFIPCXTDD)
 
 
 ap = argparse.ArgumentParser(description="DSP loader/logger tool")
