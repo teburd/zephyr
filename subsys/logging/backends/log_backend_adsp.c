@@ -75,11 +75,11 @@ static void process(const struct log_backend *const backend,
 {
 	log_format_func_t log_output_func = log_format_func_t_get(log_format_current);
 
-	k_spinlock_key_t key = k_spin_lock(&lock);
+	//k_spinlock_key_t key = k_spin_lock(&lock);
 
 	log_output_func(&log_output_adsp, &msg->log, format_flags());
 
-	k_spin_unlock(&lock, key);
+	//k_spin_unlock(&lock, key);
 }
 
 static int format_set(const struct log_backend *const backend, uint32_t log_type)
