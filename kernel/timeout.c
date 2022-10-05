@@ -236,13 +236,60 @@ void z_set_timeout_expiry(int32_t ticks, bool is_idle)
 	}
 }
 
+
+enum announce_event_kind {
+	ANNOUNCE_ENTER,
+	ANNOUNCE_EXIT,
+};
+
+struct announce_event {
+	enum announce_event_kind kind;
+	int cpu;
+	uint32_t ccount;
+	uint64_t tcount;
+
+	int64_t data;
+};
+
+#define TRACE_COUNT 8192
+#define TRACE_IDX_MASK (8192-1)
+atomic_t announce_trace_idx = ATOMIC_INIT(-1);
+struct announce_event announce_trace[TRACE_COUNT];
+
+static int32_t next_trace_idx() {
+	uint32_t curr;
+
+	do {
+		curr = atomic_get(&announce_trace_idx);
+	} while (!atomic_cas(&announce_trace_idx, curr, curr+1));
+
+	return curr+1;
+}
+
+
+static inline void record_trace(enum announce_event_kind kind, int64_t data)
+{
+	uint32_t trace_idx = next_trace_idx();
+
+	__asm__ __volatile__("rsr %0,ccount":"=a" (announce_trace[trace_idx & TRACE_IDX_MASK].ccount));
+	announce_trace[trace_idx & TRACE_IDX_MASK].kind = kind;
+	announce_trace[trace_idx &  TRACE_IDX_MASK].cpu = arch_curr_cpu()->id;
+	announce_trace[trace_idx & TRACE_IDX_MASK].tcount = sys_clock_cycle_get_64();
+	announce_trace[trace_idx & TRACE_IDX_MASK].data = data;
+}
+
+
+
 void sys_clock_announce(int32_t ticks)
 {
 #ifdef CONFIG_TIMESLICING
 	z_time_slice(ticks);
 #endif
 
+	record_trace(ANNOUNCE_ENTER, ticks);
+
 	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+
 
 	/* We release the lock around the callbacks below, so on SMP
 	 * systems someone might be already running the loop.  Don't
@@ -280,6 +327,8 @@ void sys_clock_announce(int32_t ticks)
 	announce_remaining = 0;
 
 	sys_clock_set_timeout(next_timeout(), false);
+
+	record_trace(ANNOUNCE_EXIT, ticks);
 
 	k_spin_unlock(&timeout_lock, key);
 }

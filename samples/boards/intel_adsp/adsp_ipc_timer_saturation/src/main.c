@@ -43,6 +43,8 @@ enum timer_event_kind {
 	SET_COMPARE_EXIT,
 };
 
+
+
 const char * timer_event_str(enum timer_event_kind kind) {
 	switch(kind) {
 		case COMPARE_ENTER: 
@@ -84,10 +86,37 @@ struct timer_event {
 	int64_t data;
 };
 
+enum announce_event_kind {
+	ANNOUNCE_ENTER,
+	ANNOUNCE_EXIT,
+};
+
+struct announce_event {
+	enum announce_event_kind kind;
+	int cpu;
+	uint32_t ccount;
+	uint64_t tcount;
+	int64_t data;
+};
+
+const char * announce_event_str(enum announce_event_kind kind) {
+	switch(kind) {
+		case ANNOUNCE_ENTER:
+			return "ANNOUNCE_ENTER";
+		case ANNOUNCE_EXIT:
+			return "ANNOUNCE_EXIT";
+	}
+	return "UNKNOWN";
+}
+
+
 #define TRACE_COUNT 8192
 #define TRACE_IDX_MASK (8192-1)
 extern atomic_t timer_trace_idx;
 extern struct timer_event timer_trace[TRACE_COUNT];
+
+extern atomic_t announce_trace_idx;
+extern struct announce_event announce_trace[TRACE_COUNT];
 
 extern uint32_t last_ipc_isr;
 extern uint32_t ipc_idx;
@@ -301,10 +330,8 @@ void main(void)
 		
 		
 
-		const uint32_t display = 32;
+		const uint32_t display = 16;
 		printk("\n===TIMER TRACE BEGIN===\n");
-		int64_t announces[32];
-		uint32_t announce_idx = 0;
 
 		/* Dump time trace data */
 		uint32_t trace_writer_idx = atomic_get(&timer_trace_idx);
@@ -320,18 +347,27 @@ void main(void)
 				timer_trace[i & TRACE_IDX_MASK].tcompare,
 				timer_trace[i & TRACE_IDX_MASK].data);
 			trace_reader_idx = i;
-			if (timer_trace[i & TRACE_IDX_MASK].kind == 2 && announce_idx < 32) {
-				announces[announce_idx] = timer_trace[i & TRACE_IDX_MASK].data;
-				announce_idx++;
-			}
 		}
 		printk("===TIMER TRACE END===\n\n");
 
-		printk("===TIMER ANNOUNCE SAMPLING===\n");
-		for (uint32_t i = 0; i < announce_idx; i++) {
-			printk("%lld, ", announces[announce_idx]);
+		trace_reader_idx = 0;
+
+		printk("===SYS CLOCK ANNOUNCE TRACE===\n");
+		/* Dump time trace data */
+		trace_writer_idx = atomic_get(&announce_trace_idx);
+		trace_start_idx = trace_writer_idx < display ? trace_reader_idx
+			: MAX(trace_reader_idx, trace_writer_idx - display);
+		for (uint32_t i = trace_start_idx; i < trace_writer_idx; i++) {
+			printk("ATRACE[%d]: event %s, cpu %d, ccount %d, tcount %llu, data %lld\n",
+				i,
+				announce_event_str(announce_trace[i & TRACE_IDX_MASK].kind),
+				announce_trace[i & TRACE_IDX_MASK].cpu,
+				announce_trace[i & TRACE_IDX_MASK].ccount,
+				announce_trace[i & TRACE_IDX_MASK].tcount,
+				announce_trace[i & TRACE_IDX_MASK].data);
+			trace_reader_idx = i;
 		}
-		printk("\n===TIMER ANNOUNCE END===\n\n");
+		printk("===SYS CLOCK ANNOUNCE TRACE END===\n\n");
 
 		//irq_unlock(key);
 

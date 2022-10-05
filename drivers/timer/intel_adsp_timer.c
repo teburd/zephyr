@@ -145,13 +145,10 @@ static int32_t next_trace_idx() {
 static inline void record_trace(enum timer_event_kind kind, int64_t data)
 {
 	uint32_t trace_idx = next_trace_idx();
-	if (trace_idx >= TRACE_COUNT) {
-		return;
-	}
 
-	__asm__ __volatile__("rsr %0,ccount":"=a" (timer_trace[trace_idx].ccount));
+	__asm__ __volatile__("rsr %0,ccount":"=a" (timer_trace[trace_idx & TRACE_IDX_MASK].ccount));
 	timer_trace[trace_idx & TRACE_IDX_MASK].kind = kind;
-	timer_trace[trace_idx &  TRACE_IDX_MASK].cpu = arch_curr_cpu()->id;
+	timer_trace[trace_idx & TRACE_IDX_MASK].cpu = arch_curr_cpu()->id;
 	timer_trace[trace_idx & TRACE_IDX_MASK].tcount = count();
 	timer_trace[trace_idx & TRACE_IDX_MASK].tcompare = compare();
 	timer_trace[trace_idx & TRACE_IDX_MASK].data = data;
