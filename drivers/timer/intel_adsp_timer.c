@@ -84,6 +84,8 @@ struct timer_event {
 	int64_t data;
 };
 
+uint64_t compare_isrs;
+
 #define TRACE_COUNT 8192
 #define TRACE_IDX_MASK (8192-1)
 atomic_t timer_trace_idx = ATOMIC_INIT(-1);
@@ -176,6 +178,8 @@ static void compare_isr(const void *arg)
 	ARG_UNUSED(arg);
 	uint64_t curr;
 	uint32_t dticks;
+
+	compare_isrs++;
 
 	record_trace(COMPARE_ENTER, -1);
 

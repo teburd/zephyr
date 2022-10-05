@@ -291,6 +291,8 @@ static inline void update_stats(uint32_t local_idx, uint32_t *vals, uint32_t val
 	stats->stddev = sqrtf(stats->variance);
 }
 
+extern uint64_t compare_isrs;
+
 
 void main(void)
 {
