@@ -226,13 +226,6 @@ K_TIMER_DEFINE(periodic_tm, timer_periodic_cb, NULL);
 /* Timer #2 */
 K_TIMER_DEFINE(absolute_tm, timer_absolute_cb, NULL);
 
-/* Constants for computing a histogram with percentiles for latencies */
-const double percentiles[] = {99.99, 99.9, 99.0, 95.0, 90.0, 75.0, 50.0};
-
-/* Time offset buckets */
-const double buckets[] = {-1024.0, -512.0, -256.0, -128.0, -64.0, -32.0, -16.0, -8.0, -4.0, -2.0, -1.0, 0.0,
-	1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0}; 
-
 struct statistics {
 	double min;
 	double max;
@@ -242,16 +235,53 @@ struct statistics {
 };
 
 static struct statistics ipc_stats;
-
 static struct statistics periodic_stats;
-static double periodic_histogram[ARRAY_SIZE(buckets)];
-
 static struct statistics absolute_stats;
-static double absolute_histogram[ARRAY_SIZE(buckets)];
+static struct statistics announce_stats;
+
+extern uint32_t announce_idx;
+extern uint32_t announce_values[SAMPLES];
 
 double cycles_to_us(double cycles)
 {
 	return 1000000.0 * (cycles / (double)CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC);
+}
+
+static inline void update_istats(uint32_t local_idx, int32_t *vals, uint32_t vals_len, struct statistics *stats)
+{
+	uint32_t mask = vals_len - 1;
+	stats->min = DBL_MAX;
+	stats->max = -DBL_MAX;
+	stats->mean = 0.0;
+	stats->variance = 0.0;
+	stats->stddev = 0.0;
+
+	if(local_idx < 4) {
+		return;
+	}
+
+	uint32_t window_size = 1024;
+	if (local_idx < 1025) {
+		window_size = local_idx - 2;
+	}
+	uint32_t samples = 0;
+	double sum = 0.0;
+	for (uint32_t idx = local_idx-1; idx > local_idx-1-window_size; idx--) {
+		double val = vals[idx & mask];
+		sum += val;
+		stats->min = MIN(val, stats->min);
+		stats->max = MAX(val, stats->max);
+		samples++;
+	}
+	stats->mean = sum/(double)samples;
+	for (uint32_t idx = local_idx-1; idx > local_idx-1-window_size; idx--) {
+		double val = vals[idx & mask];
+		double mean_diff = val - stats->mean;
+		double mean_diff_sq = mean_diff*mean_diff;
+		stats->variance += mean_diff_sq;
+	}
+	stats->variance = stats->variance/(double)samples;
+	stats->stddev = sqrtf(stats->variance);
 }
 
 static inline void update_stats(uint32_t local_idx, uint32_t *vals, uint32_t vals_len, struct statistics *stats)
@@ -302,18 +332,19 @@ void main(void)
 	last_ipc_isr = start_cycle;
 	last_periodic_isr = start_cycle;
 	last_absolute_isr = start_cycle;
-	
-	/* Schedule timers */
-	k_timer_start(&periodic_tm, K_MSEC(1), K_MSEC(1));
 
 	absolute_scheduled_tick = k_uptime_ticks() + ABSOLUTE_TIMER_TICKS;
 	k_timer_start(&absolute_tm, K_TIMEOUT_ABS_CYC(absolute_scheduled_tick), K_NO_WAIT);
-	
+
+	/* Schedule timers */
+	k_timer_start(&periodic_tm, K_MSEC(1), K_MSEC(1));
+
 
 	while (true) {
 		//update_stats(ipc_idx, ipc_diffs, 8192, &ipc_stats);
 		update_stats(periodic_idx, periodic_diffs, SAMPLES, &periodic_stats);
 		update_stats(absolute_idx, absolute_diffs, SAMPLES, &absolute_stats);
+		update_istats(announce_idx, announce_values, SAMPLES, &announce_stats);
 
 		uint64_t kern_tick = k_uptime_ticks();
 		uint64_t abs_sched_tick = absolute_scheduled_tick;
@@ -323,10 +354,12 @@ void main(void)
 		//unsigned int key = irq_lock();
 		printk("\033[2J\033[1;1H");
 
-		printk("ADSP IPC & Timer Saturation: ipc isrs %u, periodic isrs %u, absolute isrs %u, misses %u, ticks %u\n", ipc_idx, periodic_idx, absolute_idx, absolute_misses, ABSOLUTE_TIMER_TICKS);
+		printk("ADSP IPC & Timer Saturation: ipc isrs %u, timer isrs %llu, periodic callbacks %u, absolute callbacks %u, misses %u, ticks %u\n", ipc_idx, compare_isrs, periodic_idx, absolute_idx, absolute_misses, ABSOLUTE_TIMER_TICKS);
 		//printk("IPC ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", ipc_stats.min, ipc_stats.max, ipc_stats.mean, ipc_stats.variance, ipc_stats.stddev);
 		printk("Periodic ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", periodic_stats.min, periodic_stats.max, periodic_stats.mean, periodic_stats.variance, periodic_stats.stddev);
 		printk("Absolute ISR Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", absolute_stats.min, absolute_stats.max, absolute_stats.mean, absolute_stats.variance, absolute_stats.stddev);
+		printk("Announce Statistics: min %12.3f, max %12.3f, mean %12.3f, variance %12.3f, stddev %12.3f\n", announce_stats.min, announce_stats.max, announce_stats.mean, announce_stats.variance, announce_stats.stddev);
+
 		printk("Current: %llu (ticks), Next Absolute: %llu (ticks) Diff: %lld (ticks)\n", 
 			kern_tick, absolute_scheduled_tick, diff_ticks);
 		

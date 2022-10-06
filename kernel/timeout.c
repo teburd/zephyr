@@ -256,6 +256,11 @@ struct announce_event {
 atomic_t announce_trace_idx = ATOMIC_INIT(-1);
 struct announce_event announce_trace[TRACE_COUNT];
 
+#define SAMPLES  (1<<16)
+#define IDX_MASK ((1<<16) - 1)
+uint32_t announce_idx;
+int32_t announce_values[SAMPLES];
+
 static int32_t next_trace_idx() {
 	uint32_t curr;
 
@@ -290,6 +295,8 @@ void sys_clock_announce(int32_t ticks)
 
 	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
 
+	announce_values[announce_idx & IDX_MASK] = ticks;
+	announce_idx++;
 
 	/* We release the lock around the callbacks below, so on SMP
 	 * systems someone might be already running the loop.  Don't
