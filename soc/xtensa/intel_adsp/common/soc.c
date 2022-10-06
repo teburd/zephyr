@@ -19,6 +19,8 @@ static __imr int soc_init(const struct device *dev)
 #ifdef CONFIG_ADSP_CLOCK
 	cavs_clock_init();
 #endif
+	/* Temporary HP clock setup */
+	*((uint32_t*)(0x71B78)) = 0x207;
 
 #if CONFIG_MP_NUM_CPUS > 1
 	soc_mp_init();
