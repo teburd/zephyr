@@ -177,7 +177,8 @@ static void compare_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
 	uint64_t curr;
-	uint32_t dticks;
+	uint64_t dticks;
+	// XCC BROKEN	uint32_t dticks;
 
 	compare_isrs++;
 
@@ -188,7 +189,9 @@ static void compare_isr(const void *arg)
 	record_trace(COMPARE_LOCKED, -1);
 
 	curr = count();
-	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
+	//XCC BROKEN	dticks = (uint32_t)((curr - last_count) / CYC_PER_TICK);
+	//
+	dticks = (curr - last_count) / CYC_PER_TICK;
 
 	/* Clear the triggered bit */
 	*WCTCS |= DSP_WCT_CS_TT(COMPARATOR_IDX);
@@ -208,7 +211,7 @@ static void compare_isr(const void *arg)
 
 	record_trace(COMPARE_ANNOUNCE, dticks);
 
-	sys_clock_announce(dticks);
+	sys_clock_announce((int32_t)dticks);
 
 	record_trace(COMPARE_EXIT, -1);
 }

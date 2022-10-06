@@ -213,7 +213,10 @@ void timer_absolute_cb(struct k_timer *tm) {
 	}
 	absolute_scheduled_tick = next;
 	k_timeout_t abs_timeout = K_TIMEOUT_ABS_TICKS(next);
-	
+
+	/* Cause some small but meaningful timer skew */
+	k_busy_wait(100);
+
 	k_timer_start(tm, abs_timeout, K_NO_WAIT);
 
 	/* Notify the worker thread */
