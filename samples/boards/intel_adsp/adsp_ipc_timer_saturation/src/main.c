@@ -260,8 +260,8 @@ static inline void update_istats(uint32_t local_idx, int32_t *vals, uint32_t val
 		return;
 	}
 
-	uint32_t window_size = 1024;
-	if (local_idx < 1025) {
+	uint32_t window_size = 4096;
+	if (local_idx < 4097) {
 		window_size = local_idx - 2;
 	}
 	uint32_t samples = 0;
@@ -363,14 +363,17 @@ void main(void)
 		printk("Current: %llu (ticks), Next Absolute: %llu (ticks) Diff: %lld (ticks)\n", 
 			kern_tick, absolute_scheduled_tick, diff_ticks);
 		
-		
 
-		const uint32_t display = 16;
+		uint32_t trace_writer_idx, trace_start_idx, display;
+
+		display = 16;
+
+#ifdef TIMER_TRACE
 		printk("\n===TIMER TRACE BEGIN===\n");
 
 		/* Dump time trace data */
-		uint32_t trace_writer_idx = atomic_get(&timer_trace_idx);
-		uint32_t trace_start_idx = trace_writer_idx < display ? trace_reader_idx 
+		trace_writer_idx = atomic_get(&timer_trace_idx);
+		trace_start_idx = trace_writer_idx < display ? trace_reader_idx
 			: MAX(trace_reader_idx, trace_writer_idx - display);
 		for (uint32_t i = trace_start_idx; i < trace_writer_idx; i++) {
 			printk("TTRACE[%d]: event %s, cpu %d, ccount %d, tcount %llu, tcompare %llu, data %lld\n",
@@ -384,6 +387,7 @@ void main(void)
 			trace_reader_idx = i;
 		}
 		printk("===TIMER TRACE END===\n\n");
+#endif
 
 		trace_reader_idx = 0;
 
@@ -404,7 +408,10 @@ void main(void)
 		}
 		printk("===SYS CLOCK ANNOUNCE TRACE END===\n\n");
 
-		//irq_unlock(key);
+		/* Artificial irq lock delay */
+		unsigned int key = irq_lock();
+		k_busy_wait(1000);
+		irq_unlock(key);
 
 		/* Timer #3 */
 		k_msleep(500);
