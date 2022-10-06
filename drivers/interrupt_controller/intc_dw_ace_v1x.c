@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "zephyr/sys/printk.h"
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/irq_nextlevel.h>

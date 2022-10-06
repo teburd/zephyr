@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "zephyr/arch/xtensa/arch.h"
 #include <zephyr/kernel.h>
 #include <zephyr/spinlock.h>
 #include <ksched.h>
@@ -240,6 +241,7 @@ void z_set_timeout_expiry(int32_t ticks, bool is_idle)
 enum announce_event_kind {
 	ANNOUNCE_ENTER,
 	ANNOUNCE_EXIT,
+	ANNOUNCE_SHORT_COMPARE,
 };
 
 struct announce_event {
@@ -284,6 +286,9 @@ static inline void record_trace(enum announce_event_kind kind, int64_t data)
 }
 
 
+uint64_t intel_adsp_compare(void);
+
+int short_compares;
 
 void sys_clock_announce(int32_t ticks)
 {
@@ -310,6 +315,7 @@ void sys_clock_announce(int32_t ticks)
 		return;
 	}
 
+	uint32_t announce_iters = 0;
 	announce_remaining = ticks;
 
 	while (first() != NULL && first()->dticks <= announce_remaining) {
@@ -324,6 +330,9 @@ void sys_clock_announce(int32_t ticks)
 		t->fn(t);
 		key = k_spin_lock(&timeout_lock);
 		announce_remaining -= dt;
+		announce_iters++;
+
+		__ASSERT_NO_MSG(announce_iters < 100);
 	}
 
 	if (first() != NULL) {
@@ -333,7 +342,20 @@ void sys_clock_announce(int32_t ticks)
 	curr_tick += announce_remaining;
 	announce_remaining = 0;
 
-	sys_clock_set_timeout(next_timeout(), false);
+	int32_t next_time = next_timeout();
+	uint64_t cyc_count = k_cycle_get_64();
+
+	sys_clock_set_timeout(next_time, false);
+	uint64_t cyc_count2 = k_cycle_get_64();
+	uint64_t compare = intel_adsp_compare();
+	if (compare < cyc_count2) {
+		record_trace(ANNOUNCE_SHORT_COMPARE, compare);
+		short_compares++;
+		if (short_compares >= 1000) {
+			printk("short compares!!!!, announce looped %u times, took %llu cycles to set compare\n", announce_iters, cyc_count2 - cyc_count);
+			short_compares = 0;
+		}
+	}
 
 	record_trace(ANNOUNCE_EXIT, ticks);
 

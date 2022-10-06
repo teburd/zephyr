@@ -91,7 +91,7 @@ uint64_t compare_isrs;
 atomic_t timer_trace_idx = ATOMIC_INIT(-1);
 struct timer_event timer_trace[TRACE_COUNT];
 
-static uint64_t compare(void)
+uint64_t intel_adsp_compare(void)
 {
 	uint32_t hi0, hi1, lo;
 
@@ -152,11 +152,12 @@ static inline void record_trace(enum timer_event_kind kind, int64_t data)
 	timer_trace[trace_idx & TRACE_IDX_MASK].kind = kind;
 	timer_trace[trace_idx & TRACE_IDX_MASK].cpu = arch_curr_cpu()->id;
 	timer_trace[trace_idx & TRACE_IDX_MASK].tcount = count();
-	timer_trace[trace_idx & TRACE_IDX_MASK].tcompare = compare();
+	timer_trace[trace_idx & TRACE_IDX_MASK].tcompare = intel_adsp_compare();
 	timer_trace[trace_idx & TRACE_IDX_MASK].data = data;
 }
 
 
+int compare_sets;
 static void set_compare(uint64_t time)
 {
 	record_trace(SET_COMPARE_ENTER, time);
@@ -169,16 +170,19 @@ static void set_compare(uint64_t time)
 
 	/* Arm the timer */
 	*WCTCS |= DSP_WCT_CS_TA(COMPARATOR_IDX);
-	
+
 	record_trace(SET_COMPARE_EXIT, -1);
+	compare_sets++;
 }
 
 static void compare_isr(const void *arg)
 {
+
 	ARG_UNUSED(arg);
 	uint64_t curr;
 	uint64_t dticks;
 	// XCC BROKEN	uint32_t dticks;
+
 
 	compare_isrs++;
 
@@ -318,7 +322,7 @@ static int sys_clock_driver_init(const struct device *dev)
 	uint64_t curr = count();
 
 	IRQ_CONNECT(TIMER_IRQ, 0, compare_isr, 0, 0);
-	set_compare(curr + CYC_PER_TICK);
+	set_compare(curr + CYC_PER_TICK*4);
 	last_count = curr;
 	irq_init();
 	return 0;
