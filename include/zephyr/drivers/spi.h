@@ -25,6 +25,7 @@
 #include <zephyr/dt-bindings/spi/spi.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
+#include <zephyr/rtio/rtio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -480,6 +481,42 @@ typedef int (*spi_api_io_async)(const struct device *dev,
 				spi_callback_t cb,
 				void *userdata);
 
+#ifdef CONFIG_SPI_RTIO
+
+const struct rtio_iodev_api {
+	.poll = spi_iodev_poll,
+}
+
+/**
+ * @brief Define an iodev for a given a dt node on the bus
+ *
+ * These do not need to be shared globally but doing so
+ * will reduce a small amount of memory usage is the preferred
+ * method.
+ *
+ * @param node DT_NODE
+ */
+#define SPI_IODEV_DEFINE(name, node_id, operation_, delay_)		\
+	const struct spi_dt_spec _name_##data =				\
+		SPI_SPI_DT_SPEC_GET(node_id, operation_, delay_);	\
+	RTIO_IODEV_DEFINE(name, &spi_iodev_api, &_name_##data)
+
+
+/**
+ * @brief Get a reference to an iodev given a dt node on the bus
+ *
+ * @param node DT_NODE
+ */
+#define SPI_DT_IODEV(node)
+
+/**
+ * @typedef spi_api_iodev_poll
+ * @brief Callback API for using a SPI device with RTIO
+ */
+typedef enum rtio_poll_status *(*spi_api_iodev_poll)(const struct device *dev,
+						     struct rtio_iodev_sqe *iodev_sqe);
+#endif /* CONFIG_SPI_RTIO */
+
 /**
  * @typedef spi_api_release
  * @brief Callback API for unlocking SPI device.
@@ -498,6 +535,9 @@ __subsystem struct spi_driver_api {
 #ifdef CONFIG_SPI_ASYNC
 	spi_api_io_async transceive_async;
 #endif /* CONFIG_SPI_ASYNC */
+#ifdef CONFIG_SPI_RTIO
+	spi_api_iodev_poll iodev_poll;
+#endif /* CONFIG_SPI_RTIO */
 	spi_api_release release;
 };
 
@@ -877,6 +917,117 @@ __deprecated static inline int spi_write_async(const struct device *dev,
 #endif /* CONFIG_POLL */
 
 #endif /* CONFIG_SPI_ASYNC */
+
+
+#ifdef CONFIG_SPI_RTIO
+
+/**
+ * @brief Poll a SPI device with a request
+ *
+ * @param dev SPI device
+ * @param iodev_sqe Prepared submissions queue entry connected to an iodev
+ *                  defined by SPI_IODEV_DEFINE.
+ *                  Must live as long as the request is in flight.
+ *
+ * @retval 0 If successful.
+ * @retval -errno Negative errno code on failure.
+ */
+static inline enum rtio_poll_status spi_iodev_poll(struct rtio_iodev_sqe *iodev_sqe)
+{
+	const struct spi_dt_spec *dt_spec = iodev_sqe->iodev->data
+	const struct device *dev = dt_spec->bus;
+	const struct spi_driver_api *api = (const struct spi_driver_api *)bus->api;
+
+	return api->iodev_poll(dt_spec->bus, iodev_sqe);
+}
+
+/**
+ * @brief Convert a transcieve from spi_buf_sets to a sequence of RTIO ops
+ *
+ * Converts automatically the spi_buf_set tx/rx pair into a sequence of
+ * RTIO operations. The completions contain the rx buffer pointer as the
+ * userdata if given, or the tx buffer pointer if NULL. This does mean
+ * the description of transfers is duplicated but makes for easier usage
+ * with existing calls where drivers may internally only have to work with
+ * RTIO.
+ *
+ * @param rtio Context with which to submit
+ * @param iodev SPI supplied rtio iodev
+ * @param tx_bufs Transmit buffer set
+ * @param rx_bufs Receive buffer set
+ *
+ * @retval 0 success
+ * @retval -errno failure
+ */
+static inline int spi_iodev_convert_transcieve(struct rtio *r, struct rtio_iodev *iodev,
+					       const struct spi_buf_set *tx_bufs,
+					       const struct spi_buf_set *rx_bufs)
+{
+	int ret = 0;
+	uint32_t total_ops = 0;
+	void *userdata;
+	uint8_t *tx_buf, *rx_buf;
+	uint32_t rx_buf_len, rx_buf_len;
+
+	/* Every op is a transceive */
+	total_ops = rx_bufs->count >= tx_bufs->count ? rx_bufs->count : tx_bufs->count;
+
+	for (int i = 0; i < total_ops; i++) {
+		struct rtio_sqe *sqe = rtio_sqe_acquire(r);
+		if (sqe == NULL) {
+			rtio_sqe_drop_acquired(r);
+			ret = -ENOMEM;
+			goto out;
+		}
+
+		if (rx_bufs != NULL && i < rx_bufs->count) {
+			rx_buf = rx_bufs->buffers[i].buf;
+			rx_buf_len = rx_bufs->buffers[i].len;
+		} else {
+			rx_buf = NULL;
+			rx_buf_len = tx_bufs->buffers[i].len;
+		}
+
+		if (tx_bufs != NULL && i < tx_bufs->count) {
+			tx_buf = tx_bufs->buffers[i].buf;
+			tx_buf_len = tx_bufs->buffers[i].len;
+		} else {
+			tx_buf = NULL;
+			tx_buf_len = rx_buf_len;
+		}
+
+		if (rx_buf != NULL) {
+			userdata = rx_buf;
+		} else {
+			userdata = tx_buf;
+		}
+
+		rtio_sqe_prep_txrx(sqe, iodev, RTIO_PRIO_NORM
+				   tx_buf, tx_buf_len,
+				   rx_buf, rx_buf_len,
+				   userdata);
+	}
+
+	rtio_sqe_produce_all(r);
+
+out:
+	return ret;
+}
+
+static inline int spi_iodev_write(struct rtio *r, struct rtio_iodev *iodev,
+				       const struct spi_buf_set *tx)
+{
+	return spi_iodev_transcieve(r, iodev, tx, NULL);
+}
+
+
+static inline int spi_iodev_read(struct rtio *r, struct rtio_iodev *iodev,
+				       const struct spi_buf_set *rx)
+{
+	return spi_iodev_transcieve(r, iodev, NULL, rx);
+}
+
+#endif /* CONFIG_SPI_RTIO */
 
 /**
  * @brief Release the SPI device locked on and/or the CS by the current config
