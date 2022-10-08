@@ -25,6 +25,7 @@
 #include <zephyr/dt-bindings/spi/spi.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
+#include <zephyr/rtio/rtio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -480,6 +481,16 @@ typedef int (*spi_api_io_async)(const struct device *dev,
 				spi_callback_t cb,
 				void *userdata);
 
+#ifdef CONFIG_SPI_RTIO
+
+/**
+ * @typedef spi_api_iodev_submit
+ * @brief Callback API for submitting work to a SPI device with RTIO
+ */
+typedef void (*spi_api_iodev_submit)(const struct device *dev,
+				     struct rtio_iodev_sqe *iodev_sqe);
+#endif /* CONFIG_SPI_RTIO */
+
 /**
  * @typedef spi_api_release
  * @brief Callback API for unlocking SPI device.
@@ -498,6 +509,9 @@ __subsystem struct spi_driver_api {
 #ifdef CONFIG_SPI_ASYNC
 	spi_api_io_async transceive_async;
 #endif /* CONFIG_SPI_ASYNC */
+#ifdef CONFIG_SPI_RTIO
+	spi_api_iodev_submit iodev_submit;
+#endif /* CONFIG_SPI_RTIO */
 	spi_api_release release;
 };
 
@@ -877,6 +891,47 @@ __deprecated static inline int spi_write_async(const struct device *dev,
 #endif /* CONFIG_POLL */
 
 #endif /* CONFIG_SPI_ASYNC */
+
+
+#ifdef CONFIG_SPI_RTIO
+
+/**
+ * @brief Submit a SPI device with a request
+ *
+ * @param dev SPI device
+ * @param iodev_sqe Prepared submissions queue entry connected to an iodev
+ *                  defined by SPI_IODEV_DEFINE.
+ *                  Must live as long as the request is in flight.
+ *
+ * @retval 0 If successful.
+ * @retval -errno Negative errno code on failure.
+ */
+static inline void spi_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+{
+	const struct spi_dt_spec *dt_spec = iodev_sqe->sqe->iodev->data;
+	const struct device *dev = dt_spec->bus;
+	const struct spi_driver_api *api = (const struct spi_driver_api *)dev->api;
+
+	api->iodev_submit(dt_spec->bus, iodev_sqe);
+}
+
+extern const struct rtio_iodev_api spi_iodev_api;
+
+/**
+ * @brief Define an iodev for a given a dt node on the bus
+ *
+ * These do not need to be shared globally but doing so
+ * will reduce a small amount of memory usage is the preferred
+ * method.
+ *
+ * @param node DT_NODE
+ */
+#define SPI_IODEV_DEFINE(name, node_id, operation_, delay_)			\
+	const struct spi_dt_spec _spi_dt_spec_##name =				\
+		SPI_DT_SPEC_GET(node_id, operation_, delay_);			\
+	RTIO_IODEV_DEFINE(name, &spi_iodev_api, (void *)&_spi_dt_spec_##name)
+
+#endif /* CONFIG_SPI_RTIO */
 
 /**
  * @brief Release the SPI device locked on and/or the CS by the current config
