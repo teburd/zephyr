@@ -33,6 +33,7 @@
 #define ZEPHYR_INCLUDE_RTIO_RTIO_H_
 
 #include <zephyr/rtio/rtio_spsc.h>
+#include <zephyr/rtio/rtio_mpsc.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/device.h>
@@ -164,6 +165,7 @@ struct rtio_cq {
 };
 
 struct rtio;
+struct rtio_iodev_sqe;
 
 struct rtio_executor_api {
 	/**
@@ -179,12 +181,12 @@ struct rtio_executor_api {
 	/**
 	 * @brief SQE completes successfully
 	 */
-	void (*ok)(struct rtio *r, const struct rtio_sqe *sqe, int result);
+	void (*ok)(struct rtio_iodev_sqe *iodev_sqe, int result);
 
 	/**
-	 * @brief SQE fails to complete
+	 * @brief SQE fails to complete successfully
 	 */
-	void (*err)(struct rtio *r, const struct rtio_sqe *sqe, int result);
+	void (*err)(struct rtio_iodev_sqe *iodev_sqe, int result);
 };
 
 /**
@@ -257,47 +259,53 @@ struct rtio {
 	struct rtio_cq *cq;
 };
 
+
 /**
- * @brief API that an RTIO IO device should implement
+ * @brief IO device submission queue entry
  */
-struct rtio_iodev_api {
-	/**
-	 * @brief Submission function for a request to the iodev
-	 *
-	 * The iodev is responsible for doing the operation described
-	 * as a submission queue entry and reporting results using using
-	 * `rtio_sqe_ok` or `rtio_sqe_err` once done.
-	 */
-	void (*submit)(const struct rtio_sqe *sqe,
-		       struct rtio *r);
-
-	/**
-	 * TODO some form of transactional piece is missing here
-	 * where we wish to "transact" on an iodev with multiple requests
-	 * over a chain.
-	 *
-	 * Only once explicitly released or the chain fails do we want
-	 * to release. Once released any pending iodevs in the queue
-	 * should be done.
-	 *
-	 * Something akin to a lock/unlock pair.
-	 */
-};
-
-/* IO device submission queue entry */
 struct rtio_iodev_sqe {
+	struct rtio_mpsc_node q;
 	const struct rtio_sqe *sqe;
 	struct rtio *r;
 };
 
 /**
- * @brief IO device submission queue
+ * @brief Each call of poll on an iodev may return a status.
  *
- * This is used for reifying the member of the rtio_iodev struct
+ * This indicates the status of the SQE with regards to the iodev.
  */
-struct rtio_iodev_sq {
-	struct rtio_spsc _spsc;
-	struct rtio_iodev_sqe buffer[];
+enum rtio_poll_status {
+	/** Request has been completed */
+	RTIO_POLL_COMPLETED,
+
+	/** Request is pending */
+	RTIO_POLL_PENDING,
+};
+
+/**
+ * @brief API that an RTIO IO device should implement
+ */
+struct rtio_iodev_api {
+
+	/**
+	 * @brief Poll
+	 *
+	 * Poll may do one of 3 things.
+	 * IF the sqe has not been submitted yet THEN
+	 *    IF the device is idle THEN the sqe is started.
+	 *    ELSE the device is busy THEN the sqe is enqueued.
+	 * ELSE the sqe is enqueued or being worked on THEN
+	 *    the sqe is checked for completion
+	 * ENDIF
+	 *
+	 * Upon completion the iodev *MUST* complete the SQE by reporting results
+	 * using using `rtio_sqe_ok` or `rtio_sqe_err` with the associated rtio
+	 * context of the sqe.
+	 *
+	 * @retval RTIO_POLL_COMPLETE if the sqe has been completed
+	 * @retval RTIO_POLL_PENDING if the sqe is pending
+	 */
+	enum rtio_poll_status (*poll)(struct rtio_iodev_sqe *sqe);
 };
 
 /**
@@ -307,8 +315,8 @@ struct rtio_iodev {
 	/* Function pointer table */
 	const struct rtio_iodev_api *api;
 
-	/* Queue of RTIO contexts with requests */
-	struct rtio_iodev_sq *iodev_sq;
+	/* Queue of rtio_iodev_sqe */
+	struct rtio_mpsc iodev_q;
 
 	/* Data associated with this iodev */
 	void *data;
@@ -389,29 +397,17 @@ static inline void rtio_sqe_prep_write(struct rtio_sqe *sqe,
 #define RTIO_CQ_DEFINE(name, len)			\
 	RTIO_SPSC_DEFINE(name, struct rtio_cqe, len)
 
-
-/**
- * @brief Statically define and initialize a fixed length iodev submission queue
- *
- * @param name Name of the queue.
- * @param len Queue length, power of 2 required
- */
-#define RTIO_IODEV_SQ_DEFINE(name, len) \
-	RTIO_SPSC_DEFINE(name, struct rtio_iodev_sqe, len)
-
 /**
  * @brief Statically define and initialize an RTIO IODev
  *
  * @param name Name of the iodev
  * @param iodev_api Pointer to struct rtio_iodev_api
- * @param qsize Size of the submission queue, must be power of 2
  * @param iodev_data Data pointer
  */
-#define RTIO_IODEV_DEFINE(name, iodev_api, qsize, iodev_data)                                      \
-	static RTIO_IODEV_SQ_DEFINE(_iodev_sq_##name, qsize);                                      \
-	const STRUCT_SECTION_ITERABLE(rtio_iodev, name) = {                                        \
+#define RTIO_IODEV_DEFINE(name, iodev_api, iodev_data)                                             \
+	STRUCT_SECTION_ITERABLE(rtio_iodev, name) = {                                              \
 		.api = (iodev_api),                                                                \
-		.iodev_sq = (struct rtio_iodev_sq *const)&_iodev_sq_##name,                        \
+		.iodev_q = RTIO_MPSC_INIT((name.iodev_q)),                                         \
 		.data = (iodev_data),                                                              \
 	}
 
@@ -449,14 +445,13 @@ static inline void rtio_set_executor(struct rtio *r, struct rtio_executor *exc)
 }
 
 /**
- * @brief Perform a submitted operation with an iodev
+ * @brief Poll an iodev for an operations completion
  *
- * @param sqe Submission to work on
- * @param r RTIO context
+ * @param iodev_sqe Submission to work on
  */
-static inline void rtio_iodev_submit(const struct rtio_sqe *sqe, struct rtio *r)
+static inline enum rtio_poll_status rtio_iodev_poll(struct rtio_iodev_sqe *iodev_sqe)
 {
-	sqe->iodev->api->submit(sqe, r);
+	return iodev_sqe->sqe->iodev->api->poll(iodev_sqe);
 }
 
 /**
@@ -571,13 +566,12 @@ static inline void rtio_cqe_release_all(struct rtio *r)
  *
  * This may start the next asynchronous request if one is available.
  *
- * @param r RTIO context
- * @param sqe Submission that has succeeded
+ * @param iodev_sqe IODev Submission that has succeeded
  * @param result Result of the request
  */
-static inline void rtio_sqe_ok(struct rtio *r, const struct rtio_sqe *sqe, int result)
+static inline void rtio_iodev_sqe_ok(struct rtio_iodev_sqe *iodev_sqe, int result)
 {
-	r->executor->api->ok(r, sqe, result);
+	iodev_sqe->r->executor->api->ok(iodev_sqe, result);
 }
 
 /**
@@ -585,13 +579,12 @@ static inline void rtio_sqe_ok(struct rtio *r, const struct rtio_sqe *sqe, int r
  *
  * This SHALL fail the remaining submissions in the chain.
  *
- * @param r RTIO context
- * @param sqe Submission that has failed
+ * @param iodev_sqe Submission that has failed
  * @param result Result of the request
  */
-static inline void rtio_sqe_err(struct rtio *r, const struct rtio_sqe *sqe, int result)
+static inline void rtio_iodev_sqe_err(struct rtio_iodev_sqe *iodev_sqe, int result)
 {
-	r->executor->api->err(r, sqe, result);
+	iodev_sqe->r->executor->api->err(iodev_sqe, result);
 }
 
 /**
