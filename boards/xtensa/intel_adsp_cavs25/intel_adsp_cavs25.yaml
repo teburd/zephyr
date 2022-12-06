@@ -10,5 +10,30 @@ supported:
   - dai
 testing:
   ignore_tags:
+     - cmsis_dsp
+     - cmsis_rtos
+     - zdsp
      - net
      - bluetooth
+     - zdsp
+     - can
+     - uart
+     - filesystem
+     - onoff
+     - tinycrypt
+     - hwinfo
+     - test_framework
+     - shell
+     - sensor
+     - sensors
+     - disk
+     - led
+     - zbus
+     - chre
+     - nanopb
+     - smf
+     - compression
+     - dmic
+     - i2s
+     - peci
+     - posix
