@@ -71,13 +71,11 @@ static void vnd_sensor_iodev_execute(const struct device *dev,
 	}
 }
 
-static enum rtio_poll_status vnd_sensor_iodev_poll(struct rtio_iodev_sqe *iodev_sqe)
+static void vnd_sensor_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
 {
 	struct vnd_sensor_data *data = (struct vnd_sensor_data *) iodev_sqe->sqe->iodev;
 
 	rtio_mpsc_push(&data->iodev.iodev_q, &iodev_sqe->q);
-
-	return RTIO_POLL_PENDING;
 }
 
 static void vnd_sensor_handle_int(const struct device *dev)
@@ -121,7 +119,7 @@ static int vnd_sensor_init(const struct device *dev)
 }
 
 static const struct rtio_iodev_api vnd_sensor_iodev_api = {
-	.poll = vnd_sensor_iodev_poll,
+	.submit = vnd_sensor_iodev_submit,
 };
 
 #define VND_SENSOR_INIT(n)                                                                         \

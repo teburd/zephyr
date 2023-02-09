@@ -47,7 +47,7 @@ static void rtio_iodev_timer_fn(struct k_timer *tm)
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 }
 
-static enum rtio_poll_status rtio_iodev_test_poll(struct rtio_iodev_sqe *iodev_sqe)
+static void rtio_iodev_test_submit(struct rtio_iodev_sqe *iodev_sqe)
 {
 	struct rtio_iodev *iodev = (struct rtio_iodev *)iodev_sqe->sqe->iodev;
 	struct rtio_iodev_test_data *data = iodev->data;
@@ -58,7 +58,6 @@ static enum rtio_poll_status rtio_iodev_test_poll(struct rtio_iodev_sqe *iodev_s
 	if (!atomic_ptr_cas(&data->iodev_sqe, NULL, iodev_sqe)) {
 		TC_PRINT("adding queued sqe\n");
 		rtio_mpsc_push(&iodev->iodev_q, &iodev_sqe->q);
-		return RTIO_POLL_PENDING;
 	}
 
 	/*
@@ -69,14 +68,10 @@ static enum rtio_poll_status rtio_iodev_test_poll(struct rtio_iodev_sqe *iodev_s
 	 */
 	TC_PRINT("starting one shot\n");
 	k_timer_start(&data->timer, K_MSEC(10), K_NO_WAIT);
-	TC_PRINT("returning pending\n");
-
-	/* Always pending completion as there's a delay */
-	return RTIO_POLL_PENDING;
 }
 
 const struct rtio_iodev_api rtio_iodev_test_api = {
-	.poll = rtio_iodev_test_poll,
+	.submit = rtio_iodev_test_submit,
 };
 
 void rtio_iodev_test_init(struct rtio_iodev *test)

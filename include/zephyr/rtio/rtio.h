@@ -286,26 +286,37 @@ enum rtio_poll_status {
  * @brief API that an RTIO IO device should implement
  */
 struct rtio_iodev_api {
-
 	/**
-	 * @brief Poll
+	 * @brief Poll an iodev
 	 *
-	 * Poll may do one of 3 things.
-	 * IF the sqe has not been submitted yet THEN
-	 *    IF the device is idle THEN the sqe is started.
-	 *    ELSE the device is busy THEN the sqe is enqueued.
-	 * ELSE the sqe is enqueued or being worked on THEN
-	 *    the sqe is checked for completion
-	 * ENDIF
+	 * When a submission to an iodev requires polling, the execution context
+	 * adds the iodev to a list of pending pollable devices. The devices
+	 * are polled as frequently as the desired to determine the status
+	 * of and ensure progress of a submission.
 	 *
-	 * Upon completion the iodev *MUST* complete the SQE by reporting results
-	 * using using `rtio_sqe_ok` or `rtio_sqe_err` with the associated rtio
-	 * context of the sqe.
+	 * For hardware this is expected to directly poll the underlying hardware
+	 * registers to determine if the current submission (read/write/etc)
+	 * has completed.
+	 *
+	 * @param iodev The iodev to poll.
 	 *
 	 * @retval RTIO_POLL_COMPLETE if the sqe has been completed
 	 * @retval RTIO_POLL_PENDING if the sqe is pending
 	 */
-	enum rtio_poll_status (*poll)(struct rtio_iodev_sqe *sqe);
+	enum rtio_poll_status (*poll)(struct rtio_iodev *iodev);
+
+	/**
+	 * @brief Submit to the iodev an entry to work on
+	 *
+	 * This call should be short in duration and most likely
+	 * either enqueue or kick off an entry with the hardware.
+	 *
+	 * If polling is required the iodev should add itself to the execution
+	 * context (@see rtio_add_pollable())
+	 *
+	 * @param iodev_sqe Submission queue entry
+	 */
+	void (*submit)(struct rtio_iodev_sqe *iodev_sqe);
 };
 
 /**
@@ -314,6 +325,9 @@ struct rtio_iodev_api {
 struct rtio_iodev {
 	/* Function pointer table */
 	const struct rtio_iodev_api *api;
+
+	/* Queue member of rtio_iodev pollables */
+	struct rtio_mpsc_node poll_node;
 
 	/* Queue of rtio_iodev_sqe */
 	struct rtio_mpsc iodev_q;
@@ -445,13 +459,32 @@ static inline void rtio_set_executor(struct rtio *r, struct rtio_executor *exc)
 }
 
 /**
- * @brief Poll an iodev for an operations completion
+ * @brief Submit to an iodev a submission to work on
+ *
+ * Should be called by the executor when it wishes to submit work
+ * to an iodev.
  *
  * @param iodev_sqe Submission to work on
  */
-static inline enum rtio_poll_status rtio_iodev_poll(struct rtio_iodev_sqe *iodev_sqe)
+static inline void rtio_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
 {
-	return iodev_sqe->sqe->iodev->api->poll(iodev_sqe);
+	return iodev_sqe->sqe->iodev->api->submit(iodev_sqe);
+}
+
+/**
+ * @brief Poll an iodev for completion of a submission
+ *
+ * Should be called by the executor when rtio_submit or rtio_cqe is called
+ * and polling the device is required.
+ *
+ * @param iodev IODev to poll
+ *
+ * @retval RTIO_POLL_COMPLETED Polling is no longer required
+ * @retval RTIO_POLL_PENDING Polling is still required (task is pending)
+ */
+static inline enum rtio_poll_status rtio_iodev_poll(struct rtio_iodev *iodev)
+{
+	return iodev->api->poll(iodev);
 }
 
 /**

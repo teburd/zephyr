@@ -37,7 +37,7 @@ int rtio_simple_submit(struct rtio *r)
 	exc->task.r = r;
 
 	if (sqe != NULL) {
-		rtio_iodev_poll(&exc->task);
+		rtio_iodev_submit(&exc->task);
 	}
 
 	return 0;
@@ -102,7 +102,7 @@ void rtio_simple_err(struct rtio_iodev_sqe *iodev_sqe, int result)
 		if (nsqe != NULL) {
 
 			iodev_sqe->sqe = nsqe;
-			rtio_iodev_poll(iodev_sqe);
+			rtio_iodev_submit(iodev_sqe);
 		}
 
 	} else {
