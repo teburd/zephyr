@@ -270,9 +270,41 @@ struct rtio_iodev_sqe {
 };
 
 /**
+ * @brief Each call of poll on an iodev may return a status.
+ *
+ * This indicates the status of the SQE with regards to the iodev.
+ */
+enum rtio_poll_status {
+	/** Request has been completed */
+	RTIO_POLL_COMPLETED,
+
+	/** Request is pending */
+	RTIO_POLL_PENDING,
+};
+
+/**
  * @brief API that an RTIO IO device should implement
  */
 struct rtio_iodev_api {
+	/**
+	 * @brief Poll an iodev
+	 *
+	 * When a submission to an iodev requires polling, the execution context
+	 * adds the iodev to a list of pending pollable devices. The devices
+	 * are polled as frequently as the desired to determine the status
+	 * of and ensure progress of a submission.
+	 *
+	 * For hardware this is expected to directly poll the underlying hardware
+	 * registers to determine if the current submission (read/write/etc)
+	 * has completed.
+	 *
+	 * @param iodev The iodev to poll.
+	 *
+	 * @retval RTIO_POLL_COMPLETE if the sqe has been completed
+	 * @retval RTIO_POLL_PENDING if the sqe is pending
+	 */
+	enum rtio_poll_status (*poll)(struct rtio_iodev *iodev);
+
 	/**
 	 * @brief Submit to the iodev an entry to work on
 	 *
@@ -286,6 +318,24 @@ struct rtio_iodev_api {
 	 */
 	void (*submit)(struct rtio_iodev_sqe *iodev_sqe);
 };
+
+/**
+ * @brief An IO device with a function table for submitting requests
+ */
+struct rtio_iodev {
+	/* Function pointer table */
+	const struct rtio_iodev_api *api;
+
+	/* Queue member of rtio_iodev pollables */
+	struct rtio_mpsc_node poll_node;
+
+	/* Queue of rtio_iodev_sqe */
+	struct rtio_mpsc iodev_q;
+
+	/* Data associated with this iodev */
+	void *data;
+};
+
 
 /** An operation that does nothing and will complete immediately */
 #define RTIO_OP_NOP 0
