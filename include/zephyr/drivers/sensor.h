@@ -319,6 +319,10 @@ enum sensor_attribute {
 	 *  to the new sampling frequency.
 	 */
 	SENSOR_ATTR_FF_DUR,
+	/** FIFO watermark attribute */
+	SENSOR_ATTR_FIFO_WATERMARK,
+	/** FIFO enable/disable fifo related interrupts */
+	SENSOR_ATTR_FIFO_INTERRUPT,
 	/**
 	 * Number of all common sensor attributes.
 	 */
@@ -396,27 +400,19 @@ typedef int (*sensor_channel_get_t)(const struct device *dev,
 				    struct sensor_value *val);
 
 #ifdef CONFIG_RTIO
+
 /**
- * @type sensor_iodev_checkout_t
- * @brief Callback API for checking out an rtio_iodev for use. 
+ * @type sensor_fifo_iodev_t
+ * @brief Callback API for getting an iodev to stream from the sensors FIFO.
  */
-typedef int (*sensor_iodev_checkout_t)(const struct device *dev,
+typedef int (*sensor_fifo_iodev_t)(const struct device *dev,
 				   struct rtio_iodev **iodev);
 
 /**
- * @type sensor_iodev_checkin_t
- * @brief Callback API for checking in an rtio_iodev for return. 
+ * @type sensor_fifo_read_t
+ * @brief Callback API for triggering a FIFO read.
  */
-typedef int (*sensor_iodev_checkin_t)(const struct device *dev,
-				   struct rtio_iodev *iodev);
-
-/**
- * @type sensor_iodev_start_t
- * @brief Callback API for starting an iodev
- */
-typedef int (*sensor_iodev_start_t)(const struct device *dev,
-				   struct rtio_iodev *iodev);
-
+typedef enum rtio_poll_status (*sensor_iodev_poll_t)(const struct device *dev);
 
 #endif /* CONFIG_RTIO */
 
@@ -428,9 +424,8 @@ __subsystem struct sensor_driver_api {
 	sensor_channel_get_t channel_get;
 
 #ifdef CONFIG_RTIO
-	sensor_iodev_checkout_t iodev_checkout;
-	sensor_iodev_checkin_t iodev_checkin;
-	sensor_iodev_start_t iodev_start;
+	sensor_fifo_iodev_t fifo_iodev;
+	sensor_fifo_read_t fifo_read;
 #endif /* CONFIG_RTIO */
 };
 
