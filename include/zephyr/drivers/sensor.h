@@ -412,7 +412,7 @@ typedef int (*sensor_fifo_iodev_t)(const struct device *dev,
  * @type sensor_fifo_read_t
  * @brief Callback API for triggering a FIFO read.
  */
-typedef enum rtio_poll_status (*sensor_iodev_poll_t)(const struct device *dev);
+typedef void (*sensor_fifo_read_t)(const struct device *dev);
 
 #endif /* CONFIG_RTIO */
 
