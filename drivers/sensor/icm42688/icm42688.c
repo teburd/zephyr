@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "zephyr/drivers/gpio.h"
 #define DT_DRV_COMPAT invensense_icm42688
 
 #include <zephyr/drivers/sensor.h>
@@ -27,6 +28,7 @@ struct icm42688_sensor_data {
 
 #ifdef CONFIG_RTIO
 	struct device *dev;
+	struct rtio *r;
 	struct rtio_iodev *iodev;
 	bool checked_out;
 	uint32_t overflows;
@@ -231,84 +233,11 @@ static int icm42688_attr_get(const struct device *dev, enum sensor_channel chan,
 
 #ifdef CONFIG_ICM42688_RTIO
 
-static int icm42688_iodev_checkout(const struct device *dev, struct rtio_iodev **iodev)
+static int icm42688_iodev(const struct device *dev, struct rtio_iodev **iodev)
 {
-
 	struct icm42688_sensor_data *data = dev->data;
-
-	if(data->checked_out) {
-		LOG_WRN("iodev was already checked out and is expected to have a single owner");
-		return -EBUSY;
-	}
 
 	*iodev = data->iodev;
-
-	data->checked_out = true;
-
-	return 0;
-}
-
-
-static int icm42688_iodev_start(const struct device *dev, struct rtio_iodev *iodev)
-{
-
-	ARG_UNUSED(iodev);
-
-	struct icm42688_sensor_data *data = dev->data;
-
-	struct icm42688_cfg cfg = data->dev_data.cfg;
-	cfg.accel_odr = ICM42688_ACCEL_ODR_32000;
-	cfg.gyro_odr  = ICM42688_GYRO_ODR_32000;
-	cfg.fifo_en = true;
-	cfg.fifo_wm = 1024;
-
-	int key = arch_irq_lock();
-	
-	if (icm42688_safely_configure(dev, &cfg) != 0) {
-		LOG_WRN("Configuring FIFO failed");
-		return -EINVAL;
-	}
-
-	arch_irq_unlock(key);
-
-	LOG_DBG("sensor iodev started");
-	
-	return 0;
-}
-
-
-
-static int icm42688_iodev_checkin(const struct device *dev, struct rtio_iodev *iodev)
-{
-	int res = 0;
-
-	LOG_INF("Checking in iodev");
-
-	int key = arch_irq_lock();
-
-	struct icm42688_sensor_data *data = dev->data;
-
-	if(!data->checked_out || iodev != data->iodev) {
-		LOG_WRN("checkout was false %d or given iodev %p doesn't match known %p",
-			data->checked_out, iodev, data->iodev);
-		return -EINVAL;
-	}
-
-	struct icm42688_cfg cfg = data->dev_data.cfg;
-	cfg.accel_odr = ICM42688_ACCEL_ODR_1000;
-	cfg.gyro_odr = ICM42688_GYRO_ODR_1000;
-	cfg.fifo_en = false;
-	if (icm42688_safely_configure(dev, &cfg) != 0) {
-		LOG_ERR("Error reconfiguring sensor %d", res);
-		return -EINVAL;
-	}
-	data->checked_out = false;
-
-	rtio_iodev_cancel_all(data->iodev);
-
-	arch_irq_unlock(key);
-
-	LOG_INF("Checked in iodev");
 
 	return 0;
 }
@@ -319,26 +248,179 @@ static int icm42688_iodev_checkin(const struct device *dev, struct rtio_iodev *i
 
 /* Accepts read requests with buffers long enough to store at least a single FIFO packet
  * and appends them to a pending request queue. This is then pulled from and read into
- * from the sensor fifo watermark isr.
+ * when sensor_fifo_read is called.
  */
-enum rtio_poll_status icm42688_iodev_poll(struct rtio_iodev_sqe *iodev_sqe)
+void icm42688_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
 {
 	const struct rtio_sqe *sqe = iodev_sqe->sqe;
-	
-	if(sqe->op != RTIO_OP_RX || sqe->buf_len < ICM42688_MIN_BUF_SIZE) {
+
+	if (sqe->op != RTIO_OP_RX || sqe->buf_len < ICM42688_MIN_BUF_SIZE) {
 		rtio_iodev_sqe_err(iodev_sqe, -EINVAL);
-		return RTIO_POLL_COMPLETED;
+		return;
 	}
 
 	rtio_mpsc_push((struct rtio_mpsc *)&iodev_sqe->sqe->iodev->iodev_q, &iodev_sqe->q);
 
-	return RTIO_POLL_PENDING;
+	return;
 }
 
 
 static const struct rtio_iodev_api icm42688_iodev_api = {
-	.poll = icm42688_iodev_poll
+	.submit = icm42688_iodev_submit
 };
+
+
+
+struct fifo_header {
+	uint8_t int_status;
+	uint16_t gyro_odr: 4;
+	uint16_t accel_odr: 4;
+	uint16_t gyro_fs: 3;
+	uint16_t accel_fs: 3;
+	uint16_t packet_format: 2;
+} __attribute__((__packed__));
+
+BUILD_ASSERT(sizeof(struct fifo_header) == 3);
+
+
+
+static void
+icm42688_fifo_count_cb(struct rtio *r, struct rtio_sqe *sqe, void *dev)
+{
+	uint8_t fifo_count = (uint8_t)sqe->userdata;
+
+	if (!(int_status & BIT_INT_STATUS_FIFO_THS || int_status & BIT_INT_STATUS_FIFO_FULL)) {
+		goto out;
+	}
+
+	/* In effect a overrun, as the sensor is producing faster than we are consuming */
+	if (int_status & BIT_INT_STATUS_FIFO_FULL) {
+		data->overflows++;
+	}
+
+	/* Pull a operation from our device iodev queue, validated to only be reads */
+
+
+	/* Get a buffer to read into, if one exists */
+	struct rtio_mpsc_node *next = rtio_mpsc_pop(&data->iodev->iodev_q);
+
+	/* Not inherently an underrun/overrun as we may have a buffer to fill next time */
+	if (next == NULL) {
+		/* In effect we want to punish this thread (ugh) for now so others may run.
+		 * Without this its very possible all time is spent jumping from the interrupt to this
+		 * thread not allowing other threads to run (like the one adding the buffers to read into)
+		 */
+		k_msleep(1);
+		goto out;
+	}
+
+	struct rtio_iodev_sqe *iodev_sqe = CONTAINER_OF(next, struct rtio_iodev_sqe, q);
+	
+	/* Check buffer is big enough for configuration
+	 * and at least 1 packet
+	 *
+	 * TODO determine len to be aligned down to the nearest packet
+	 */
+	if (iodev_sqe->sqe->buf_len < (sizeof(struct fifo_header) + 20)) {
+		LOG_WRN("Buffer minimum size not met");
+		rtio_iodev_sqe_err(iodev_sqe, -ENOMEM);
+		goto out;
+	}
+
+	/* Read FIFO and call back to rtio with rtio_sqe completion */
+	/* TODO is packet format even needed? the fifo has a header per packet
+	 * already
+	 */
+	struct fifo_header hdr = {
+		.int_status = int_status,
+		.gyro_odr = data->dev_data.cfg.gyro_odr,
+		.gyro_fs = data->dev_data.cfg.gyro_fs,
+		.accel_odr = data->dev_data.cfg.accel_odr,
+		.accel_fs = data->dev_data.cfg.accel_fs,
+		.packet_format = 0,
+	};
+
+	uint32_t buf_avail = iodev_sqe->sqe->buf_len;
+	memcpy(iodev_sqe->sqe->buf, &hdr, sizeof(hdr));
+	buf_avail -= sizeof(hdr);
+
+	/* TODO account for other packet sizes */
+	const uint32_t pkt_size = 16;
+	uint32_t read_len = fifo_count > buf_avail ? buf_avail : fifo_count;
+	uint32_t pkts = read_len / pkt_size;
+	read_len = pkts*pkt_size;
+
+	__ASSERT_NO_MSG(read_len % pkt_size == 0);
+
+	uint8_t *read_buf = &iodev_sqe->sqe->buf[sizeof(hdr)];
+
+	/* Flush out completions  */
+	struct rtio_cqe *cqe = rtio_cqe_consume(drv_data->r);
+
+	while (cqe != NULL) {
+		cqe = rtio_cqe_consume(drv_data->r);
+	}
+	rtio_cqe_release_all(r);
+
+	/** Setup new rtio chain to read the fifo data and report then check the result */
+	struct rtio_sqe *write_fifo_addr = rtio_sqe_acquire(dev_data->r);
+	struct rtio_sqe *read_fifo_data = rtio_sqe_acquire(dev_data->r);
+	struct rtio_sqe *complete_sqe = rtio_sqe_acquire(dev_data->r);
+
+	rtio_sqe_prep_small_write(write_int_reg, drv_data->spi_iodev, RTIO_PRIO_NORM, REG_INT_STATUS, 1);
+	write_fifo_count_reg->flags = RTIO_SQE_CHAINED;
+	rtio_sqe_prep_read(read_int_reg, drv_data->spi_iodev, RTIO_PRIO_NORM, read_buf, read_len, iodev_sqe);
+
+	/* TODO add flush op here */
+
+	rtio_sqe_prep_func(check_fifo_count, icm42688_fifo_count_cb, dev);	
+	
+	res = icm42688_spi_read(&cfg->dev_cfg.spi, REG_FIFO_DATA, read_buf, read_len);
+}
+
+static void
+icm42688_int_status_cb(struct rtio *r, struct rtio_sqe *sqe, void *arg)
+{
+	uint8_t int_status = (uint8_t)sqe->userdata;
+	const struct device *dev = arg;
+	const struct icm42688_sensor_config *drv_ata = dev->data;
+		
+	if (!(int_status & BIT_INT_STATUS_FIFO_THS || int_status & BIT_INT_STATUS_FIFO_FULL)) {
+		gpio_pin_interrupt_configure_dt(drv_cfg->dev_cfg.gpio_int1, GPIO_INT_EDGE_TO_ACTIVE);
+		return;
+	}
+
+	/* In effect a overrun, as the sensor is producing faster than we are consuming */
+	if (int_status & BIT_INT_STATUS_FIFO_FULL) {
+		data->overflows++;
+	}
+
+	/* Flush out completions  */
+	struct rtio_cqe *cqe = rtio_cqe_consume(drv_data->r);
+
+	while (cqe != NULL) {
+		cqe = rtio_cqe_consume(drv_data->r);
+	}
+	rtio_cqe_release_all(r);
+
+
+	struct rtio_sqe *write_fifo_count_reg = rtio_sqe_acquire(drv_data->r);
+	struct rtio_sqe *read_fifo_count_reg = rtio_sqe_acquire(drv_data->r);
+	struct rtio_sqe *check_fifo_count = rtio_sqe_acquire(drv_data->r);
+
+	rtio_sqe_prep_small_write(write_int_reg, drv_data->spi_iodev, RTIO_PRIO_NORM, REG_INT_STATUS, 1);
+	write_fifo_count_reg->flags = RTIO_SQE_CHAINED;
+	rtio_sqe_prep_read(read_int_reg, drv_data->spi_iodev, RTIO_PRIO_NORM, &(check_int_status->userdata), 1, NULL);
+	/* TODO add flush op here instead to ensure all prior ops are done (success or error)
+	 * This works without it since we are using the simple executor which ensure one task
+	 * at a time.
+	 */
+	rtio_sqe_prep_func(check_fifo_count, icm42688_fifo_count_cb, dev);
+
+	rtio_sqe_produce_all(drv_data->r);
+
+	rtio_submit(drv_data->r, 0);
+}
 
 atomic_t icm42688_int_count = ATOMIC_INIT(0);
 
@@ -353,22 +435,51 @@ icm42688_gpio_callback(const struct device *dev, struct gpio_callback *cb, uint3
 
 	atomic_inc(&icm42688_int_count);
 
-	gpio_pin_interrupt_configure_dt(&drv_cfg->dev_cfg.gpio_int1, GPIO_INT_DISABLE);
+	/**
+	 * An awkward scenario can occur here where the interrupt occurs while working through
+	 * the callback chain *if* we don't mask the interrupt first. So do that, and expect its unmasked
+	 * once work is done.
+	 */
+	gpio_pin_interrupt_configure_dt(drv_cfg->dev_cfg.gpio_int1, GPIO_INT_DISABLE);
 
-	k_sem_give(&drv_data->gpio_sem);
+	/* If SPI has RTIO support we don't need to have a thread at all
+	 *
+	 * In a real driver we might depend on this rather than make it optional, here
+	 * its optional to be able to compare and contrast the performan and latency.
+	 */
+#ifdef CONFIG_SPI_RTIO
+
+	/*
+	 * Setup rtio chain of ops with inline calls to make decisions
+	 * 1. read int status
+	 * 2. call to check int status and get pending RX operation
+	 * 4. read fifo len
+	 * 5. call to determine read len
+	 * 6. read fifo
+	 * 7. call to report completion
+	 */
+	struct rtio_sqe *write_int_reg = rtio_sqe_acquire(drv_data->r);
+	struct rtio_sqe *read_int_reg = rtio_sqe_acquire(drv_data->r);
+	struct rtio_sqe *check_int_status  = rtio_sqe_acquire(drv_data->r);
+	struct rtio_sqe *unmask_gpio_int  = rtio_sqe_acquire(drv_data->r);
+
+	rtio_sqe_prep_small_write(write_int_reg, drv_data->spi_iodev, RTIO_PRIO_NORM, REG_INT_STATUS, 1, read_int_reg);
+	write_int_reg->flags = RTIO_SQE_CHAINED;
+	rtio_sqe_prep_read(read_int_reg, drv_data->spi_iodev, RTIO_PRIO_NORM, &(check_int_status->userdata), 1, NULL);
+	/* TODO add flush op here instead to ensure all prior ops are done (success or error)
+	 * This works without it since we are using the simple executor which ensure one task
+	 * at a time.
+	 */
+	rtio_sqe_prep_func(check_int_status, icm42688_int_status_cb, dev);
+
+
+	rtio_sqe_produce_all(drv_data->r);
+
+	rtio_submit(drv_data->r, 0);
+#else /* CONFIG_SPI_RTIO */
+	k_sem_give(drv_data->gpio_sem);
+#endif /* CONFIG_SPI_RTIO */
 }
-
-struct fifo_header {
-	uint8_t int_status;
-	uint16_t gyro_odr: 4;
-	uint16_t accel_odr: 4;
-	uint16_t gyro_fs: 3;
-	uint16_t accel_fs: 3;
-	uint16_t packet_format: 2;
-} __attribute__((packed));
-
-BUILD_ASSERT(sizeof(struct fifo_header) == 3);
-
 
 static void icm42688_thread_cb(const struct device *dev)
 {
@@ -399,6 +510,7 @@ static void icm42688_thread_cb(const struct device *dev)
 	}
 
 	res = icm42688_spi_read(&cfg->dev_cfg.spi, REG_FIFO_COUNTH, read_buf, 2);
+
 	if (res) {
 		goto out;
 	}
@@ -474,7 +586,6 @@ static void icm42688_thread_cb(const struct device *dev)
 	rtio_iodev_sqe_ok(iodev_sqe, read_len + sizeof(hdr));
 
 out:
-	gpio_pin_interrupt_configure_dt(&cfg->dev_cfg.gpio_int1, GPIO_INT_EDGE_TO_ACTIVE);
 	return;
 }
 
@@ -487,8 +598,8 @@ static void icm42688_thread(void *p1, void *p2, void *p3)
 
 	while (1) {
 		k_sem_take(&data->gpio_sem, K_FOREVER);
-		/*k_sem_reset(&data->gpio_sem);*/
 		icm42688_thread_cb(data->dev);
+		gpio_pin_interrupt_configure_dt(&cfg->dev_cfg.gpio_int1, GPIO_INT_EDGE_TO_ACTIVE);
 	}
 }
 
@@ -594,33 +705,38 @@ int icm42688_init(const struct device *dev)
 }
 
 /* device defaults to spi mode 0/3 support */
-#define ICM42688_SPI_CFG                                                                           \
+#define ICM42688_SPI_CFG                                                                        \
 	SPI_OP_MODE_MASTER | SPI_MODE_CPOL | SPI_MODE_CPHA | SPI_WORD_SET(8) | SPI_TRANSFER_MSB
 
-#define ICM42688_RTIO_DEFINE(inst)                                                                 \
+#define ICM42688_RTIO_DEFINE(inst)                                                              \
+	RTIO_EXECUTOR_SIMPLE_DEFINE(icm42688_rtio_exec_##inst);					\
+	RTIO_DEFINE(icm42688_rtio_##inst, &icm42688_rtio_exec_##inst, 4, 4);			\
 	RTIO_IODEV_DEFINE(icm42688_iodev_##inst, &icm42688_iodev_api, NULL);
 
 #define ICM42688_DEFINE_CONFIG(inst) \
-	static const struct icm42688_sensor_config icm42688_cfg_##inst = {                         \
-		.dev_cfg =                                                                         \
-			{                                                                          \
-				.spi = SPI_DT_SPEC_INST_GET(inst, ICM42688_SPI_CFG, 0U),           \
-				.gpio_int1 = GPIO_DT_SPEC_INST_GET_OR(inst, int_gpios, {0}),       \
-			},                                                                         \
+	static const struct icm42688_sensor_config icm42688_cfg_##inst = {                      \
+		.dev_cfg =                                                                      \
+			{                                                                       \
+				.spi = SPI_DT_SPEC_INST_GET(inst, ICM42688_SPI_CFG, 0U),        \
+				.gpio_int1 = GPIO_DT_SPEC_INST_GET_OR(inst, int_gpios, {0}),    \
+			},                                                                      \
 	}
 
-#define ICM42688_DEFINE_DATA(inst)                                                                 \
-	IF_ENABLED(CONFIG_ICM42688_RTIO, (ICM42688_RTIO_DEFINE(inst)));                            \
-	static struct icm42688_sensor_data icm42688_driver_##inst = {                              \
-		IF_ENABLED(CONFIG_ICM42688_RTIO, (.iodev = &icm42688_iodev_##inst,))               \
+#define ICM42688_DEFINE_DATA(inst)								\
+	IF_ENABLED(CONFIG_ICM42688_RTIO, (ICM42688_RTIO_DEFINE(inst)));				\
+	static struct icm42688_sensor_data icm42688_driver_##inst = {                           \
+		IF_ENABLED(CONFIG_ICM42688_RTIO, (						\
+		.r = &icm42688_rtio_##inst,							\
+		.iodev = &icm42688_iodev_##inst							\
+		))										\
 	}
 
-#define ICM42688_INIT(inst)                                                                        \
-	ICM42688_DEFINE_CONFIG(inst);                                                              \
-	ICM42688_DEFINE_DATA(inst);                                                                \
-                                                                                                   \
-	SENSOR_DEVICE_DT_INST_DEFINE(inst, icm42688_init, NULL, &icm42688_driver_##inst,           \
-				     &icm42688_cfg_##inst, POST_KERNEL,                            \
+#define ICM42688_INIT(inst)									\
+	ICM42688_DEFINE_CONFIG(inst);								\
+	ICM42688_DEFINE_DATA(inst);								\
+												\
+	SENSOR_DEVICE_DT_INST_DEFINE(inst, icm42688_init, NULL, &icm42688_driver_##inst,	\
+				     &icm42688_cfg_##inst, POST_KERNEL,				\
 				     CONFIG_SENSOR_INIT_PRIORITY, &icm42688_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(ICM42688_INIT)
