@@ -161,11 +161,16 @@ struct rtio_sqe {
 			void (*callback)(struct rtio *r, const struct rtio_sqe *sqe, void *arg0);
 			void *arg0; /**< Last argument given to callback */
 		};
+
+		/** OP_TXRX */
+		struct {
+			uint32_t txrx_len;
+			uint8_t *tx_buf;
+			uint8_t *rx_buf;
+		};
+
 	};
 };
-
-/* Adjust as needed to account for the byte size of each submission queue entry. */
-BUILD_ASSERT(sizeof(struct rtio_sqe) == 20);
 
 /* Ensure the rtio_sqe never grows beyond a common cacheline size of 64 bytes */
 BUILD_ASSERT(sizeof(struct rtio_sqe) <= 64);
@@ -352,6 +357,8 @@ struct rtio_iodev {
 /** An operation that calls a given function (callback) */
 #define RTIO_OP_CALLBACK (RTIO_OP_TINY_TX+1)
 
+/** An operation that transceives (reads and writes simultaneously) */
+#define RTIO_OP_TXRX (RTIO_OP_CALLBACK+1)
 
 /**
  * @brief Prepare a nop (no op) submission
@@ -453,6 +460,29 @@ static inline void rtio_sqe_prep_callback(struct rtio_sqe *sqe,
 	sqe->iodev = NULL;
 	sqe->callback = callback;
 	sqe->arg0 = arg0;
+	sqe->userdata = userdata;
+}
+
+
+
+/**
+ * @brief Prepare a transceive op submission
+ */
+static inline void rtio_sqe_prep_transceive(struct rtio_sqe *sqe,
+				       const struct rtio_iodev *iodev,
+				       int8_t prio,
+				       uint8_t *tx_buf,
+				       uint8_t *rx_buf,
+				       uint32_t txrx_len,
+				       void *userdata)
+{
+	sqe->op = RTIO_OP_TXRX;
+	sqe->prio = prio;
+	sqe->flags = 0;
+	sqe->iodev = iodev;
+	sqe->txrx_len = txrx_len;
+	sqe->tx_buf = tx_buf;
+	sqe->rx_buf = rx_buf;
 	sqe->userdata = userdata;
 }
 
