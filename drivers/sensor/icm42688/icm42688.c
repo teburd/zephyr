@@ -37,19 +37,20 @@ struct icm42688_sensor_data {
 	bool checked_out;
 	uint32_t overflows;
 	struct gpio_callback gpio_cb;
-
-#ifndef CONFIG_SPI_RTIO
-	struct k_sem gpio_sem;
-	struct k_thread thread;
-
-	K_KERNEL_STACK_MEMBER(thread_stack, CONFIG_ICM42688_THREAD_STACK_SIZE);
-#else
+#ifdef CONFIG_SPI_RTIO
 	struct rtio_iodev *spi_iodev;
 	uint8_t int_status;
 	uint16_t fifo_count;
 	atomic_t reading_fifo;
 #endif /* CONFIG_SPI_RTIO */
 #endif /* CONFIG_ICM42688_RTIO */
+
+#if CONFIG_ICM42688_TRIGGER_OWN_THREAD
+	struct k_sem gpio_sem;
+	struct k_thread thread;
+
+	K_KERNEL_STACK_MEMBER(thread_stack, CONFIG_ICM42688_THREAD_STACK_SIZE);
+#endif
 };
 
 struct icm42688_sensor_config {
@@ -282,8 +283,8 @@ static int icm42688_fifo_start(const struct device *dev)
 	 * fifo_odr, fifo_wm (in bytes or records?) attrs?
 	 */
 	sensor_cfg.fifo_wm = 1024; /* wm in bytes */
-	sensor_cfg.accel_odr = ICM42688_ACCEL_ODR_32000;
-	sensor_cfg.gyro_odr = ICM42688_GYRO_ODR_32000;
+	sensor_cfg.accel_odr = ICM42688_ACCEL_ODR_200;
+	sensor_cfg.gyro_odr = ICM42688_GYRO_ODR_200;
 
 	res = icm42688_safely_configure(dev, &sensor_cfg);
 	if (res != 0) {
