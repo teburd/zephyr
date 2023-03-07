@@ -164,8 +164,9 @@ struct rtio_sqe {
 
 		/** OP_TXRX */
 		struct {
-			uint32_t txrx_len;
+			uint32_t tx_buf_len;
 			uint8_t *tx_buf;
+			uint32_t rx_buf_len;
 			uint8_t *rx_buf;
 		};
 
@@ -472,16 +473,18 @@ static inline void rtio_sqe_prep_transceive(struct rtio_sqe *sqe,
 				       const struct rtio_iodev *iodev,
 				       int8_t prio,
 				       uint8_t *tx_buf,
+				       uint32_t tx_buf_len,
 				       uint8_t *rx_buf,
-				       uint32_t txrx_len,
+				       uint32_t rx_buf_len,
 				       void *userdata)
 {
 	sqe->op = RTIO_OP_TXRX;
 	sqe->prio = prio;
 	sqe->flags = 0;
 	sqe->iodev = iodev;
-	sqe->txrx_len = txrx_len;
+	sqe->tx_buf_len = tx_buf_len;
 	sqe->tx_buf = tx_buf;
+	sqe->rx_buf_len = rx_buf_len;
 	sqe->rx_buf = rx_buf;
 	sqe->userdata = userdata;
 }
@@ -663,6 +666,16 @@ static inline struct rtio_cqe *rtio_cqe_consume_block(struct rtio *r)
 #endif
 
 	return cqe;
+}
+
+/**
+ * @brief Release consumed completion queue event
+ *
+ * @param r RTIO context
+ */
+static inline void rtio_cqe_release(struct rtio *r)
+{
+	rtio_spsc_release(r->cq);
 }
 
 /**
