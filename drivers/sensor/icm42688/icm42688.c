@@ -53,6 +53,13 @@ struct icm42688_sensor_data {
 #endif
 };
 
+
+#if defined(CONFIG_SPI_RTIO) && defined(CONFIG_ICM42688_RTIO)
+#define ICM42688_USE_SPI_RTIO 1
+#else
+#define ICM42688_USE_SPI_RTIO 0
+#endif
+
 struct icm42688_sensor_config {
 	struct icm42688_dev_cfg dev_cfg;
 };
@@ -366,7 +373,7 @@ struct fifo_header {
 BUILD_ASSERT(sizeof(struct fifo_header) == 3);
 
 
-#ifdef CONFIG_SPI_RTIO
+#if CONFIG_SPI_RTIO
 
 static void icm42688_complete_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
 {
@@ -768,7 +775,7 @@ void icm42688_unlock(const struct device *dev)
 		.r = &icm42688_rtio_##inst,							\
 		.fifo_iodev = &icm42688_fifo_iodev_##inst,					\
 		))										\
-		IF_ENABLED(CONFIG_SPI_RTIO, (							\
+		IF_ENABLED(ICM42688_USE_SPI_RTIO, (						\
 		.spi_iodev = &icm42688_spi_iodev_##inst,					\
 		))										\
 	}
