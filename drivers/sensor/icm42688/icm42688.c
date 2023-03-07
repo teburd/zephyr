@@ -47,6 +47,7 @@ struct icm42688_sensor_data {
 	struct rtio_iodev *spi_iodev;
 	uint8_t int_status;
 	uint16_t fifo_count;
+	atomic_t reading_fifo;
 #endif /* CONFIG_SPI_RTIO */
 #endif /* CONFIG_ICM42688_RTIO */
 };
@@ -366,8 +367,7 @@ BUILD_ASSERT(sizeof(struct fifo_header) == 3);
 
 #ifdef CONFIG_SPI_RTIO
 
-static void
-icm42688_complete_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
+static void icm42688_complete_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
 {
 	const struct device *dev = arg;
 	struct icm42688_sensor_data *drv_data = dev->data;
@@ -380,8 +380,7 @@ icm42688_complete_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
 	gpio_pin_interrupt_configure_dt(&drv_cfg->dev_cfg.gpio_int1, GPIO_INT_EDGE_TO_ACTIVE);
 }
 
-static void
-icm42688_fifo_count_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
+static void icm42688_fifo_count_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
 {
 	const struct device *dev = arg;
 	struct icm42688_sensor_data *drv_data = dev->data;
@@ -476,8 +475,7 @@ icm42688_fifo_count_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
 	rtio_submit(drv_data->r, 0);
 }
 
-static void
-icm42688_int_status_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
+static void icm42688_int_status_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
 {
 	const struct device *dev = arg;
 	struct icm42688_sensor_data *drv_data = dev->data;
@@ -520,36 +518,9 @@ icm42688_int_status_cb(struct rtio *r, const struct rtio_sqe *sqe, void *arg)
 	rtio_submit(drv_data->r, 0);
 }
 
-#endif /* CONFIG_SPI_RTIO */
-
-atomic_t icm42688_int_count = ATOMIC_INIT(0);
-
-static void
-icm42688_gpio_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+void icm42688_rtio_fifo_event(const struct device *dev)
 {
-	struct icm42688_sensor_data *drv_data =
-		CONTAINER_OF(cb, struct icm42688_sensor_data, gpio_cb);
-	const struct icm42688_sensor_config *drv_cfg = drv_data->dev->config;
-
-	ARG_UNUSED(pins);
-
-	atomic_inc(&icm42688_int_count);
-
-	if (!drv_data->dev_data.cfg.fifo_en) {
-		return;
-	}
-	/* An awkward scenario can occur here where the interrupt occurs while
-	 * working through the callback chain *if* we don't mask the interrupt
-	 * first. So do that, and expect its unmasked once work is done.
-	 */
-	gpio_pin_interrupt_configure_dt(&drv_cfg->dev_cfg.gpio_int1, GPIO_INT_DISABLE);
-
-	/* If SPI has RTIO support we don't need to have a thread at all
-	 *
-	 * In a real driver we might depend on this rather than make it optional, here
-	 * its optional to be able to compare and contrast the performan and latency.
-	 */
-#ifdef CONFIG_SPI_RTIO
+	struct icm42688_sensor_data *drv_data = dev->data;
 
 	/*
 	 * Setup rtio chain of ops with inline calls to make decisions
@@ -573,15 +544,11 @@ icm42688_gpio_callback(const struct device *dev, struct gpio_callback *cb, uint3
 	rtio_sqe_prep_callback(check_int_status, icm42688_int_status_cb,
 		(void *)drv_data->dev, NULL);
 
-	rtio_submit(drv_data->r, 0);
-#else /* CONFIG_SPI_RTIO */
-	k_sem_give(&drv_data->gpio_sem);
-#endif /* CONFIG_SPI_RTIO */
-}
+	rtio_submit(drv_data->r, 0);}
 
-#ifndef CONFIG_SPI_RTIO
+#else
 
-static void icm42688_thread_cb(const struct device *dev)
+void icm42688_rtio_fifo_event(const struct device *dev)
 {
 	struct icm42688_sensor_data *data = dev->data;
 	const struct icm42688_sensor_config *cfg = dev->config;
@@ -694,61 +661,7 @@ out:
 	return;
 }
 
-static void icm42688_thread(void *p1, void *p2, void *p3)
-{
-	ARG_UNUSED(p3);
-
-	struct icm42688_sensor_data *data = p1;
-	const struct icm42688_sensor_config *cfg = p2;
-
-	while (1) {
-		k_sem_take(&data->gpio_sem, K_FOREVER);
-		icm42688_thread_cb(data->dev);
-		gpio_pin_interrupt_configure_dt(&cfg->dev_cfg.gpio_int1,
-						GPIO_INT_EDGE_TO_ACTIVE);
-	}
-}
 #endif /* CONFIG_SPI_RTIO */
-
-int icm42688_init_rtio(const struct device *dev)
-{
-	struct icm42688_sensor_data *data = dev->data;
-	const struct icm42688_sensor_config *cfg = dev->config;
-	int res = 0;
-
-	if (!cfg->dev_cfg.gpio_int1.port) {
-		LOG_ERR("trigger enabled but no interrupt gpio supplied");
-		return -ENODEV;
-	}
-
-	if (!device_is_ready(cfg->dev_cfg.gpio_int1.port)) {
-		LOG_ERR("gpio_int gpio not ready");
-		return -ENODEV;
-	}
-
-	data->dev = dev;
-	gpio_pin_configure_dt(&cfg->dev_cfg.gpio_int1, GPIO_INPUT);
-	gpio_init_callback(&data->gpio_cb, icm42688_gpio_callback,
-			   BIT(cfg->dev_cfg.gpio_int1.pin));
-	res = gpio_add_callback(cfg->dev_cfg.gpio_int1.port, &data->gpio_cb);
-
-	if (res < 0) {
-		LOG_ERR("Failed to set gpio callback");
-		return res;
-	}
-
-#ifndef CONFIG_SPI_RTIO
-	k_sem_init(&data->gpio_sem, 0, K_SEM_MAX_LIMIT);
-	k_thread_create(&data->thread, data->thread_stack,
-			CONFIG_ICM42688_THREAD_STACK_SIZE,
-			icm42688_thread, data, cfg, NULL,
-			K_PRIO_COOP(CONFIG_ICM42688_THREAD_PRIORITY), 0,
-			K_NO_WAIT);
-#endif /* CONFIG_SPI_RTIO */
-
-	return 0;
-}
-
 #endif /* CONFIG_ICM42688_RTIO */
 
 
@@ -810,13 +723,6 @@ int icm42688_init(const struct device *dev)
 		LOG_ERR("Failed to configure");
 		return res;
 	}
-
-#ifdef CONFIG_ICM42688_RTIO
-	if (icm42688_init_rtio(dev)) {
-		LOG_ERR("Failed to initialize rtio with icm42688.");
-		res = -EIO;
-	}
-#endif
 
 	return res;
 }

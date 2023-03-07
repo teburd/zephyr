@@ -17,19 +17,28 @@
 
 LOG_MODULE_DECLARE(ICM42688, CONFIG_SENSOR_LOG_LEVEL);
 
+
+void icm42688_rtio_fifo_event(const struct device *dev);
+
 static void icm42688_gpio_callback(const struct device *dev, struct gpio_callback *cb,
 				   uint32_t pins)
 {
 	struct icm42688_dev_data *data = CONTAINER_OF(cb, struct icm42688_dev_data, gpio_cb);
+	const struct icm42688_dev_cfg *cfg = data->dev->config;
 
 	ARG_UNUSED(dev);
 	ARG_UNUSED(pins);
 
+if (data->cfg.fifo_en && IS_ENABLED(CONFIG_ICM4268_RTIO) && IS_ENABLED(CONFIG_SPI_RTIO)) {
+	gpio_pin_interrupt_configure_dt(&cfg->gpio_int1, GPIO_INT_DISABLE);
+	icm42688_rtio_fifo_event(data->dev);
+} else {
 #if defined(CONFIG_ICM42688_TRIGGER_OWN_THREAD)
 	k_sem_give(&data->gpio_sem);
 #elif defined(CONFIG_ICM42688_TRIGGER_GLOBAL_THREAD)
 	k_work_submit(&data->work);
 #endif
+}
 }
 
 static void icm42688_thread_cb(const struct device *dev)
@@ -39,7 +48,10 @@ static void icm42688_thread_cb(const struct device *dev)
 
 	icm42688_lock(dev);
 
-	if (data->data_ready_handler != NULL) {
+	if (data->cfg.fifo_en && IS_ENABLED(CONFIG_ICM42688_RTIO) && !IS_ENABLED(CONFIG_SPI_RTIO)) {
+		gpio_pin_interrupt_configure_dt(&cfg->gpio_int1, GPIO_INT_DISABLE);
+		icm42688_rtio_fifo_event(data->dev);
+	} else if (data->data_ready_handler != NULL) {
 		data->data_ready_handler(dev, data->data_ready_trigger);
 	} else {
 		uint8_t status;
