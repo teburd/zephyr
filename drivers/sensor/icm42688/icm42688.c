@@ -127,21 +127,9 @@ static int icm42688_channel_get(const struct device *dev, enum sensor_channel ch
 
 static int icm42688_sample_fetch(const struct device *dev, enum sensor_channel chan)
 {
-	uint8_t status;
 	struct icm42688_sensor_data *data = dev->data;
-	const struct icm42688_sensor_config *cfg = dev->config;
-
-	int res = icm42688_spi_read(&cfg->dev_cfg.spi, REG_INT_STATUS, &status, 1);
-
-	if (res) {
-		return res;
-	}
-
-	if (!FIELD_GET(BIT_INT_STATUS_DATA_RDY, status)) {
-		return -EBUSY;
-	}
-
 	uint8_t readings[14];
+	int res;
 
 	res = icm42688_read_all(dev, readings);
 
@@ -290,8 +278,8 @@ static int icm42688_fifo_start(const struct device *dev)
 	 * fifo_odr, fifo_wm (in bytes or records?) attrs?
 	 */
 	sensor_cfg.fifo_wm = 1024; /* wm in bytes */
-	sensor_cfg.accel_odr = ICM42688_ACCEL_ODR_200;
-	sensor_cfg.gyro_odr = ICM42688_GYRO_ODR_200;
+	sensor_cfg.accel_odr = ICM42688_ACCEL_ODR_32000;
+	sensor_cfg.gyro_odr = ICM42688_GYRO_ODR_32000;
 
 	res = icm42688_safely_configure(dev, &sensor_cfg);
 	if (res != 0) {
@@ -549,8 +537,7 @@ void icm42688_rtio_fifo_event(const struct device *dev)
 	rtio_sqe_prep_read(read_int_reg, drv_data->spi_iodev, RTIO_PRIO_NORM,
 		&drv_data->int_status, 1, NULL);
 	/* TODO add flush op here, works without because we are using simple executor */
-	rtio_sqe_prep_callback(check_int_status, icm42688_int_status_cb,
-		(void *)drv_data->dev, NULL);
+	rtio_sqe_prep_callback(check_int_status, icm42688_int_status_cb, (void *)dev, NULL);
 
 	rtio_submit(drv_data->r, 0);}
 
