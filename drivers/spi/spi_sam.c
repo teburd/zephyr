@@ -561,6 +561,7 @@ static inline int spi_sam_txrx(const struct device *dev,
 #endif
 }
 
+#ifndef CONFIG_SPI_RTIO
 /* Fast path where every overlapping tx and rx buffer is the same length */
 static void spi_sam_fast_transceive(const struct device *dev,
 				    const struct spi_config *config,
@@ -609,6 +610,7 @@ static void spi_sam_fast_transceive(const struct device *dev,
 		rx++;
 	}
 }
+#endif
 
 /* Returns true if the request is suitable for the fast
  * path. Specifically, the bufs are a sequence of:
@@ -764,7 +766,7 @@ static int spi_sam_transceive(const struct device *dev,
 	spi_context_lock(&data->ctx, false, NULL, NULL, config);
 
 #if CONFIG_SPI_RTIO
-	struct rtio_sqe *sqe;
+	struct rtio_sqe *sqe = NULL;
 	struct rtio_cqe *cqe;
 	size_t tx_count = tx_bufs ? tx_bufs->count : 0;
 	size_t rx_count = rx_bufs ? rx_bufs->count : 0;
@@ -772,11 +774,10 @@ static int spi_sam_transceive(const struct device *dev,
 	uint32_t count = MAX(tx_count, rx_count);
 	struct spi_dt_spec *dt_spec = &data->dt_spec;
 
-	LOG_DBG("doing spi rtio");
 	dt_spec->config = *config;
 
 	if (count > rtio_spsc_acquirable(data->r->sq)) {
-		LOG_ERR("Out of SQEs, requested %d, availabled %d", count, rtio_spsc_acquirable(data->r->sq));
+		LOG_ERR("Out of SQEs, requested %d, available %ld", count, rtio_spsc_acquirable(data->r->sq));
 		spi_context_unlock_unconditionally(&data->ctx);
 		return -ENOMEM;
 	}
@@ -809,7 +810,9 @@ static int spi_sam_transceive(const struct device *dev,
 		sqe->flags = RTIO_SQE_TRANSACTION;
  	}
 
-	sqe->flags = 0;
+	if (sqe != NULL) {
+		sqe->flags = 0;
+	}
 	
 	/* Submit request and wait */
 	rtio_submit(data->r, 1);
@@ -956,7 +959,7 @@ static const struct spi_driver_api spi_sam_driver_api = {
 
 #define SPI_SAM_RTIO_DEFINE(n)									\
 	RTIO_EXECUTOR_SIMPLE_DEFINE(spi_sam_exec_##n);						\
-	RTIO_DEFINE(spi_sam_rtio_##n, (struct rtio_executor *)&spi_sam_exec_##n, 8, 1);
+	RTIO_DEFINE(spi_sam_rtio_##n, (struct rtio_executor *)&spi_sam_exec_##n, 4, 1);
 
 #define SPI_SAM_DEVICE_INIT(n)									\
 	PINCTRL_DT_INST_DEFINE(n);								\
