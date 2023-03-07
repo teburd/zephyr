@@ -745,6 +745,7 @@ static void spi_sam_iodev_complete(const struct device *dev, int status)
 static void spi_sam_iodev_submit(const struct device *dev,
 				struct rtio_iodev_sqe *iodev_sqe)
 {
+	LOG_INF("adding sqe %p to queue\n", iodev_sqe->sqe);
 	struct spi_sam_data *data = dev->data;
 
 	rtio_mpsc_push(&data->bus_q, &iodev_sqe->q);
@@ -762,7 +763,7 @@ static int spi_sam_transceive(const struct device *dev,
 
 	spi_context_lock(&data->ctx, false, NULL, NULL, config);
 
-#ifdef CONFIG_SPI_RTIO
+#if CONFIG_SPI_RTIO
 	struct rtio_sqe *sqe;
 	struct rtio_cqe *cqe;
 	size_t tx_count = tx_bufs ? tx_bufs->count : 0;
@@ -771,6 +772,7 @@ static int spi_sam_transceive(const struct device *dev,
 	uint32_t count = MAX(tx_count, rx_count);
 	struct spi_dt_spec *dt_spec = &data->dt_spec;
 
+	LOG_DBG("doing spi rtio");
 	dt_spec->config = *config;
 
 	if (count > rtio_spsc_acquirable(data->r->sq)) {
@@ -835,6 +837,7 @@ static int spi_sam_transceive(const struct device *dev,
 	if (spi_sam_is_regular(tx_bufs, rx_bufs)) {
 		spi_sam_fast_transceive(dev, config, tx_bufs, rx_bufs);
 	} else {
+		LOG_INF("slower transfer");
 		spi_context_buffers_setup(&data->ctx, tx_bufs, rx_bufs, 1);
 
 		do {
@@ -844,7 +847,7 @@ static int spi_sam_transceive(const struct device *dev,
 
 	spi_context_cs_control(&data->ctx, false);
 #endif
-	
+done:
 	spi_context_release(&data->ctx, err);
 	return err;
 }
