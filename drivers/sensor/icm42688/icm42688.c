@@ -46,7 +46,6 @@ struct icm42688_sensor_data {
 #endif /* CONFIG_ICM42688_RTIO */
 
 #if CONFIG_ICM42688_TRIGGER_OWN_THREAD
-	struct k_sem gpio_sem;
 	struct k_thread thread;
 
 	K_KERNEL_STACK_MEMBER(thread_stack, CONFIG_ICM42688_THREAD_STACK_SIZE);

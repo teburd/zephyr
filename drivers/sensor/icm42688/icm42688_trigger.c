@@ -54,8 +54,7 @@ static void icm42688_thread_cb(const struct device *dev)
 	icm42688_lock(dev);
 
 	if (data->cfg.fifo_en && IS_ENABLED(CONFIG_ICM42688_RTIO) && !IS_ENABLED(CONFIG_SPI_RTIO)) {
-		LOG_INF("fifo event sent to handler in thread");
-		icm42688_rtio_fifo_event(data->dev);
+		icm42688_rtio_fifo_event(dev);
 	} else if (data->data_ready_handler != NULL) {
 		data->data_ready_handler(dev, data->data_ready_trigger);
 	} else {
