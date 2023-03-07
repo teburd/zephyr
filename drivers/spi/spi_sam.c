@@ -150,39 +150,6 @@ static int spi_sam_configure(const struct device *dev,
 	return 0;
 }
 
-static bool spi_sam_transfer_ongoing(struct spi_sam_data *data)
-{
-	return spi_context_tx_on(&data->ctx) || spi_context_rx_on(&data->ctx);
-}
-
-static void spi_sam_shift_master(Spi *regs, struct spi_sam_data *data)
-{
-	uint8_t tx;
-	uint8_t rx;
-
-	if (spi_context_tx_buf_on(&data->ctx)) {
-		tx = *(uint8_t *)(data->ctx.tx_buf);
-	} else {
-		tx = 0U;
-	}
-
-	while ((regs->SPI_SR & SPI_SR_TDRE) == 0) {
-	}
-
-	regs->SPI_TDR = SPI_TDR_TD(tx);
-	spi_context_update_tx(&data->ctx, 1, 1);
-
-	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
-	}
-
-	rx = (uint8_t)regs->SPI_RDR;
-
-	if (spi_context_rx_buf_on(&data->ctx)) {
-		*data->ctx.rx_buf = rx;
-	}
-	spi_context_update_rx(&data->ctx, 1, 1);
-}
-
 /* Finish any ongoing writes and drop any remaining read data */
 static void spi_sam_finish(Spi *regs)
 {
@@ -195,18 +162,11 @@ static void spi_sam_finish(Spi *regs)
 }
 
 /* Fast path that transmits a buf */
-static void spi_sam_fast_tx(const struct device *dev, Spi *regs,
-			    const uint8_t *tx_buf, const uint32_t tx_buf_len)
+static void spi_sam_fast_tx(Spi *regs, const uint8_t *tx_buf, const uint32_t tx_buf_len)
 {
-	struct spi_sam_data *data = dev->data;
-
 	const uint8_t *p = tx_buf;
 	const uint8_t *pend = (uint8_t *)tx_buf + tx_buf_len;
-
-	k_spinlock_key_t key = k_spin_lock(&data->lock);
-
 	uint8_t ch;
-
 
 	while (p != pend) {
 		ch = *p++;
@@ -216,28 +176,17 @@ static void spi_sam_fast_tx(const struct device *dev, Spi *regs,
 
 		regs->SPI_TDR = SPI_TDR_TD(ch);
 	}
-
-	spi_sam_finish(regs);
-
-	k_spin_unlock(&data->lock, key);
 }
 
 /* Fast path that reads into a buf */
-static void spi_sam_fast_rx(const struct device *dev, Spi *regs,
-			    uint8_t *rx_buf, const uint32_t rx_buf_len)
+static void spi_sam_fast_rx(Spi *regs, uint8_t *rx_buf, const uint32_t rx_buf_len)
 {
-	struct spi_sam_data *data = dev->data;
-	k_spinlock_key_t key = k_spin_lock(&data->lock);
-
 	uint8_t *rx = rx_buf;
 	int len = rx_buf_len;
 
 	if (len <= 0) {
-		k_spin_unlock(&data->lock, key);
 		return;
 	}
-
-	/* See the comment in spi_sam_fast_txrx re: interleaving. */
 
 	/* Write the first byte */
 	regs->SPI_TDR = SPI_TDR_TD(0);
@@ -263,11 +212,72 @@ static void spi_sam_fast_rx(const struct device *dev, Spi *regs,
 	}
 
 	*rx = (uint8_t)regs->SPI_RDR;
-
-	spi_sam_finish(regs);
-
-	k_spin_unlock(&data->lock, key);
 }
+
+/* Fast path that writes and reads bufs of the same length */
+static void spi_sam_fast_txrx(Spi *regs,
+			      const uint8_t *tx_buf,
+			      const uint32_t tx_buf_len,
+			      const uint8_t *rx_buf,
+			      const uint32_t rx_buf_len)
+{
+	const uint8_t *tx = tx_buf;
+	size_t len = MIN(rx_buf_len, tx_buf_len);
+	const uint8_t *txend = tx_buf + len;
+	uint8_t *rx = (uint8_t *)rx_buf;
+
+	if (len == 0) {
+		return;
+	}
+
+	/*
+	 * The code below interleaves the transmit writes with the
+	 * receive reads to keep the bus fully utilised.  The code is
+	 * equivalent to:
+	 *
+	 * Transmit byte 0
+	 * Loop:
+	 * - Transmit byte n+1
+	 * - Receive byte n
+	 * Receive the final byte
+	 */
+
+	/* Write the first byte */
+	regs->SPI_TDR = SPI_TDR_TD(*tx++);
+
+	while (tx != txend) {
+		while ((regs->SPI_SR & SPI_SR_TDRE) == 0) {
+		}
+
+		/* Load byte N+1 into the transmit register.  TX is
+		 * single buffered and we have at most one byte in
+		 * flight so skip the DRE check.
+		 */
+		regs->SPI_TDR = SPI_TDR_TD(*tx++);
+
+		/* Read byte N+0 from the receive register */
+		while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
+		}
+
+		*rx++ = (uint8_t)regs->SPI_RDR;
+	}
+
+	/* Read the final incoming byte */
+	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
+	}
+
+	*rx = (uint8_t)regs->SPI_RDR;
+
+	/* If the buffers are of different lengths then a continued
+	 * fast tx or rx is required
+ 	 */
+	if (len < rx_buf_len) {
+		spi_sam_fast_rx(regs, rx, rx_buf_len - len);
+	} else if (len < tx_buf_len) {
+		spi_sam_fast_tx(regs, tx, tx_buf_len - len);
+	}
+}
+
 
 #ifdef CONFIG_SPI_SAM_DMA
 
@@ -434,108 +444,56 @@ out:
 #endif /* CONFIG_SPI_SAM_DMA */
 
 
-/* Fast path that writes and reads bufs of the same length */
-static void spi_sam_fast_txrx(const struct device *dev,
-			      Spi *regs,
-			      const uint8_t *tx_buf,
-			      const uint32_t tx_buf_len,
-			      const uint8_t *rx_buf,
-			      const uint32_t rx_buf_len)
-{
-	struct spi_sam_data *data = dev->data;
-	k_spinlock_key_t key = k_spin_lock(&data->lock);
-
-	const uint8_t *tx = tx_buf;
-	const uint8_t *txend = tx_buf + tx_buf_len;
-	uint8_t *rx = (uint8_t *)rx_buf;
-	size_t len = rx_buf_len;
-
-	if (len == 0) {
-		goto out;
-	}
-
-	/*
-	 * The code below interleaves the transmit writes with the
-	 * receive reads to keep the bus fully utilised.  The code is
-	 * equivalent to:
-	 *
-	 * Transmit byte 0
-	 * Loop:
-	 * - Transmit byte n+1
-	 * - Receive byte n
-	 * Receive the final byte
-	 */
-
-	/* Write the first byte */
-	regs->SPI_TDR = SPI_TDR_TD(*tx++);
-
-	while (tx != txend) {
-		while ((regs->SPI_SR & SPI_SR_TDRE) == 0) {
-		}
-
-		/* Load byte N+1 into the transmit register.  TX is
-		 * single buffered and we have at most one byte in
-		 * flight so skip the DRE check.
-		 */
-		regs->SPI_TDR = SPI_TDR_TD(*tx++);
-
-		/* Read byte N+0 from the receive register */
-		while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
-		}
-
-		*rx++ = (uint8_t)regs->SPI_RDR;
-	}
-
-	/* Read the final incoming byte */
-	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
-	}
-
-	*rx = (uint8_t)regs->SPI_RDR;
-
-	spi_sam_finish(regs);
-
-out:
-	k_spin_unlock(&data->lock, key);
-}
-
 static inline int spi_sam_rx(const struct device *dev,
 			      Spi *regs,
 			      uint8_t *rx_buf,
 			      uint32_t rx_buf_len)
 {
+	struct spi_sam_data *data = dev->data;
+	k_spinlock_key_t key;
+	
 #ifdef CONFIG_SPI_SAM_DMA
 	const struct spi_sam_config *cfg = dev->config;
 
 	if (rx_buf_len < SAM_SPI_DMA_THRESHOLD || cfg->dma_dev == NULL) {
-		spi_sam_fast_rx(dev, regs, rx_buf, rx_buf_len);
-		return 0;
+ 		key = k_spin_lock(&data->lock);
+		spi_sam_fast_rx(regs, rx_buf, rx_buf_len);
 	} else {
 		return spi_sam_dma_txrx(dev, regs, NULL, 0, rx_buf, rx_buf_len);
 	}
 #else
-	spi_sam_fast_rx(dev, regs, rx_buf, rx_buf_len);
-	return 0;
+ 	key = k_spin_lock(&data->lock);
+	spi_sam_fast_rx(regs, rx_buf, rx_buf_len);
 #endif
-}
+
+	spi_sam_finish(regs);
+	k_spin_unlock(&data->lock, key);
+	return 0;}
 
 static inline int spi_sam_tx(const struct device *dev,
 			      Spi *regs,
 			      const uint8_t *tx_buf,
 			      uint32_t tx_buf_len)
 {
+	struct spi_sam_data *data = dev->data;
+	k_spinlock_key_t key;
+	
 #ifdef CONFIG_SPI_SAM_DMA
 	const struct spi_sam_config *cfg = dev->config;
 
 	if (tx_buf_len < SAM_SPI_DMA_THRESHOLD || cfg->dma_dev == NULL) {
-		spi_sam_fast_tx(dev, regs, tx_buf, tx_buf_len);
-		return 0;
+ 		key = k_spin_lock(&data->lock);
+		spi_sam_fast_tx(regs, tx_buf, tx_buf_len);
 	} else {
 		return spi_sam_dma_txrx(dev, regs, tx_buf, tx_buf_len, NULL, 0);
 	}
 #else
-	spi_sam_fast_tx(dev, regs, tx_buf, tx_buf_len);
-	return 0;
+ 	key = k_spin_lock(&data->lock);
+	spi_sam_fast_tx(regs, tx_buf, tx_buf_len);
 #endif
+	spi_sam_finish(regs);
+	k_spin_unlock(&data->lock, key);
+	return 0;
 }
 
 
@@ -546,19 +504,25 @@ static inline int spi_sam_txrx(const struct device *dev,
 				const uint8_t *rx_buf,
 				uint32_t rx_buf_len)
 {
+	struct spi_sam_data *data = dev->data;
+	k_spinlock_key_t key;
+
 #ifdef CONFIG_SPI_SAM_DMA
 	const struct spi_sam_config *cfg = dev->config;
 
 	if (tx_buf_len < SAM_SPI_DMA_THRESHOLD || cfg->dma_dev == NULL) {
-		spi_sam_fast_txrx(dev, regs, tx_buf, tx_buf_len, rx_buf, rx_buf_len);
-		return 0;
+ 		key = k_spin_lock(&data->lock);
+		spi_sam_fast_txrx(regs, tx_buf, tx_buf_len, rx_buf, rx_buf_len);
 	} else {
 		return spi_sam_dma_txrx(dev, regs, tx_buf, tx_buf_len, rx_buf, rx_buf_len);
 	}
 #else
-	spi_sam_fast_txrx(dev, regs, tx_buf, tx_buf_len, rx_buf, rx_buf_len);
-	return 0;
+ 	key = k_spin_lock(&data->lock);
+	spi_sam_fast_txrx(regs, tx_buf, tx_buf_len, rx_buf, rx_buf_len);
 #endif
+	spi_sam_finish(regs);
+	k_spin_unlock(&data->lock, key);
+	return 0;
 }
 
 #ifndef CONFIG_SPI_RTIO
@@ -612,52 +576,10 @@ static void spi_sam_fast_transceive(const struct device *dev,
 }
 #endif
 
-/* Returns true if the request is suitable for the fast
- * path. Specifically, the bufs are a sequence of:
- *
- * - Zero or more RX and TX buf pairs where each is the same length.
- * - Zero or more trailing RX only bufs
- * - Zero or more trailing TX only bufs
- */
-static bool spi_sam_is_regular(const struct spi_buf_set *tx_bufs,
-			       const struct spi_buf_set *rx_bufs)
-{
-	const struct spi_buf *tx = NULL;
-	const struct spi_buf *rx = NULL;
-	size_t tx_count = 0;
-	size_t rx_count = 0;
-
-	if (tx_bufs) {
-		tx = tx_bufs->buffers;
-		tx_count = tx_bufs->count;
-	}
-
-	if (rx_bufs) {
-		rx = rx_bufs->buffers;
-		rx_count = rx_bufs->count;
-	}
-
-	if (!tx || !rx) {
-		return true;
-	}
-
-	while (tx_count != 0 && rx_count != 0) {
-		if (tx->len != rx->len) {
-			return false;
-		}
-
-		tx++;
-		tx_count--;
-		rx++;
-		rx_count--;
-	}
-
-	return true;
-}
-
-
 
 #ifdef CONFIG_SPI_RTIO
+
+static void spi_sam_iodev_complete(const struct device *dev, int status);
 
 static void spi_sam_iodev_start(const struct device *dev)
 {
@@ -747,7 +669,6 @@ static void spi_sam_iodev_complete(const struct device *dev, int status)
 static void spi_sam_iodev_submit(const struct device *dev,
 				struct rtio_iodev_sqe *iodev_sqe)
 {
-	LOG_INF("adding sqe %p to queue\n", iodev_sqe->sqe);
 	struct spi_sam_data *data = dev->data;
 
 	rtio_mpsc_push(&data->bus_q, &iodev_sqe->q);
@@ -761,7 +682,7 @@ static int spi_sam_transceive(const struct device *dev,
 			      const struct spi_buf_set *rx_bufs)
 {
 	struct spi_sam_data *data = dev->data;
-	int err;
+	int err = 0;
 
 	spi_context_lock(&data->ctx, false, NULL, NULL, config);
 
@@ -823,34 +744,12 @@ static int spi_sam_transceive(const struct device *dev,
 
 	rtio_cqe_release(data->r);
 #else
-	const struct spi_sam_config *cfg = dev->config;
-	Spi *regs = cfg->regs;	err = spi_sam_configure(dev, config);
-
-	if (err != 0) {
-		goto done;
-	}
-
+	spi_sam_configure(dev, config);
 	spi_context_cs_control(&data->ctx, true);
-
-	/* This driver special cases the common send only, receive
-	 * only, and transmit then receive operations.	This special
-	 * casing is 4x faster than the spi_context() routines
-	 * and allows the transmit and receive to be interleaved.
-	 */
-	if (spi_sam_is_regular(tx_bufs, rx_bufs)) {
-		spi_sam_fast_transceive(dev, config, tx_bufs, rx_bufs);
-	} else {
-		LOG_INF("slower transfer");
-		spi_context_buffers_setup(&data->ctx, tx_bufs, rx_bufs, 1);
-
-		do {
-			spi_sam_shift_master(regs, data);
-		} while (spi_sam_transfer_ongoing(data));
-	}
-
+	spi_sam_fast_transceive(dev, config, tx_bufs, rx_bufs);
 	spi_context_cs_control(&data->ctx, false);
 #endif
-done:
+
 	spi_context_release(&data->ctx, err);
 	return err;
 }
