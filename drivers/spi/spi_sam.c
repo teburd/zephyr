@@ -305,7 +305,6 @@ static void dma_callback(const struct device *dma_dev, void *user_data,
 	}
 #endif
 	k_sem_give(&drv_data->dma_sem);
-
 }
 
 
@@ -429,9 +428,7 @@ static int spi_sam_dma_txrx(const struct device *dev,
 
 	/* Move up a level or wrap in branch when blocking */
 	if (blocking) {
-		for (int i = 0; i < 2; i++) {
-			k_sem_take(&drv_data->dma_sem, K_FOREVER);
-		}
+		k_sem_take(&drv_data->dma_sem, K_FOREVER);
 		spi_sam_finish(regs);
 	} else {
 		res = -EWOULDBLOCK;
@@ -465,7 +462,6 @@ static inline int spi_sam_rx(const struct device *dev,
  	key = k_spin_lock(&data->lock);
 	spi_sam_fast_rx(regs, rx_buf, rx_buf_len);
 #endif
-
 	spi_sam_finish(regs);
 	k_spin_unlock(&data->lock, key);
 	return 0;}
