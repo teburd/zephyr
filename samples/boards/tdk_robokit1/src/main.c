@@ -15,13 +15,16 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(TDK_ROBOKIT1, CONFIG_SENSOR_LOG_LEVEL);
 
+/* The fifo size (2048) bytes plus 3 for the header */
+#define ICM42688_FIFO_BUF_LEN 2051
+
 /* Power of 2 number of stream buffers */
 #define N_BUFS 4
 
 RTIO_EXECUTOR_SIMPLE_DEFINE(r_exec);
 
 /* Show no over/under flows with a 4 buffer queue */
-RTIO_DEFINE(r4, (struct rtio_executor *)&r_exec, N_BUFS, N_BUFS);
+RTIO_DEFINE_WITH_MEMPOOL(r4, (struct rtio_executor *)&r_exec, N_BUFS, N_BUFS, N_BUFS, ICM42688_FIFO_BUF_LEN, 4);
 
 /* Show over/underflows with a single buffer queue */
 RTIO_DEFINE(r1, (struct rtio_executor *)&r_exec, 1, 1);
@@ -36,10 +39,6 @@ struct fifo_header {
 	uint16_t accel_fs: 3;
 	uint16_t packet_format: 2;
 } __packed;
-
-/* The fifo size (2048) bytes plus 3 for the header */
-#define ICM42688_FIFO_BUF_LEN 2051
-static uint8_t icm42688_fifo_bufs[N_BUFS][ICM42688_FIFO_BUF_LEN];
 
 const struct device *icm42688 = DEVICE_DT_GET_ONE(invensense_icm42688);
 const struct device *akm09918 = DEVICE_DT_GET_ONE(asahi_kasei_akm09918c);
@@ -109,8 +108,7 @@ void fifo_stream(struct rtio *r, uint32_t n_bufs)
 	/* Feed initial read requests */
 	for (int i = 0; i < n_bufs; i++) {
 		sqe = rtio_spsc_acquire(r->sq);
-		rtio_sqe_prep_read(sqe, iodev, 0, &icm42688_fifo_bufs[i][0], ICM42688_FIFO_BUF_LEN,
-				   (void *)(uintptr_t)i);
+		rtio_sqe_prep_read(sqe, iodev, 0, NULL, 0, NULL);
 		rtio_spsc_produce(r->sq);
 	}
 
@@ -142,8 +140,7 @@ void fifo_stream(struct rtio *r, uint32_t n_bufs)
 	for (int i = 0; i < FIFO_ITERS; i++) {
 		struct rtio_cqe *cqe = rtio_cqe_consume_block(r);
 		int32_t result = cqe->result;
-		uintptr_t buf_idx = (uintptr_t)cqe->userdata;
-		uint8_t *buf = &icm42688_fifo_bufs[buf_idx][0];
+		uint8_t *buf = cqe->mempool_buffer;
 
 		rtio_spsc_release(r->cq);
 
@@ -159,8 +156,8 @@ void fifo_stream(struct rtio *r, uint32_t n_bufs)
 
 		if (i % 64 == 0) {
 			LOG_INF("Poll Mag: Iteration %d, Underflows (sensor overflows) %u, Buf "
-			       "%lu, int status %x, result %d\n",
-			       i, overflows, buf_idx, buf[0], result);
+			       "%p, int status %x, result %d\n",
+			       i, overflows, (void*)buf, buf[0], result);
 			poll_mag();
 			k_busy_wait(1000);
 		}
@@ -169,8 +166,8 @@ void fifo_stream(struct rtio *r, uint32_t n_bufs)
 		struct rtio_sqe *sqe = rtio_spsc_acquire(r->sq);
 
 		__ASSERT_NO_MSG(sqe != NULL);
-		rtio_sqe_prep_read(sqe, iodev, 0, &icm42688_fifo_bufs[buf_idx][0],
-				   ICM42688_FIFO_BUF_LEN, (void *)(uintptr_t)buf_idx);
+		rtio_release_mempool(r, buf);
+		rtio_sqe_prep_read(sqe, iodev, 0, NULL, 0, NULL);
 		rtio_spsc_produce(r->sq);
 
 		rtio_submit(r, 0);
@@ -199,6 +196,10 @@ void main(void)
 		LOG_INF("%s: device not ready.", akm09918->name);
 		return;
 	}
+
+	LOG_INF("Setting RTIO 1 and 4 to use the same mempool");
+	r1.mempool = r4.mempool;
+	r1.mempool_blk_size = r4.mempool_blk_size;
 
 	struct sensor_value sample_freq = { .val1 = 10, .val2 = 0 };
 

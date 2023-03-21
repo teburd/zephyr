@@ -58,6 +58,26 @@ static void rtio_iodev_timer_fn(struct k_timer *tm)
 	struct rtio_iodev_sqe *iodev_sqe = data->iodev_sqe;
 	struct rtio_iodev *iodev = (struct rtio_iodev *)iodev_sqe->sqe->iodev;
 
+	TC_PRINT("<iodev> Processing sqe...\n");
+
+	if (data->sqe->op == RTIO_OP_RX) {
+		uint8_t *buf;
+		uint32_t buf_len;
+
+		int rc = rtio_sqe_rx_buf(iodev_sqe, 16, 16, &buf, &buf_len);
+
+		if (rc != 0) {
+			printk("Error getting buffer\n");
+			rtio_iodev_sqe_err(iodev_sqe, rc);
+			return;
+		}
+
+		TC_PRINT("<iodev> Got memory buffer at %p\n", buf);
+		for (int i = 0; i < 16; ++i) {
+			buf[i] = ((uint8_t *)iodev_sqe->sqe->userdata)[i];
+		}
+	}
+
 	if (data->sqe->flags & RTIO_SQE_TRANSACTION) {
 		data->sqe = rtio_spsc_next(data->iodev_sqe->r->sq, data->sqe);
 		k_timer_start(&data->timer, K_MSEC(10), K_NO_WAIT);
@@ -66,6 +86,7 @@ static void rtio_iodev_timer_fn(struct k_timer *tm)
 
 	data->iodev_sqe = NULL;
 	data->sqe = NULL;
+	TC_PRINT("<iodev> Setting result OK\n");
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 	rtio_iodev_test_next(iodev);
 }

@@ -36,6 +36,7 @@
 #include <zephyr/rtio/rtio_mpsc.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/atomic.h>
+#include <zephyr/sys/mem_blocks.h>
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <string.h>
@@ -113,6 +114,52 @@ extern "C" {
  * that will be returned in a single completion on failure/success.
  */
 #define RTIO_SQE_TRANSACTION BIT(1)
+
+/**
+ * @brief The buffer was allocated by the RTIO mempool
+ *
+ * This flag can only exist if the CONFIG_RTIO_SYS_MEM_BLOCKS Kconfig was
+ * enabled and the RTIO context was created via the RTIO_DEFINE_WITH_MEMPOOL()
+ * macro. If set, the buffer associated with the entry was allocated by the
+ * internal memory pool and should be released as soon as it is no longer
+ * needed via a call to rtio_release_mempool().
+ */
+#define RTIO_SQE_MEMPOOL_BUFFER BIT(2)
+
+/**
+ * @}
+ */
+
+/**
+ * @brief RTIO CQE Flags
+ * @defgroup rtio_cqe_flags RTIO CQE Flags
+ * @ingroup rtio_api
+ * @{
+ */
+
+/**
+ * @brief The entry's buffer was allocated from the RTIO's mempool
+ *
+ * If this bit is set, the buffer was allocated from the memory pool and should be recycled as
+ * soon as the application is done with it.
+ */
+#define RTIO_CQE_FLAG_MEMPOOL_BUFFER BIT(0)
+
+/**
+ * @brief Get the value portion of the CQE flags
+ *
+ * @param flags The CQE flags value
+ * @return The value portion of the flags field.
+ */
+#define RTIO_CQE_FLAG_GET_VALUE(flags) FIELD_GET(GENMASK(31, 16), (flags))
+
+/**
+ * @brief Prepare a value to be added to the CQE flags field.
+ *
+ * @param The value to prepare
+ * @return A shifted and masked value that can be added to the flags field with an OR operator.
+ */
+#define RTIO_CQE_FLAG_PREP_VALUE(value) FIELD_PREP(GENMASK(31, 16), (value))
 
 /**
  * @}
@@ -203,6 +250,7 @@ struct rtio_sq {
 struct rtio_cqe {
 	int32_t result; /**< Result from operation */
 	void *userdata; /**< Associated userdata with operation */
+	uint32_t flags; /**< Flags associated with the operation */
 };
 
 /**
@@ -263,6 +311,12 @@ struct rtio_executor {
 	const struct rtio_executor_api *api;
 };
 
+struct rtio_mempool_map_entry {
+	uint8_t *ptr;
+	uint32_t len;
+	bool zombie;
+};
+
 /**
  * @brief An RTIO queue pair that both the kernel and application work with
  *
@@ -307,6 +361,16 @@ struct rtio {
 
 	/* Completion queue */
 	struct rtio_cq *cq;
+
+#ifdef CONFIG_RTIO_SYS_MEM_BLOCKS
+#ifdef CONFIG_USERSPACE
+	struct k_mem_partition *mempool_buf_partition;
+	struct k_mem_domain *mempool_domain;
+#endif /* CONFIG_USERSPACE */
+	struct sys_mem_blocks *mempool;
+	uint32_t mempool_blk_size;
+	struct rtio_mempool_map_entry *mempool_map;
+#endif /* CONFIG_RTIO_SYS_MEM_BLOCKS */
 };
 
 
@@ -400,6 +464,19 @@ static inline void rtio_sqe_prep_read(struct rtio_sqe *sqe,
 	sqe->buf_len = len;
 	sqe->buf = buf;
 	sqe->userdata = userdata;
+}
+
+/**
+ * @brief Prepare a read op submission with context's mempool
+ *
+ * @see rtio_sqe_prep_read()
+ */
+static inline void rtio_sqe_prep_read_with_pool(struct rtio_sqe *sqe,
+						const struct rtio_iodev *iodev, int8_t prio,
+						void *userdata)
+{
+	rtio_sqe_prep_read(sqe, iodev, prio, NULL, 0, userdata);
+	sqe->flags = RTIO_SQE_MEMPOOL_BUFFER;
 }
 
 /**
@@ -528,6 +605,24 @@ static inline void rtio_sqe_prep_transceive(struct rtio_sqe *sqe,
 		.data = (iodev_data),                                                              \
 	}
 
+/* clang-format off */
+#define _RTIO_DEFINE(name, exec, sq_sz, cq_sz)                                                     \
+	IF_ENABLED(CONFIG_RTIO_SUBMIT_SEM,                                                         \
+		   (static K_SEM_DEFINE(_submit_sem_##name, 0, K_SEM_MAX_LIMIT)))                  \
+	IF_ENABLED(CONFIG_RTIO_CONSUME_SEM,                                                        \
+		   (static K_SEM_DEFINE(_consume_sem_##name, 0, K_SEM_MAX_LIMIT)))                 \
+	static RTIO_SQ_DEFINE(_sq_##name, sq_sz);                                                  \
+	static RTIO_CQ_DEFINE(_cq_##name, cq_sz);                                                  \
+	STRUCT_SECTION_ITERABLE(rtio, name) = {                                                    \
+		.executor = (exec),                                                                \
+		.xcqcnt = ATOMIC_INIT(0),                                                          \
+		IF_ENABLED(CONFIG_RTIO_SUBMIT_SEM, (.submit_sem = &_submit_sem_##name, ))          \
+		IF_ENABLED(CONFIG_RTIO_SUBMIT_SEM, (.submit_count = 0, ))                          \
+		IF_ENABLED(CONFIG_RTIO_CONSUME_SEM, (.consume_sem = &_consume_sem_##name, ))       \
+		.sq = (struct rtio_sq *const)&_sq_##name,                                          \
+		.cq = (struct rtio_cq *const)&_cq_##name,
+/* clang-format on */
+
 /**
  * @brief Statically define and initialize an RTIO context
  *
@@ -536,22 +631,41 @@ static inline void rtio_sqe_prep_transceive(struct rtio_sqe *sqe,
  * @param sq_sz Size of the submission queue, must be power of 2
  * @param cq_sz Size of the completion queue, must be power of 2
  */
-#define RTIO_DEFINE(name, exec, sq_sz, cq_sz)	\
-	IF_ENABLED(CONFIG_RTIO_SUBMIT_SEM,							   \
-		   (static K_SEM_DEFINE(_submit_sem_##name, 0, K_SEM_MAX_LIMIT)))		   \
-	IF_ENABLED(CONFIG_RTIO_CONSUME_SEM,							   \
-		   (static K_SEM_DEFINE(_consume_sem_##name, 0, K_SEM_MAX_LIMIT)))		   \
-	static RTIO_SQ_DEFINE(_sq_##name, sq_sz);						   \
-	static RTIO_CQ_DEFINE(_cq_##name, cq_sz);						   \
-	STRUCT_SECTION_ITERABLE(rtio, name) = {							   \
-		.executor = (exec),                                                                \
-		.xcqcnt = ATOMIC_INIT(0),                                                          \
-		IF_ENABLED(CONFIG_RTIO_SUBMIT_SEM, (.submit_sem = &_submit_sem_##name,))	   \
-		IF_ENABLED(CONFIG_RTIO_SUBMIT_SEM, (.submit_count = 0,))			   \
-		IF_ENABLED(CONFIG_RTIO_CONSUME_SEM, (.consume_sem = &_consume_sem_##name,))	   \
-		.sq = (struct rtio_sq *const)&_sq_##name,					   \
-		.cq = (struct rtio_cq *const)&_cq_##name,                                          \
-	};
+/* clang-format off */
+#define RTIO_DEFINE(name, exec, sq_sz, cq_sz)                                                      \
+	_RTIO_DEFINE(name, exec, sq_sz, cq_sz)                                            \
+	}
+/* clang-format on */
+
+#define _RTIO_MEMPOOL_SIZE(name) ARRAY_SIZE(SYS_MEM_BLOCKS_BUF_NAME(_mempool_##name))
+
+/**
+ * @brief Statically define and initialize an RTIO context
+ *
+ * @param name Name of the RTIO
+ * @param exec Symbol for rtio_executor (pointer)
+ * @param sq_sz Size of the submission queue, must be power of 2
+ * @param cq_sz Size of the completion queue, must be power of 2
+ * @param num_blks Number of blocks in the memory pool
+ * @param blk_size The number of bytes in each block
+ * @param balign The block aligmnent
+ */
+/* clang-format off */
+#define RTIO_DEFINE_WITH_MEMPOOL(name, exec, sq_sz, cq_sz, num_blks, blk_size, balign)             \
+	SYS_MEM_BLOCKS_DEFINE_STATIC(_mempool_##name, blk_size, num_blks, balign);                 \
+	static struct rtio_mempool_map_entry _mempool_map_##name[sq_sz] = {0};                     \
+	IF_ENABLED(CONFIG_USERSPACE,                                                               \
+		   (K_MEM_PARTITION_DEFINE(_partition_##name,                                      \
+					   SYS_MEM_BLOCKS_BUF_NAME(_mempool_##name),               \
+					   sizeof(SYS_MEM_BLOCKS_BUF_NAME(_mempool_##name)),       \
+					   K_MEM_PARTITION_P_RW_U_RO);))                           \
+	_RTIO_DEFINE(name, exec, sq_sz, cq_sz)                                                     \
+                IF_ENABLED(CONFIG_USERSPACE, (.mempool_buf_partition = &_partition_##name,))       \
+		.mempool = &_mempool_##name,                                                       \
+		.mempool_blk_size = (_RTIO_MEMPOOL_SIZE(name) / num_blks),                         \
+        	.mempool_map = _mempool_map_##name,                                                \
+	}
+/* clang-format on */
 
 /**
  * @brief Set the executor of the rtio context
@@ -695,6 +809,77 @@ static inline void rtio_cqe_release_all(struct rtio *r)
 	rtio_spsc_release_all(r->cq);
 }
 
+/**
+ * @brief Compte the CQE flags from the rtio_iodev_sqe entry
+ *
+ * @param iodev_sqe The SQE entry in question.
+ * @return The value that should be set for the CQE's flags field.
+ */
+static inline uint32_t rtio_cqe_compute_flags(struct rtio_iodev_sqe *iodev_sqe)
+{
+	uint32_t flags = 0;
+
+	ARG_UNUSED(iodev_sqe);
+
+#ifdef CONFIG_RTIO_SYS_MEM_BLOCKS
+	if (iodev_sqe->sqe->op == RTIO_OP_RX && iodev_sqe->sqe->flags & RTIO_SQE_MEMPOOL_BUFFER) {
+		struct rtio *r = iodev_sqe->r;
+		int sqe_index = iodev_sqe->sqe - r->sq->buffer;
+		uintptr_t mempool_addr = (uintptr_t)r->mempool->buffer;
+		uintptr_t buffer_addr;
+
+		if (r->mempool_map[sqe_index].ptr == NULL || r->mempool_map[sqe_index].zombie) {
+			/* Not allocated to this sqe */
+			return flags;
+		}
+
+		buffer_addr = (uintptr_t)r->mempool_map[sqe_index].ptr;
+
+		/* Check that 'buf' is in bounds of the memory pool */
+		if (buffer_addr >= mempool_addr &&
+		    buffer_addr < mempool_addr + r->mempool_blk_size * r->mempool->num_blocks) {
+			/* Update the flags */
+			flags |= RTIO_CQE_FLAG_MEMPOOL_BUFFER;
+			flags |= RTIO_CQE_FLAG_PREP_VALUE((buffer_addr - mempool_addr) /
+							  r->mempool_blk_size);
+			r->mempool_map[sqe_index].zombie = true;
+		}
+	}
+#endif
+
+	return flags;
+}
+
+/**
+ * @brief Retrieve the mempool buffer that was allocated for the CQE.
+ *
+ * If the RTIO context contains a memory pool, and the SQE was created by calling
+ * rtio_sqe_read_with_pool(), this function can be used to retrieve the memory associated with the
+ * read. Once processing is done, it should be released by calling rtio_release_buffer().
+ *
+ * @param r RTIO context
+ * @param cqe The CQE handling the event.
+ * @return NULL if no mempool buffer was allocated for this request
+ * @return non-NULL if a mempool buffer was found
+ */
+static inline uint8_t *rtio_cqe_get_mempool_buffer(const struct rtio *r, struct rtio_cqe *cqe)
+{
+	uint8_t *buff = NULL;
+
+#ifdef CONFIG_RTIO_SYS_MEM_BLOCKS
+	if (cqe->flags & RTIO_CQE_FLAG_MEMPOOL_BUFFER) {
+		int buffer_index = RTIO_CQE_FLAG_GET_VALUE(cqe->flags);
+
+		buff = r->mempool->buffer + r->mempool_blk_size * buffer_index;
+		__ASSERT_NO_MSG(buff >= r->mempool->buffer);
+		__ASSERT_NO_MSG(buff <
+				r->mempool->buffer + r->mempool_blk_size * r->mempool->num_blocks);
+	}
+#endif
+
+	return buff;
+}
+
 
 /**
  * @brief Inform the executor of a submission completion with success
@@ -749,8 +934,9 @@ static inline void rtio_iodev_cancel_all(struct rtio_iodev *iodev)
  * @param r RTIO context
  * @param result Integer result code (could be -errno)
  * @param userdata Userdata to pass along to completion
+ * @param flags Flags to use for the CEQ see RTIO_CQE_FLAG_*
  */
-static inline void rtio_cqe_submit(struct rtio *r, int result, void *userdata)
+static inline void rtio_cqe_submit(struct rtio *r, int result, void *userdata, uint32_t flags)
 {
 	struct rtio_cqe *cqe = rtio_spsc_acquire(r->cq);
 
@@ -759,6 +945,7 @@ static inline void rtio_cqe_submit(struct rtio *r, int result, void *userdata)
 	} else {
 		cqe->result = result;
 		cqe->userdata = userdata;
+		cqe->flags = flags;
 		rtio_spsc_produce(r->cq);
 	}
 #ifdef CONFIG_RTIO_SUBMIT_SEM
@@ -771,6 +958,112 @@ static inline void rtio_cqe_submit(struct rtio *r, int result, void *userdata)
 #endif
 #ifdef CONFIG_RTIO_CONSUME_SEM
 	k_sem_give(r->consume_sem);
+#endif
+}
+
+#define __RTIO_MEMPOOL_GET_NUM_BLKS(num_bytes, blk_size) (((num_bytes) + (blk_size)-1) / (blk_size))
+
+/**
+ * @brief Get the buffer associate with the RX submission
+ *
+ * @param[in] iodev_sqe   The submission to probe
+ * @param[in] min_buf_len The minimum number of bytes needed for the operation
+ * @param[in] max_buf_len The maximum number of bytes needed for the operation
+ * @param[out] buf        Where to store the pointer to the buffer
+ * @param[out] buf_len    Where to store the size of the buffer
+ *
+ * @return 0 if @p buf and @p buf_len were successfully filled
+ * @return -ENOMEM Not enough memory for @p min_buf_len
+ */
+static inline int rtio_sqe_rx_buf(const struct rtio_iodev_sqe *iodev_sqe, uint32_t min_buf_len,
+				  uint32_t max_buf_len, uint8_t **buf, uint32_t *buf_len)
+{
+	const struct rtio_sqe *sqe = iodev_sqe->sqe;
+
+#ifdef CONFIG_RTIO_SYS_MEM_BLOCKS
+	if (sqe->op == RTIO_OP_RX && sqe->flags & RTIO_SQE_MEMPOOL_BUFFER) {
+		struct rtio *r = iodev_sqe->r;
+		uint32_t blk_size = r->mempool_blk_size;
+		struct sys_mem_blocks *pool = r->mempool;
+		uint32_t bytes = max_buf_len;
+		int sqe_index = sqe - r->sq->buffer;
+
+		printk("RX with mempool\n");
+		printk("mempool_map[%d].ptr=%p\n", sqe_index, r->mempool_map[sqe_index].ptr);
+		if (r->mempool_map[sqe_index].ptr != NULL && !r->mempool_map[sqe_index].zombie) {
+			printk("mempool_map[%d].len=%u\n", sqe_index, r->mempool_map[sqe_index].len);
+			if (r->mempool_map[sqe_index].len < min_buf_len) {
+				return -ENOMEM;
+			}
+			*buf = r->mempool_map[sqe_index].ptr;
+			*buf_len = r->mempool_map[sqe_index].len;
+			return 0;
+		}
+
+		do {
+			size_t num_blks = ceiling_fraction(bytes, blk_size);
+			int rc = sys_mem_blocks_alloc_contiguous(pool, num_blks, (void **)buf);
+
+			printk("bytes=%u, num_blks=%u\n", bytes, num_blks);
+			if (rc == 0) {
+				*buf_len = num_blks * blk_size;
+				r->mempool_map[sqe_index].ptr = *buf;
+				r->mempool_map[sqe_index].len = num_blks * blk_size;
+				r->mempool_map[sqe_index].zombie = false;
+				return 0;
+			}
+			if (bytes == min_buf_len) {
+				break;
+			}
+			bytes = (bytes + min_buf_len) / 2;
+		} while (bytes >= min_buf_len);
+		return -ENOMEM;
+	}
+#endif
+	if (sqe->buf_len < min_buf_len) {
+		return -ENOMEM;
+	}
+
+	*buf = sqe->buf;
+	*buf_len = sqe->buf_len;
+	return 0;
+}
+
+/**
+ * @brief Release memory that was allocated by the RTIO's memory pool
+ *
+ * If the RTIO context was created by a call to RTIO_DEFINE_WITH_MEMPOOL(), then the cqe data might
+ * contain a buffer that's owned by the RTIO context. In those cases (if the read request was
+ * configured via rtio_sqe_read_with_pool()) the buffer must be returned back to the pool.
+ *
+ * Call this function when processing is complete. This function will validate that the memory
+ * actually belongs to the RTIO context and will ignore invalid arguments.
+ *
+ * @param r RTIO context
+ * @param buff Pointer to the buffer to be released.
+ */
+__syscall void rtio_release_buffer(struct rtio *r, void *buff);
+
+static inline void z_impl_rtio_release_buffer(struct rtio *r, void *buff)
+{
+#ifdef CONFIG_RTIO_SYS_MEM_BLOCKS
+	if (r == NULL || buff == NULL || r->mempool == NULL) {
+		return;
+	}
+
+	int rc = sys_mem_blocks_free(r->mempool, 1, &buff);
+
+	if (rc != 0) {
+		return;
+	}
+
+	for (int i = 0; i < r->sq->_spsc.mask + 1; ++i) {
+		if ((void *)r->mempool_map[i].ptr == buff) {
+			r->mempool_map[i].ptr = NULL;
+			r->mempool_map[i].zombie = false;
+			break;
+		}
+	}
 #endif
 }
 
@@ -787,6 +1080,12 @@ static inline void rtio_access_grant(struct rtio *r, struct k_thread *t)
 
 #ifdef CONFIG_RTIO_CONSUME_SEM
 	k_object_access_grant(r->consume_sem, t);
+#endif
+
+#if defined(CONFIG_RTIO_SYS_MEM_BLOCKS) && defined(CONFIG_USERSPACE)
+	if (r->mempool_domain != NULL) {
+		k_mem_domain_add_thread(r->mempool_domain, t);
+	}
 #endif
 }
 

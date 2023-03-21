@@ -39,6 +39,12 @@ static inline bool rtio_vrfy_sqe(struct rtio_sqe *sqe)
 	return valid_sqe;
 }
 
+static inline void z_vrfy_rtio_release_buffer(struct rtio *r, void *buff)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(r, K_OBJ_RTIO));
+	z_impl_rtio_release_buffer(r, buff);
+}
+
 static inline int z_vrfy_rtio_sqe_copy_in(struct rtio *r,
 					  const struct rtio_sqe *sqes,
 					  size_t sqe_count)

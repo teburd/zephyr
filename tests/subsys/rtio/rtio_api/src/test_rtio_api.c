@@ -24,11 +24,17 @@
 /* Repeat tests to ensure they are repeatable */
 #define TEST_REPEATS 4
 
+#define MEM_BLK_COUNT 4
+#define MEM_BLK_SIZE 16
+#define MEM_BLK_ALIGN 4
+
 RTIO_EXECUTOR_SIMPLE_DEFINE(simple_exec_simp);
-RTIO_DEFINE(r_simple_simp, (struct rtio_executor *)&simple_exec_simp, 4, 4);
+RTIO_DEFINE_WITH_MEMPOOL(r_simple_simp, (struct rtio_executor *)&simple_exec_simp, 4, 4,
+			 MEM_BLK_COUNT, MEM_BLK_SIZE, MEM_BLK_ALIGN);
 
 RTIO_EXECUTOR_CONCURRENT_DEFINE(simple_exec_con, 1);
-RTIO_DEFINE(r_simple_con, (struct rtio_executor *)&simple_exec_con, 4, 4);
+RTIO_DEFINE_WITH_MEMPOOL(r_simple_con, (struct rtio_executor *)&simple_exec_con, 4, 4,
+			 MEM_BLK_COUNT, MEM_BLK_SIZE, MEM_BLK_ALIGN);
 
 RTIO_IODEV_TEST_DEFINE(iodev_test_simple);
 
@@ -72,6 +78,55 @@ ZTEST(rtio_api, test_rtio_simple)
 	TC_PRINT("rtio simple concurrent\n");
 	for (int i = 0; i < TEST_REPEATS; i++) {
 		test_rtio_simple_(&r_simple_con);
+	}
+}
+
+static void test_rtio_simple_mempool_(struct rtio *r)
+{
+	static int run_count;
+	int res;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe *cqe;
+	uint8_t data[MEM_BLK_SIZE];
+
+	for (int i = 0; i < MEM_BLK_SIZE; ++i) {
+		data[i] = i + run_count;
+	}
+	++run_count;
+
+	rtio_iodev_test_init(&iodev_test_simple);
+
+	TC_PRINT("setting up single mempool read\n");
+	sqe = rtio_spsc_acquire(r->sq);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_read_with_pool(sqe, (struct rtio_iodev *)&iodev_test_simple, 0, data);
+
+	TC_PRINT("submit with wait\n");
+	res = rtio_submit(r, 1);
+	zassert_ok(res, "Should return ok from rtio_execute");
+
+	cqe = rtio_spsc_consume(r->cq);
+	zassert_not_null(cqe, "Expected a valid cqe");
+	zassert_ok(cqe->result, "Result should be ok");
+	zassert_equal_ptr(cqe->userdata, data, "Expected userdata back");
+
+	uint8_t *buffer = rtio_cqe_get_mempool_buffer(r, cqe);
+	rtio_spsc_release(r->cq);
+
+	zassert_not_null(buffer, "Expected an allocated mempool buffer");
+	zassert_mem_equal(buffer, data, MEM_BLK_SIZE, "Data expected to be the same");
+	rtio_release_buffer(r, buffer);
+}
+
+ZTEST_USER(rtio_api, test_rtio_simple_mempool)
+{
+	TC_PRINT("rtio simple mempool simple\n");
+	for (int i = 0; i < TEST_REPEATS * 2; i++) {
+		test_rtio_simple_mempool_(&r_simple_simp);
+	}
+	TC_PRINT("rtio simple mempool concurrent\n");
+	for (int i = 0; i < TEST_REPEATS * 2; i++) {
+		test_rtio_simple_mempool_(&r_simple_con);
 	}
 }
 
@@ -349,16 +404,21 @@ void test_rtio_transaction_(struct rtio *r)
 			  &userdata[1]);
 
 	TC_PRINT("submitting userdata 0 %p, userdata 1 %p\n", &userdata[0], &userdata[1]);
-	res = rtio_submit(r, 2);
+	res = rtio_submit(r, 4);
 	TC_PRINT("checking cq, completions available %lu\n", rtio_spsc_consumable(r->cq));
 	zassert_ok(res, "Should return ok from rtio_execute");
-	zassert_equal(rtio_spsc_consumable(r->cq), 2, "Should have 2 pending completions");
+	zassert_equal(rtio_spsc_consumable(r->cq), 4, "Should have 4 pending completions");
 
-	for (int i = 0; i < 2; i++) {
+	for (int i = 0; i < 4; i++) {
 		TC_PRINT("consume %d\n", i);
 		cqe = rtio_spsc_consume(r->cq);
 		zassert_not_null(cqe, "Expected a valid cqe");
 		zassert_ok(cqe->result, "Result should be ok");
+		if (i % 2 == 0) {
+			zassert_is_null(cqe->userdata);
+			rtio_spsc_release(r->cq);
+			continue;
+		}
 		uintptr_t idx = *(uintptr_t *)cqe->userdata;
 
 		TC_PRINT("userdata is %p, value %lu\n", cqe->userdata, idx);

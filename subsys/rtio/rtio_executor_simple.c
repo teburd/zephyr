@@ -29,12 +29,14 @@ int rtio_simple_submit(struct rtio *r)
 
 	/* Task is already running */
 	if (exc->task.sqe != NULL) {
+		LOG_DBG("Task is already running");
 		return 0;
 	}
 
 	struct rtio_sqe *sqe = rtio_spsc_consume(r->sq);
 
 	if (sqe == NULL) {
+		LOG_DBG("Nothing to consume");
 		return 0;
 	}
 
@@ -59,14 +61,11 @@ int rtio_simple_submit(struct rtio *r)
 		sqe);
 #endif
 
+	LOG_DBG("Setting current task");
 	exc->task.sqe = sqe;
 	exc->task.r = r;
 
-	if (sqe != NULL) {
-		if (sqe != NULL) {
-			rtio_executor_submit(&exc->task);
-		}
-	}
+	rtio_executor_submit(&exc->task);
 
 	return 0;
 }
@@ -78,6 +77,7 @@ void rtio_simple_ok(struct rtio_iodev_sqe *iodev_sqe, int result)
 {
 	struct rtio *r = iodev_sqe->r;
 	const struct rtio_sqe *sqe = iodev_sqe->sqe;
+	bool transaction;
 
 #ifdef CONFIG_ASSERT
 	struct rtio_simple_executor *exc =
@@ -86,21 +86,30 @@ void rtio_simple_ok(struct rtio_iodev_sqe *iodev_sqe, int result)
 	__ASSERT_NO_MSG(iodev_sqe == &exc->task);
 #endif
 
-	bool transaction = sqe->flags & RTIO_SQE_TRANSACTION;
+	do {
+		/* Capture the sqe information */
+		void *userdata = sqe->userdata;
+		uint32_t flags = rtio_cqe_compute_flags(iodev_sqe);
 
-	while (transaction) {
-		rtio_spsc_release(r->sq);
-		sqe = rtio_spsc_consume(r->sq);
-		__ASSERT_NO_MSG(sqe != NULL);
 		transaction = sqe->flags & RTIO_SQE_TRANSACTION;
-	}
 
-	void *userdata = sqe->userdata;
+		/* Release the sqe */
+		rtio_spsc_release(r->sq);
+		LOG_DBG("sqe(is_transaction=%d, flags=0x%04x, userdata=%p), result=%d", transaction,
+			flags, userdata, result);
 
-	rtio_spsc_release(r->sq);
+		/* Submit the completion event */
+		rtio_cqe_submit(r, result, userdata, flags);
+
+		if (transaction) {
+			/* sqe was a transaction, get the next one */
+			sqe = rtio_spsc_consume(r->sq);
+			__ASSERT_NO_MSG(sqe != NULL);
+		}
+
+	} while (transaction);
+
 	iodev_sqe->sqe = NULL;
-
-	rtio_cqe_submit(r, result, userdata);
 	rtio_simple_submit(r);
 }
 
@@ -116,6 +125,7 @@ void rtio_simple_err(struct rtio_iodev_sqe *iodev_sqe, int result)
 	const struct rtio_sqe *sqe = iodev_sqe->sqe;
 	struct rtio *r = iodev_sqe->r;
 	void *userdata = sqe->userdata;
+	uint32_t flags = rtio_cqe_compute_flags(iodev_sqe);
 	bool chained = sqe->flags & RTIO_SQE_CHAINED;
 	bool transaction = sqe->flags & RTIO_SQE_TRANSACTION;
 
@@ -129,7 +139,7 @@ void rtio_simple_err(struct rtio_iodev_sqe *iodev_sqe, int result)
 	rtio_spsc_release(r->sq);
 	iodev_sqe->sqe = NULL;
 	if (!transaction) {
-		rtio_cqe_submit(r, result, userdata);
+		rtio_cqe_submit(r, result, userdata, flags);
 	}
 	while (chained | transaction) {
 		sqe = rtio_spsc_consume(r->sq);
@@ -139,9 +149,9 @@ void rtio_simple_err(struct rtio_iodev_sqe *iodev_sqe, int result)
 		rtio_spsc_release(r->sq);
 
 		if (!transaction) {
-			rtio_cqe_submit(r, result, userdata);
+			rtio_cqe_submit(r, result, userdata, flags);
 		} else {
-			rtio_cqe_submit(r, -ECANCELED, userdata);
+			rtio_cqe_submit(r, -ECANCELED, userdata, flags);
 		}
 	}
 

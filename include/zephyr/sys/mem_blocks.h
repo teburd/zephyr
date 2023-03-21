@@ -132,6 +132,16 @@ struct sys_multi_mem_blocks {
 	}
 
 /**
+ * @brief Get the name of the automatically allocted buffer name
+ *
+ * This will be the backing buffer name used when calling SYS_MEM_BLOCKS_DEFINE() or
+ * SYS_MEM_BLOCKS_DEFINE_STATIC().
+ *
+ * @param name Name of the memory block object.
+ */
+#define SYS_MEM_BLOCKS_BUF_NAME(name) _sys_mem_blocks_buf_##name
+
+/**
  * @brief Create a memory block object with a new backing buffer.
  *
  * @param name     Name of the memory block object.
@@ -140,13 +150,11 @@ struct sys_multi_mem_blocks {
  * @param balign   Alignment of the memory block buffer (power of 2).
  * @param mbmod    Modifier to the memory block struct
  */
-#define _SYS_MEM_BLOCKS_DEFINE(name, blk_sz, num_blks, balign, mbmod)	\
-	mbmod uint8_t __noinit_named(sys_mem_blocks_buf_##name)		\
-		__aligned(WB_UP(balign))				\
-		_sys_mem_blocks_buf_##name[num_blks * WB_UP(blk_sz)];	\
-	_SYS_MEM_BLOCKS_DEFINE_WITH_EXT_BUF(name, blk_sz, num_blks,	\
-					   _sys_mem_blocks_buf_##name,	\
-					   mbmod);
+#define _SYS_MEM_BLOCKS_DEFINE(name, blk_sz, num_blks, balign, mbmod)                              \
+	mbmod uint8_t __noinit_named(sys_mem_blocks_buf_##name) __aligned(WB_UP(balign))           \
+		SYS_MEM_BLOCKS_BUF_NAME(name)[num_blks * WB_UP(blk_sz)];                           \
+	_SYS_MEM_BLOCKS_DEFINE_WITH_EXT_BUF(name, blk_sz, num_blks, SYS_MEM_BLOCKS_BUF_NAME(name), \
+					    mbmod);
 
 /**
  * INTERNAL_HIDDEN @endcond
