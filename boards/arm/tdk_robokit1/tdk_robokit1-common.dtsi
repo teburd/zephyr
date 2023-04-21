@@ -190,37 +190,41 @@ zephyr_udc0: &usbhs {
 };
 
 &flash0 {
+	/* Each sector is 128K, there are 16 sectors making up 2M */
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/*
-		 * The first half of sector 0 (64 kbytes)
-		 * is reserved for the bootloader
-		 */
+		/* Sector 0 */
 		boot_partition: partition@0 {
 			label = "mcuboot";
-			reg = <0x0 0x00010000>;
+			reg = <0x0 DT_SIZE_K(128)>;
 			read-only;
 		};
 
-		/* From sector 1 to sector 7 (included): slot0 (896 kbytes) */
+		/* Sector 1-2 */
 		slot0_partition: partition@20000 {
 			label = "image-0";
-			reg = <0x00020000 0x000e0000>;
+			reg = <0x00020000 DT_SIZE_K(256)>;
 		};
 
-		/* From sector 8 to sector 14 (included): slot1 (896 kbytes) */
+		/* Sector 3-4 */
 		slot1_partition: partition@100000 {
 			label = "image-1";
-			reg = <0x00100000 0x000e0000>;
+			reg = <0x00060000 DT_SIZE_K(256)>;
 		};
 
-		/* Sector 15: scratch (128 kbytes) */
+		/* Sector 5 Scratch */
 		scratch_partition: partition@1e0000 {
 			label = "image-scratch";
-			reg = <0x001e0000 0x00020000>;
+			reg = <0x000a0000 DT_SIZE_K(128)>;
+		};
+
+		/* Sector 6 - 15 Storage */
+		storage_partition: partition@c0000 {
+			label = "storage";
+			reg = <0x000c0000 DT_SIZE_K(2304)>;
 		};
 	};
 };
