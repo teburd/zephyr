@@ -14,6 +14,9 @@ static void rtio_executor_submit_self(struct rtio_iodev_sqe *iodev_sqe)
 	const struct rtio_sqe *sqe = iodev_sqe->sqe;
 
 	switch (sqe->op) {
+	case RTIO_OP_NOP:
+		rtio_iodev_sqe_ok(iodev_sqe, 0);
+		break;
 	case RTIO_OP_CALLBACK:
 		sqe->callback(iodev_sqe->r, sqe, sqe->arg0);
 		rtio_iodev_sqe_ok(iodev_sqe, 0);

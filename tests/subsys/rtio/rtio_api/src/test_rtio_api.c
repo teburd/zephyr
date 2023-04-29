@@ -13,6 +13,7 @@
 #include <zephyr/app_memory/mem_domain.h>
 #include <zephyr/sys/util_loops.h>
 #include <zephyr/sys/time_units.h>
+#include <zephyr/timing/timing.h>
 #include <zephyr/rtio/rtio_spsc.h>
 #include <zephyr/rtio/rtio_mpsc.h>
 #include <zephyr/rtio/rtio.h>
@@ -460,6 +461,39 @@ ZTEST(rtio_api, test_rtio_transaction)
 		test_rtio_transaction_(&r_transaction_con);
 	}
 }
+
+#define THROUGHPUT_ITERS 100000
+RTIO_EXECUTOR_SIMPLE_DEFINE(throughput_exec_simp);
+RTIO_DEFINE(r_throughput, (struct rtio_executor *)&throughput_exec_simp, 2, 2);
+
+ZTEST(rtio_api, test_rtio_throughput)
+{
+	TC_PRINT("initializing iodev test devices\n");
+	timing_t start_time, end_time;
+	struct rtio_cqe *cqe;
+	struct rtio_sqe *sqe;
+
+	timing_init();
+	timing_start();
+
+	start_time = timing_counter_get();
+
+	for (uint32_t i = 0; i < THROUGHPUT_ITERS; i++) {
+		sqe = rtio_sqe_acquire(&r_throughput);
+		rtio_sqe_prep_nop(sqe, &iodev_test_transaction0, NULL);
+		rtio_submit(&r_throughput, 0);
+		cqe = rtio_cqe_consume(&r_throughput);
+		rtio_cqe_release(&r_throughput);
+	}
+
+	end_time = timing_counter_get();
+
+	uint64_t cycles = timing_cycles_get(&start_time, &end_time);
+	uint64_t ns = timing_cycles_to_ns(cycles);
+
+	TC_PRINT("%llu ns for %d iterations, %llu ns per op\n", ns, THROUGHPUT_ITERS, ns/THROUGHPUT_ITERS);
+}
+
 
 static void *rtio_api_setup(void)
 {
