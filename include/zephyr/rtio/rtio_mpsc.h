@@ -25,6 +25,40 @@ extern "C" {
  * @{
  */
 
+/*
+ * On single core systems atomics are unnecessary
+ * and cause a lot of unnecessary cache invalidation
+ *
+ * Using volatile to at least ensure memory is read/written
+ * by the compiler generated op codes is enough.
+ *
+ * On SMP atomics *must* be used to ensure the pointers
+ * are updated in the correct order and the values are
+ * updated core caches correctly.
+ */
+#ifdef CONFIG_SMP
+
+typedef atomic_ptr_t mpsc_ptr_t;
+
+#define mpsc_ptr_get(ptr) atomic_ptr_get(&ptr)
+#define mpsc_ptr_set(ptr, val) atomic_ptr_set(&ptr, val)
+#define mpsc_ptr_set_get(ptr, val) atomic_ptr_set(&ptr, val)
+
+#else
+
+typedef volatile struct rtio_mpsc_node *mpsc_ptr_t;
+
+#define mpsc_ptr_get(ptr) ptr
+#define mpsc_ptr_set(ptr, val) ptr = val
+#define mpsc_ptr_set_get(ptr, val)		\
+	({					\
+		mpsc_ptr_t tmp = ptr;		\
+		ptr = val;			\
+		tmp;				\
+	})
+
+#endif
+
 /**
  * @file rtio_mpsc.h
  *
@@ -45,14 +79,14 @@ extern "C" {
  * @brief Queue member
  */
 struct rtio_mpsc_node {
-	atomic_ptr_t next;
+	mpsc_ptr_t next;
 };
 
 /**
  * @brief MPSC Queue
  */
 struct rtio_mpsc {
-	atomic_ptr_t head;
+	mpsc_ptr_t head;
 	struct rtio_mpsc_node *tail;
 	struct rtio_mpsc_node stub;
 };
@@ -81,9 +115,9 @@ struct rtio_mpsc {
  */
 static inline void rtio_mpsc_init(struct rtio_mpsc *q)
 {
-	atomic_ptr_set(&q->head, &q->stub);
+	mpsc_ptr_set(q->head, &q->stub);
 	q->tail = &q->stub;
-	atomic_ptr_set(&q->stub.next, NULL);
+	mpsc_ptr_set(q->stub.next, NULL);
 }
 
 /**
@@ -97,11 +131,11 @@ static inline void rtio_mpsc_push(struct rtio_mpsc *q, struct rtio_mpsc_node *n)
 	struct rtio_mpsc_node *prev;
 	int key;
 
-	atomic_ptr_set(&n->next, NULL);
+	mpsc_ptr_set(n->next, NULL);
 
 	key = arch_irq_lock();
-	prev = (struct rtio_mpsc_node *)atomic_ptr_set(&q->head, n);
-	atomic_ptr_set(&prev->next, n);
+	prev = (struct rtio_mpsc_node *)mpsc_ptr_set_get(q->head, n);
+	mpsc_ptr_set(prev->next, n);
 	arch_irq_unlock(key);
 }
 
@@ -115,7 +149,7 @@ static inline struct rtio_mpsc_node *rtio_mpsc_pop(struct rtio_mpsc *q)
 {
 	struct rtio_mpsc_node *head;
 	struct rtio_mpsc_node *tail = q->tail;
-	struct rtio_mpsc_node *next = (struct rtio_mpsc_node *)atomic_ptr_get(&tail->next);
+	struct rtio_mpsc_node *next = (struct rtio_mpsc_node *)mpsc_ptr_get(tail->next);
 
 	/* Skip over the stub/sentinel */
 	if (tail == &q->stub) {
@@ -125,7 +159,7 @@ static inline struct rtio_mpsc_node *rtio_mpsc_pop(struct rtio_mpsc *q)
 
 		q->tail = next;
 		tail = next;
-		next = (struct rtio_mpsc_node *)atomic_ptr_get(&next->next);
+		next = (struct rtio_mpsc_node *)mpsc_ptr_get(next->next);
 	}
 
 	/* If next is non-NULL then a valid node is found, return it */
@@ -134,7 +168,7 @@ static inline struct rtio_mpsc_node *rtio_mpsc_pop(struct rtio_mpsc *q)
 		return tail;
 	}
 
-	head = (struct rtio_mpsc_node *)atomic_ptr_get(&q->head);
+	head = (struct rtio_mpsc_node *)mpsc_ptr_get(q->head);
 
 	/* If next is NULL, and the tail != HEAD then the queue has pending
 	 * updates that can't yet be accessed.
@@ -145,7 +179,7 @@ static inline struct rtio_mpsc_node *rtio_mpsc_pop(struct rtio_mpsc *q)
 
 	rtio_mpsc_push(q, &q->stub);
 
-	next = (struct rtio_mpsc_node *)atomic_ptr_get(&tail->next);
+	next = (struct rtio_mpsc_node *)mpsc_ptr_get(tail->next);
 
 	if (next != NULL) {
 		q->tail = next;
