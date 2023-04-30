@@ -463,12 +463,14 @@ ZTEST(rtio_api, test_rtio_transaction)
 }
 
 #define THROUGHPUT_ITERS 100000
-RTIO_EXECUTOR_SIMPLE_DEFINE(throughput_exec_simp);
-RTIO_DEFINE(r_throughput, (struct rtio_executor *)&throughput_exec_simp, 2, 2);
+RTIO_EXECUTOR_CONCURRENT_DEFINE(throughput_exec_con, 1);
+RTIO_DEFINE(r_throughput_con, (struct rtio_executor *)&throughput_exec_con, 2, 2);
 
-ZTEST(rtio_api, test_rtio_throughput)
+RTIO_EXECUTOR_SIMPLE_DEFINE(throughput_exec_simp);
+RTIO_DEFINE(r_throughput_simp, (struct rtio_executor *)&throughput_exec_simp, 2, 2);
+
+static inline void _test_rtio_throughput(struct rtio *r, const char *name)
 {
-	TC_PRINT("initializing iodev test devices\n");
 	timing_t start_time, end_time;
 	struct rtio_cqe *cqe;
 	struct rtio_sqe *sqe;
@@ -479,11 +481,11 @@ ZTEST(rtio_api, test_rtio_throughput)
 	start_time = timing_counter_get();
 
 	for (uint32_t i = 0; i < THROUGHPUT_ITERS; i++) {
-		sqe = rtio_sqe_acquire(&r_throughput);
-		rtio_sqe_prep_nop(sqe, &iodev_test_transaction0, NULL);
-		rtio_submit(&r_throughput, 0);
-		cqe = rtio_cqe_consume(&r_throughput);
-		rtio_cqe_release(&r_throughput);
+		sqe = rtio_sqe_acquire(r);
+		rtio_sqe_prep_nop(sqe, NULL, NULL);
+		rtio_submit(r, 0);
+		cqe = rtio_cqe_consume(r);
+		rtio_cqe_release(r);
 	}
 
 	end_time = timing_counter_get();
@@ -491,7 +493,14 @@ ZTEST(rtio_api, test_rtio_throughput)
 	uint64_t cycles = timing_cycles_get(&start_time, &end_time);
 	uint64_t ns = timing_cycles_to_ns(cycles);
 
-	TC_PRINT("%llu ns for %d iterations, %llu ns per op\n", ns, THROUGHPUT_ITERS, ns/THROUGHPUT_ITERS);
+	TC_PRINT("%s: %llu ns for %d iterations, %llu ns per op\n", name, ns, THROUGHPUT_ITERS, ns/THROUGHPUT_ITERS);
+}
+
+
+ZTEST(rtio_api, test_rtio_throughput)
+{
+	_test_rtio_throughput(&r_throughput_simp, "Simple Executor");
+	_test_rtio_throughput(&r_throughput_con, "Concurrent Executor");
 }
 
 
