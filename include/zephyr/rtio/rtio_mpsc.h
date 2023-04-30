@@ -126,7 +126,7 @@ static inline void rtio_mpsc_init(struct rtio_mpsc *q)
  * @param q Queue to push the node to
  * @param n Node to push into the queue
  */
-static inline void rtio_mpsc_push(struct rtio_mpsc *q, struct rtio_mpsc_node *n)
+static ALWAYS_INLINE void rtio_mpsc_push(struct rtio_mpsc *q, struct rtio_mpsc_node *n)
 {
 	struct rtio_mpsc_node *prev;
 	int key;
@@ -145,7 +145,7 @@ static inline void rtio_mpsc_push(struct rtio_mpsc *q, struct rtio_mpsc_node *n)
  * @retval NULL When no node is available
  * @retval node When node is available
  */
-static inline struct rtio_mpsc_node *rtio_mpsc_pop(struct rtio_mpsc *q)
+static ALWAYS_INLINE struct rtio_mpsc_node *rtio_mpsc_pop(struct rtio_mpsc *q)
 {
 	struct rtio_mpsc_node *head;
 	struct rtio_mpsc_node *tail = q->tail;
