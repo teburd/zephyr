@@ -1,5 +1,6 @@
 tests:
-  kernel.timer.timer:
+  kernel.timer.timer_behavior:
+    harness: pytest
     tags:
       - kernel
       - timer
