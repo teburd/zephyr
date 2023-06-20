@@ -42,6 +42,10 @@
 			gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
 			label = "Green LED 3";
 		};
+		timerout: timerout {
+			gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+			label = "Timer Output";
+		};
 	};
 
 	pwmleds {
@@ -117,6 +121,7 @@
 		led1 = &led1;
 		led2 = &led2;
 		led3 = &led3;
+		timerout = &timerout;
 		pwm-led0 = &pwm_led0;
 		sw0 = &button0;
 		sw1 = &button1;
