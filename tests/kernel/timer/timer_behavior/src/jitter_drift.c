@@ -9,9 +9,20 @@
 #include <stdlib.h>
 
 #include <zephyr/kernel.h>
+#include <zephyr/drivers/gpio.h>
 
 #include <zephyr/tc_util.h>
 #include <zephyr/ztest.h>
+
+/* The devicetree node identifier for the "timer out" alias. */
+#define TIMER_OUT_NODE DT_ALIAS(timerout)
+
+/*
+ * A build error on this line means your board is unsupported.
+ * See the sample documentation for information on how to fix this.
+ */
+static const struct gpio_dt_spec timer_out = GPIO_DT_SPEC_GET(TIMER_OUT_NODE, gpios);
+
 
 static uint32_t periodic_idx;
 static uint64_t periodic_data[CONFIG_TIMER_TEST_SAMPLES + 1];
@@ -27,6 +38,8 @@ static struct k_sem periodic_sem;
 static void timer_period_fn(struct k_timer *t)
 {
 	uint64_t curr_cycle;
+
+	gpio_pin_toggle_dt(&timer_out);
 
 #ifdef CONFIG_TIMER_HAS_64BIT_CYCLE_COUNTER
 	curr_cycle = k_cycle_get_64();
@@ -61,6 +74,8 @@ static void collect_timer_period_time_samples(void)
 static void timer_startdelay_fn(struct k_timer *t)
 {
 	uint64_t curr_cycle;
+
+	gpio_pin_toggle_dt(&timer_out);
 
 #ifdef CONFIG_TIMER_HAS_64BIT_CYCLE_COUNTER
 	curr_cycle = k_cycle_get_64();
@@ -262,12 +277,16 @@ static void do_test_using(void (*sample_collection_fn)(void))
 ZTEST(timer_jitter_drift, test_jitter_drift_timer_period)
 {
 	TC_PRINT("periodic timer behavior test using built-in restart mechanism\n");
+	gpio_is_ready_dt(&timer_out);
+	gpio_pin_configure_dt(&timer_out, GPIO_OUTPUT_ACTIVE);
 	do_test_using(collect_timer_period_time_samples);
 }
 
 ZTEST(timer_jitter_drift, test_jitter_drift_timer_startdelay)
 {
 	TC_PRINT("periodic timer behavior test using explicit start with delay\n");
+	gpio_is_ready_dt(&timer_out);
+	gpio_pin_configure_dt(&timer_out, GPIO_OUTPUT_ACTIVE);
 	do_test_using(collect_timer_startdelay_time_samples);
 }
 
