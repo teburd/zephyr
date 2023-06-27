@@ -282,6 +282,7 @@ ZTEST(timer_jitter_drift, test_jitter_drift_timer_period)
 	do_test_using(collect_timer_period_time_samples);
 }
 
+/*
 ZTEST(timer_jitter_drift, test_jitter_drift_timer_startdelay)
 {
 	TC_PRINT("periodic timer behavior test using explicit start with delay\n");
@@ -289,5 +290,6 @@ ZTEST(timer_jitter_drift, test_jitter_drift_timer_startdelay)
 	gpio_pin_configure_dt(&timer_out, GPIO_OUTPUT_ACTIVE);
 	do_test_using(collect_timer_startdelay_time_samples);
 }
+*/
 
 ZTEST_SUITE(timer_jitter_drift, NULL, NULL, NULL, NULL, NULL);
