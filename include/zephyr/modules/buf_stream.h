@@ -4,11 +4,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 #ifndef ZEPHYR_MODULE_BUF_STREAM_H
 #define ZEPHYR_MODULE_BUF_STREAM_H
 
 #include <zephyr/modules/module.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Module buffer stream
+ * @defgroup module_buf_stream Module Buffer Stream
+ * @ingroup modules
+ * @{
+ */
 
 struct module_buf_stream {
 	struct module_stream stream;
@@ -31,6 +41,13 @@ int module_buf_seek(struct module_stream *s, size_t pos);
 		.pos = 0				\
 	}
 
+/**
+ * @}
+ */
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #endif /* ZEPHYR_MODULE_BUF_STREAM_H */

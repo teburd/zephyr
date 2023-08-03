@@ -19,6 +19,7 @@ OS Services
    tracing/index.rst
    resource_management/index.rst
    modbus/index.rst
+   modules/index.rst
    notify.rst
    pm/index.rst
    portability/index.rst
