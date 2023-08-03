@@ -9,14 +9,21 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief ELF types and parsing
+ * @defgroup elf ELF data types and defines
+ * @ingroup modules
+ * @{
+ */
+
 /**
  * @brief Type aliases for 32 bit ELF
- * @defgroup elf_32bit_types
- *
-
-
-
-@{
+ * @defgroup elf_32bit_types ELF 32bit typedefs
+ * @{
  */
 
 typedef uint32_t elf32_addr;
@@ -31,7 +38,7 @@ typedef uint32_t elf32_word;
 
 /**
  * @brief Type aliases for 64 bit ELF
- * @defgroup elf_64bit_types
+ * @defgroup elf_64bit_types ELF 62bit typedefs
  * @{
  */
 
@@ -378,4 +385,12 @@ typedef struct elf32_sym elf_sym_t;
 #define ELF_ST_TYPE ELF32_ST_TYPE
 #endif
 
-#endif /* ZEPHYR_DYNELF_ELF_H */
+/**
+ * @}
+ */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* ZEPHYR_ELF_H */

@@ -11,6 +11,17 @@
 #include <zephyr/modules/elf.h>
 #include <sys/types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Loadable modules
+ * @defgroup modules Modules
+ * @ingroup os_services
+ * @{
+ */
+
 /**
  * @brief A module symbol type tag
  */
@@ -199,5 +210,12 @@ int module_call_fn(struct module *module, const char *sym_name);
  */
 void arch_elf_relocate(elf_rel_t *rel, uintptr_t opaddr, uintptr_t opval);
 
+/**
+ * @}
+ */
 
-#endif /* ELFLOADER_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* ZEPHYR_MODULE_H */
