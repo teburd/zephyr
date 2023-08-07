@@ -1,0 +1,14 @@
+common:
+  tags: modules
+tests:
+  modules.simple.x86:
+    filter: not CONFIG_X86_64
+    tags: modules
+    arch_allow: x86
+  modules.simple.xtensa:
+    tags: modules
+    arch_allow: xtensa
+  modules.simple.arm:
+    arch_allow: arm
+    extra_configs:
+      - CONFIG_ARM_MPU=n
