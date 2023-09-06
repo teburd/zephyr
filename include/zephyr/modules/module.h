@@ -9,6 +9,7 @@
 
 #include <zephyr/sys/slist.h>
 #include <zephyr/modules/elf.h>
+#include <zephyr/modules/symbol.h>
 #include <sys/types.h>
 
 #ifdef __cplusplus
@@ -21,24 +22,6 @@ extern "C" {
  * @ingroup os_services
  * @{
  */
-
-/**
- * @brief A module symbol type tag
- */
-enum module_symbol_type {
-	MODULE_SYMBOL_FUNC,
-	MODULE_SYMBOL_VAR,
-	MODULE_SYMBOL_UNDEF_FUNC,
-};
-
-/**
- * @brief A symbol (named memory address)
- */
-struct module_symbol {
-	enum module_symbol_type tt;
-	char name[32];
-	void *addr;
-};
 
 /**
  * @brief A symbol table
@@ -179,7 +162,7 @@ void module_unload(struct module *module);
  * @retval NULL if no symbol found
  * @retval addr Address of symbol in memory if found
  */
-void *module_find_sym(struct module_symtable *sym_table, const char *sym_name);
+void *module_find_sym(const struct module_symtable *sym_table, const char *sym_name);
 
 /**
  * @brief Call a function by name

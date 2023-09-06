@@ -290,6 +290,7 @@ SECTIONS {
     _module_init_end = .;
   } >ram
 
+
 #define RAMABLE_REGION ram
 #define ROMABLE_REGION ram
 #include <zephyr/linker/common-rom.ld>

@@ -17,18 +17,7 @@ LOG_MODULE_REGISTER(modules, CONFIG_MODULES_LOG_LEVEL);
 
 #include <string.h>
 
-static const struct module_symbol SYMS[] = {
-	{
-		.tt = MODULE_SYMBOL_FUNC,
-		.name = "printk",
-		.addr = printk,
-	}
-};
-
-static const struct module_symtable SYMTAB = {
-	.sym_cnt = ARRAY_SIZE(SYMS),
-	.syms = (struct module_symbol *)&SYMS[0],
-};
+static struct module_symtable SYMTAB;
 
 
 /** Default heap for metadata and module regions */
@@ -177,14 +166,14 @@ struct module *module_from_name(const char *name) {
 
 
 /* find arbitrary symbol's address according to its name in a module */
-void *module_find_sym(struct module_symtable *sym_table, const char *sym_name)
+void *module_find_sym(const struct module_symtable *sym_table, const char *sym_name)
 {
 	elf_word i;
 
 	/* find symbols in module */
 	for (i = 0; i < sym_table->sym_cnt; i++) {
 		if (strcmp(sym_table->syms[i].name, sym_name) == 0) {
-			return (void *)sym_table->syms[i].addr;
+			return sym_table->syms[i].addr;
 		}
 	}
 
@@ -371,14 +360,15 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 		module_read(ms, name, sizeof(name));
 
 		if (stt == STT_FUNC && stb == STB_GLOBAL && sect != SHN_UNDEF) {
-			strncpy(m->sym_tab.syms[j].name, name, sizeof(m->sym_tab.syms[j].name));
-			m->sym_tab.syms[j].tt = MODULE_SYMBOL_FUNC;
+			size_t name_sz = sizeof(name);
 
+			m->sym_tab.syms[j].name = module_alloc_ro(sizeof(name));
+			strncpy(m->sym_tab.syms[j].name, name, name_sz);
 			m->sym_tab.syms[j].addr =
 				(void *)((uintptr_t)m->mem[ms->sect_map[sym.st_shndx]]
 					 + sym.st_value);
-			LOG_DBG("function symbol %d, name %s, type %d, addr %p",
-				j, name, MODULE_SYMBOL_FUNC, m->sym_tab.syms[j].addr);
+			LOG_DBG("function symbol %d name %s addr %p",
+				j, name, m->sym_tab.syms[j].addr);
 			j++;
 		}
 	}
@@ -481,11 +471,17 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 	return 0;
 }
 
+STRUCT_SECTION_START_EXTERN(module_symbol);
 
 int module_load(struct module_stream *ms, const char name[16], struct module **m)
 {
 	int ret;
 	elf_ehdr_t ehdr;
+
+	if (!SYMTAB.sym_cnt) {
+		STRUCT_SECTION_COUNT(module_symbol, &SYMTAB.sym_cnt);
+		SYMTAB.syms = STRUCT_SECTION_START(module_symbol);
+	}
 
 	module_seek(ms, 0);
 	module_read(ms, (void *)&ehdr, sizeof(ehdr));
