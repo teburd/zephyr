@@ -17,18 +17,7 @@ LOG_MODULE_REGISTER(modules, CONFIG_MODULES_LOG_LEVEL);
 
 #include <string.h>
 
-static const struct module_symbol SYMS[] = {
-	{
-		.tt = MODULE_SYMBOL_FUNC,
-		.name = "printk",
-		.addr = printk,
-	}
-};
-
-static const struct module_symtable SYMTAB = {
-	.sym_cnt = ARRAY_SIZE(SYMS),
-	.syms = (struct module_symbol *)&SYMS[0],
-};
+static struct module_symtable SYMTAB;
 
 
 /** Default heap for metadata and module regions */
@@ -177,14 +166,14 @@ struct module *module_from_name(const char *name) {
 
 
 /* find arbitrary symbol's address according to its name in a module */
-void *module_find_sym(struct module_symtable *sym_table, const char *sym_name)
+void *module_find_sym(const struct module_symtable *sym_table, const char *sym_name)
 {
 	elf_word i;
 
 	/* find symbols in module */
 	for (i = 0; i < sym_table->sym_cnt; i++) {
 		if (strcmp(sym_table->syms[i].name, sym_name) == 0) {
-			return (void *)sym_table->syms[i].addr;
+			return sym_table->syms[i].addr;
 		}
 	}
 
@@ -481,11 +470,15 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 	return 0;
 }
 
-
 int module_load(struct module_stream *ms, const char name[16], struct module **m)
 {
 	int ret;
 	elf_ehdr_t ehdr;
+
+	if (!SYMTAB.sym_cnt) {
+		SYMTAB.sym_cnt = &_exp_sym_end - &_exp_sym_start;
+		SYMTAB.syms = &_exp_sym_start;
+	}
 
 	module_seek(ms, 0);
 	module_read(ms, (void *)&ehdr, sizeof(ehdr));

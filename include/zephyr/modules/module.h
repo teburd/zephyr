@@ -23,22 +23,22 @@ extern "C" {
  */
 
 /**
- * @brief A module symbol type tag
- */
-enum module_symbol_type {
-	MODULE_SYMBOL_FUNC,
-	MODULE_SYMBOL_VAR,
-	MODULE_SYMBOL_UNDEF_FUNC,
-};
-
-/**
  * @brief A symbol (named memory address)
  */
 struct module_symbol {
-	enum module_symbol_type tt;
-	char name[32];
+	const char *name;
+	/* If an object is exported, it might be writable, so no "const" */
 	void *addr;
 };
+
+/*
+ * If a module exports its functions, they will have to be re-linked, so these
+ * structures cannot be constant
+ */
+#define EXPORT_SYMBOL(x) struct module_symbol __attribute__((__section__(".exported_sym"))) \
+						symbol_##x = {STRINGIFY(x), x}
+
+extern struct module_symbol _exp_sym_start, _exp_sym_end;
 
 /**
  * @brief A symbol table
@@ -179,7 +179,7 @@ void module_unload(struct module *module);
  * @retval NULL if no symbol found
  * @retval addr Address of symbol in memory if found
  */
-void *module_find_sym(struct module_symtable *sym_table, const char *sym_name);
+void *module_find_sym(const struct module_symtable *sym_table, const char *sym_name);
 
 /**
  * @brief Call a function by name

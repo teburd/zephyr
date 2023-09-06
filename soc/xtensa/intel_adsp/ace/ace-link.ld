@@ -290,6 +290,12 @@ SECTIONS {
     _module_init_end = .;
   } >ram
 
+  .exported_symbols : ALIGN(4) {
+    _exp_sym_start = .;
+    KEEP (*(.exported_sym))
+    _exp_sym_end = .;
+  } >ram
+
 #define RAMABLE_REGION ram
 #define ROMABLE_REGION ram
 #include <zephyr/linker/common-rom.ld>
