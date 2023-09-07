@@ -327,10 +327,14 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 
 	LOG_DBG("symbol count %d", sym_cnt);
 
-	for (i = 0; i < sym_cnt; i++) {
+	/* Count global functions, exported by the object */
+	for (i = 0; i < sym_cnt; i++, pos += ent_size) {
+		if (!i)
+			/* A dummy entry */
+			continue;
+
 		module_seek(ms, pos);
 		module_read(ms, &sym, ent_size);
-		pos += ent_size;
 
 		uint32_t stt = ELF_ST_TYPE(sym.st_info);
 		uint32_t stb = ELF_ST_BIND(sym.st_info);
@@ -356,10 +360,13 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 	m->sym_tab.sym_cnt = func_syms_cnt;
 	pos = ms->sects[MOD_SECT_SYMTAB].sh_offset;
 	j = 0;
-	for (i = 0; i < sym_cnt; i++) {
+	for (i = 0; i < sym_cnt; i++, pos += ent_size) {
+		if (!i)
+			/* A dummy entry */
+			continue;
+
 		module_seek(ms, pos);
 		module_read(ms, &sym, ent_size);
-		pos += ent_size;
 
 		uint32_t stt = ELF_ST_TYPE(sym.st_info);
 		uint32_t stb = ELF_ST_BIND(sym.st_info);
