@@ -189,7 +189,6 @@ void *module_find_sym(const struct module_symtable *sym_table, const char *sym_n
  */
 static int module_load_rel(struct module_stream *ms, struct module *m)
 {
-	elf_ehdr_t ehdr;
 	elf_word i, j, sym_cnt, rel_cnt;
 	elf_rel_t rel;
 	char name[32];
@@ -197,27 +196,22 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 	m->mem_size = 0;
 	m->sym_tab.sym_cnt = 0;
 
-	module_seek(ms, 0);
-	module_read(ms, (void *)&ehdr, sizeof(ehdr));
-
-	ms->hdr = ehdr;
-
 	elf_shdr_t shdr;
-	size_t pos = ehdr.e_shoff;
+	size_t pos = ms->hdr.e_shoff;
 
-	ms->sect_map = k_heap_alloc(&module_heap, ehdr.e_shnum*sizeof(uint32_t), K_NO_WAIT);
-	ms->sect_cnt = ehdr.e_shnum;
+	ms->sect_map = k_heap_alloc(&module_heap, ms->hdr.e_shnum * sizeof(uint32_t), K_NO_WAIT);
+	ms->sect_cnt = ms->hdr.e_shnum;
 
 	/* Find string tables */
-	for (i = 0; i < ehdr.e_shnum; i++) {
+	for (i = 0; i < ms->hdr.e_shnum; i++) {
 		module_seek(ms, pos);
 		module_read(ms, (void *)&shdr, sizeof(elf_shdr_t));
 
-		pos += ehdr.e_shentsize;
+		pos += ms->hdr.e_shentsize;
 
 		LOG_DBG("section %d at %x: name %d, type %d, flags %x, addr %x, size %d",
 			i,
-			ehdr.e_shoff+i*ehdr.e_shentsize,
+			ms->hdr.e_shoff + i * ms->hdr.e_shentsize,
 			shdr.sh_name,
 			shdr.sh_type,
 			shdr.sh_flags,
@@ -231,7 +225,7 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 			ms->sect_map[i] = MOD_SECT_SYMTAB;
 			break;
 		case SHT_STRTAB:
-			if (ehdr.e_shstrndx == i) {
+			if (ms->hdr.e_shstrndx == i) {
 				LOG_DBG("shstrtab at %d", i);
 				ms->sects[MOD_SECT_SHSTRTAB] = shdr;
 				ms->sect_map[i] = MOD_SECT_SHSTRTAB;
@@ -247,14 +241,14 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 		}
 	}
 
-	pos = ehdr.e_shoff;
+	pos = ms->hdr.e_shoff;
 
 	/* Copy over useful sections */
-	for (i = 0; i < ehdr.e_shnum; i++) {
+	for (i = 0; i < ms->hdr.e_shnum; i++) {
 		module_seek(ms, pos);
 		module_read(ms, (void *)&shdr, sizeof(elf_shdr_t));
 
-		pos += ehdr.e_shentsize;
+		pos += ms->hdr.e_shentsize;
 
 		elf32_word str_idx = shdr.sh_name;
 
@@ -373,13 +367,13 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 	}
 
 	/* relocations */
-	pos = ehdr.e_shoff;
+	pos = ms->hdr.e_shoff;
 
-	for (i = 0; i < ehdr.e_shnum - 1; i++) {
+	for (i = 0; i < ms->hdr.e_shnum - 1; i++) {
 		module_seek(ms, pos);
 		module_read(ms, (void *)&shdr, sizeof(elf_shdr_t));
 
-		pos += ehdr.e_shentsize;
+		pos += ms->hdr.e_shentsize;
 
 		/* find relocation sections */
 		if ((shdr.sh_type == SHT_REL)
@@ -500,8 +494,10 @@ int module_load(struct module_stream *ms, const char name[16], struct module **m
 		if (m == NULL) {
 			LOG_ERR("Not enough memory for module metadata");
 			ret = -ENOMEM;
+		} else {
+			ms->hdr = ehdr;
+			ret = module_load_rel(ms, *m);
 		}
-		ret = module_load_rel(ms, *m);
 	} else {
 		LOG_ERR("Unsupported elf file type %x", ehdr.e_type);
 		/* unsupported ELF file type */
