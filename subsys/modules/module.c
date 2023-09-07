@@ -479,7 +479,7 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 	return 0;
 }
 
-int module_load(struct module_stream *ms, const char name[16], struct module **m)
+int module_load(struct module_stream *ms, const char *name, struct module **m)
 {
 	int ret;
 	elf_ehdr_t ehdr;

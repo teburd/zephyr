@@ -161,7 +161,7 @@ struct module *module_from_name(const char *name);
  * @retval -ENOMEM Not enough memory
  * @retval -EINVAL Invalid ELF stream
  */
-int module_load(struct module_stream *modstr, const char name[16], struct module **module);
+int module_load(struct module_stream *modstr, const char *name, struct module **module);
 
 /**
  * @brief Unload a module
