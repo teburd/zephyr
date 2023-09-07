@@ -130,7 +130,6 @@ int module_buf_seek(struct module_stream *s, size_t pos)
 	return 0;
 }
 
-
 int module_read(struct module_stream *s, void *buf, size_t len)
 {
 	return s->read(s, buf, len);
@@ -163,7 +162,6 @@ struct module *module_from_name(const char *name) {
 
 	return NULL;
 }
-
 
 /* find arbitrary symbol's address according to its name in a module */
 void *module_find_sym(const struct module_symtable *sym_table, const char *sym_name)
@@ -355,7 +353,7 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 
 	/* Copy over global function symbols to symtab */
 
-	m->sym_tab.syms = k_heap_alloc(&module_heap, func_syms_cnt*sizeof(struct module_symbol),
+	m->sym_tab.syms = k_heap_alloc(&module_heap, func_syms_cnt * sizeof(struct module_symbol),
 				       K_NO_WAIT);
 	m->sym_tab.sym_cnt = func_syms_cnt;
 	pos = ms->sects[MOD_SECT_SYMTAB].sh_offset;
@@ -403,7 +401,7 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 
 		rel_cnt = shdr.sh_size / sizeof(elf_rel_t);
 
-		uintptr_t loc = 0;
+		uintptr_t loc;
 
 		module_seek(ms, ms->sects[MOD_SECT_SHSTRTAB].sh_offset + shdr.sh_name);
 		module_read(ms, name, sizeof(name));
@@ -441,7 +439,7 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 				rel.r_offset, name, ELF_ST_TYPE(sym.st_info),
 				ELF_ST_BIND(sym.st_info), sym.st_shndx);
 
-			uintptr_t link_addr, op_loc, op_code = 0;
+			uintptr_t link_addr, op_loc, op_code;
 
 			/* If symbol is undefined, then we need to look it up */
 			if (sym.st_shndx == SHN_UNDEF) {
@@ -486,7 +484,7 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 
 int module_load(struct module_stream *ms, const char *name, struct module **m)
 {
-	int ret;
+	int ret = 0;
 	elf_ehdr_t ehdr;
 
 	if (!SYMTAB.sym_cnt) {
