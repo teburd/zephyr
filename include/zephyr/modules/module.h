@@ -100,6 +100,9 @@ struct module {
 	/** Total size of the module memory usage */
 	size_t mem_size;
 
+	/** Offset to the .module section */
+	size_t module_offset;
+
 	/** Exported symbols from the module, may be used in other modules */
 	struct module_symtable sym_tab;
 };

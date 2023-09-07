@@ -355,6 +355,9 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 		} else if (strncmp(name, ".bss", sizeof(name)) == 0) {
 			mem_idx = MOD_MEM_BSS;
 			sect_idx = MOD_SECT_BSS;
+		} else if (strncmp(name, ".module", sizeof(name)) == 0) {
+			m->module_offset = shdr.sh_offset;
+			continue;
 		} else {
 			LOG_DBG("Not copied section %s", name);
 			continue;
