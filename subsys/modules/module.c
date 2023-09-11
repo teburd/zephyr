@@ -536,6 +536,9 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 				link_addr = (uintptr_t)m->mem[ms->sect_map[sym.st_shndx]];
 
 				LOG_INF("found section symbol %s addr 0x%lx", name, link_addr);
+			} else {
+				/* Nothing to relocate here */
+				continue;
 			}
 
 			op_loc = loc + rel.r_offset;
