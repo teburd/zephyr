@@ -19,8 +19,93 @@ LOG_MODULE_REGISTER(modules, CONFIG_MODULES_LOG_LEVEL);
 
 static struct module_symtable SYMTAB;
 
-/* TODO different allocator pools for metadata, code sections, and data sections */
+
+/** Default heap for metadata and module regions */
 K_HEAP_DEFINE(module_heap, CONFIG_MODULES_HEAP_SIZE * 1024);
+
+/* With MMU/MPU and memory protection different allocators are needed
+ * for different pages and permissions.
+ */
+#ifdef CONFIG_MODULES_MEMPROTECTED
+struct k_heap module_rx_heap;
+struct k_heap module_rw_heap;
+struct k_heap module_ro_heap;
+
+#define MODULE_RX_HEAP module_rx_heap
+#define MODULE_RW_HEAP module_rw_heap
+#define MODULE_RO_HEAP module_ro_heap
+
+#else
+
+#define MODULE_RX_HEAP module_heap
+#define MODULE_RW_HEAP module_heap
+#define MODULE_RO_HEAP module_heap
+
+#endif /* CONFIG_MODULES_MEM_PROTECTED */
+
+static inline void *module_alloc_rx(size_t sz)
+{
+	return k_heap_alloc(&MODULE_RX_HEAP, sz, K_NO_WAIT);
+}
+
+static inline void module_free_rx(void *p)
+{
+	k_heap_free(&MODULE_RX_HEAP, p);
+}
+
+static inline void *module_alloc_rw(size_t sz)
+{
+	return k_heap_alloc(&MODULE_RW_HEAP, sz, K_NO_WAIT);
+}
+
+static inline void module_free_rw(void *p)
+{
+	k_heap_free(&MODULE_RW_HEAP, p);
+}
+
+static inline void *module_alloc_ro(size_t sz)
+{
+	return k_heap_alloc(&MODULE_RO_HEAP, sz, K_NO_WAIT);
+}
+
+static inline void module_free_ro(void *p)
+{
+	k_heap_free(&MODULE_RO_HEAP, p);
+}
+
+static inline void *module_mem_alloc(enum module_mem m, size_t sz)
+{
+	void *mem = NULL;
+
+	switch (m) {
+	case MOD_MEM_TEXT:
+		mem = module_alloc_rx(sz);
+		break;
+	case MOD_MEM_RODATA:
+		mem = module_alloc_ro(sz);
+		break;
+	default:
+		mem = module_alloc_rw(sz);
+		break;
+	}
+	return mem;
+}
+
+
+static inline void module_mem_free(enum module_mem m, void *p)
+{
+	switch (m) {
+	case MOD_MEM_TEXT:
+		module_free_rx(p);
+		break;
+	case MOD_MEM_RODATA:
+		module_free_ro(p);
+		break;
+	default:
+		module_free_rw(p);
+		break;
+	}
+}
 
 static const char ELF_MAGIC[] = {0x7f, 'E', 'L', 'F'};
 
@@ -205,7 +290,7 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 			ms->sect_map[i] = sect_idx;
 
 			m->mem[mem_idx] =
-				k_heap_alloc(&module_heap, ms->sects[sect_idx].sh_size, K_NO_WAIT);
+				module_mem_alloc(mem_idx, ms->sects[sect_idx].sh_size);
 			module_seek(ms, ms->sects[sect_idx].sh_offset);
 			module_read(ms, m->mem[mem_idx], ms->sects[sect_idx].sh_size);
 
