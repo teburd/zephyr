@@ -24,6 +24,4 @@ config SENSING_MAX_SENSITIVITY_COUNT
 	  So, maximum sensitivity count is needed for sensors
 	  Typical values are 6
 
-source "subsys/sensing/sensor/phy_3d_sensor/Kconfig"
-
 endif # SENSING
