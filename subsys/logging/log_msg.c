@@ -5,6 +5,7 @@
  */
 #include <zephyr/kernel.h>
 #include <zephyr/syscall_handler.h>
+#include <zephyr/modules/symbol.h>
 #include <zephyr/logging/log_internal.h>
 #include <zephyr/logging/log_ctrl.h>
 #include <zephyr/logging/log_frontend.h>
@@ -94,6 +95,7 @@ void z_impl_z_log_msg_static_create(const void *source,
 
 	z_log_msg_finalize(msg, source, out_desc, data);
 }
+EXPORT_SYMBOL(z_impl_z_log_msg_static_create);
 
 #ifdef CONFIG_USERSPACE
 static inline void z_vrfy_z_log_msg_static_create(const void *source,
