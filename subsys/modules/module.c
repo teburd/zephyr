@@ -5,11 +5,10 @@
  *
  */
 
-#include "zephyr/sys/slist.h"
-#include "zephyr/sys/util.h"
+#include <zephyr/sys/slist.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/modules/elf.h>
 #include <zephyr/modules/module.h>
-#include <zephyr/modules/buf_stream.h>
 #include <zephyr/kernel.h>
 
 #include <zephyr/logging/log.h>
@@ -19,121 +18,12 @@ LOG_MODULE_REGISTER(modules, CONFIG_MODULES_LOG_LEVEL);
 
 static struct module_symtable SYMTAB;
 
-
-/** Default heap for metadata and module regions */
-K_HEAP_DEFINE(module_heap, CONFIG_MODULES_HEAP_SIZE * 1024);
-
-/* With MMU/MPU and memory protection different allocators are needed
- * for different pages and permissions.
- */
-#ifdef CONFIG_MODULES_MEMPROTECTED
-struct k_heap module_rx_heap;
-struct k_heap module_rw_heap;
-struct k_heap module_ro_heap;
-
-#define MODULE_RX_HEAP module_rx_heap
-#define MODULE_RW_HEAP module_rw_heap
-#define MODULE_RO_HEAP module_ro_heap
-
-#else
-
-#define MODULE_RX_HEAP module_heap
-#define MODULE_RW_HEAP module_heap
-#define MODULE_RO_HEAP module_heap
-
-#endif /* CONFIG_MODULES_MEM_PROTECTED */
-
-static inline void *module_alloc_rx(size_t sz)
-{
-	return k_heap_alloc(&MODULE_RX_HEAP, sz, K_NO_WAIT);
-}
-
-static inline void module_free_rx(void *p)
-{
-	k_heap_free(&MODULE_RX_HEAP, p);
-}
-
-static inline void *module_alloc_rw(size_t sz)
-{
-	return k_heap_alloc(&MODULE_RW_HEAP, sz, K_NO_WAIT);
-}
-
-static inline void module_free_rw(void *p)
-{
-	k_heap_free(&MODULE_RW_HEAP, p);
-}
-
-static inline void *module_alloc_ro(size_t sz)
-{
-	return k_heap_alloc(&MODULE_RO_HEAP, sz, K_NO_WAIT);
-}
-
-static inline void module_free_ro(void *p)
-{
-	k_heap_free(&MODULE_RO_HEAP, p);
-}
-
-static inline void *module_mem_alloc(enum module_mem m, size_t sz)
-{
-	void *mem = NULL;
-
-	switch (m) {
-	case MOD_MEM_TEXT:
-		mem = module_alloc_rx(sz);
-		break;
-	case MOD_MEM_RODATA:
-		mem = module_alloc_ro(sz);
-		break;
-	default:
-		mem = module_alloc_rw(sz);
-		break;
-	}
-	return mem;
-}
-
-
-static inline void module_mem_free(enum module_mem m, void *p)
-{
-	switch (m) {
-	case MOD_MEM_TEXT:
-		module_free_rx(p);
-		break;
-	case MOD_MEM_RODATA:
-		module_free_ro(p);
-		break;
-	default:
-		module_free_rw(p);
-		break;
-	}
-}
-
 static const char ELF_MAGIC[] = {0x7f, 'E', 'L', 'F'};
 
-int module_buf_read(struct module_stream *s, void *buf, size_t len)
+int module_read(struct module_stream *s, enum module_memkind mk,
+		void **mem, size_t len)
 {
-	struct module_buf_stream *buf_s = CONTAINER_OF(s, struct module_buf_stream, stream);
-	size_t end = MIN(buf_s->pos + len, buf_s->len);
-	size_t read_len = end - buf_s->pos;
-
-	memcpy(buf, buf_s->buf + buf_s->pos, read_len);
-	buf_s->pos = end;
-
-	return read_len;
-}
-
-int module_buf_seek(struct module_stream *s, size_t pos)
-{
-	struct module_buf_stream *buf_s = CONTAINER_OF(s, struct module_buf_stream, stream);
-
-	buf_s->pos = MIN(pos, buf_s->len);
-
-	return 0;
-}
-
-
-int module_read(struct module_stream *s, void *buf, size_t len)
-{
-	return s->read(s, buf, len);
+	return s->read(s, mk, mem, len);
 }
 
 int module_seek(struct module_stream *s, size_t pos)
@@ -164,8 +54,6 @@ struct module *module_from_name(const char *name) {
 	return NULL;
 }
 
-
-/* find arbitrary symbol's address according to its name in a module */
 void *module_find_sym(const struct module_symtable *sym_table, const char *sym_name)
 {
 	elf_word i;
@@ -189,7 +77,7 @@ void *module_find_sym(const struct module_symtable *sym_table, const char *sym_n
  */
 static int module_load_rel(struct module_stream *ms, struct module *m)
 {
-	elf_ehdr_t ehdr;
+	elf_ehdr_t *ehdr;
 	elf_word i, j, sym_cnt, rel_cnt;
 	elf_rel_t rel;
 	char name[32];
@@ -198,11 +86,10 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 	m->sym_tab.sym_cnt = 0;
 
 	module_seek(ms, 0);
-	module_read(ms, (void *)&ehdr, sizeof(ehdr));
-
+	module_read(ms, MOD_MEMKIND_METADATA, &ehdr, sizeof(elf_ehdr_t));
 	ms->hdr = ehdr;
 
-	elf_shdr_t shdr;
+	elf_shdr_t *shdr;
 	size_t pos = ehdr.e_shoff;
 
 	ms->sect_map = k_heap_alloc(&module_heap, ehdr.e_shnum*sizeof(uint32_t), K_NO_WAIT);
@@ -473,53 +360,42 @@ static int module_load_rel(struct module_stream *ms, struct module *m)
 
 STRUCT_SECTION_START_EXTERN(module_symbol);
 
-int module_load(struct module_stream *ms, const char name[16], struct module **m)
+int module_load(struct module_stream *ms, const char name[16], struct module *m)
 {
 	int ret;
-	elf_ehdr_t ehdr;
 
 	if (!SYMTAB.sym_cnt) {
 		STRUCT_SECTION_COUNT(module_symbol, &SYMTAB.sym_cnt);
 		SYMTAB.syms = STRUCT_SECTION_START(module_symbol);
 	}
 
-	module_seek(ms, 0);
-	module_read(ms, (void *)&ehdr, sizeof(ehdr));
+	(void)module_seek(ms, 0);
+	res = module_read(ms, MOD_MEMKIND_METADATA, &ms->hdr, sizeof(struct elf_ehdr_t));
+
+	if (res != 0) {
+		LOG_ERR("Reading ELF header failed");
+		return ret;
+	}
 
 	/* check whether this is an valid elf file */
-	if (memcmp(ehdr.e_ident, ELF_MAGIC, sizeof(ELF_MAGIC)) != 0) {
-		LOG_HEXDUMP_ERR(ehdr.e_ident, 16, "Invalid ELF, magic does not match");
+	if (memcmp(ms->hdr->e_ident, ELF_MAGIC, sizeof(ELF_MAGIC)) != 0) {
+		LOG_HEXDUMP_ERR(ms->hdr->e_ident, 16, "Invalid ELF, magic does not match");
 		return -EINVAL;
 	}
 
-	if (ehdr.e_type == ET_REL) {
+	if (ms->hdr->e_type == ET_REL) {
 		LOG_DBG("Loading relocatable elf");
-		*m = k_heap_alloc(&module_heap, sizeof(struct module), K_NO_WAIT);
-
-		for (int i = 0; i < MOD_MEM_COUNT; i++) {
-			(*m)->mem[i] = NULL;
-		}
-
-		if (m == NULL) {
-			LOG_ERR("Not enough memory for module metadata");
-			ret = -ENOMEM;
-		}
-		ret = module_load_rel(ms, *m);
+		ret = module_load_rel(ms, m);
 	} else {
 		LOG_ERR("Unsupported elf file type %x", ehdr.e_type);
-		/* unsupported ELF file type */
-		*m = NULL;
 	}
 
-	if (ret != 0) {
-		if(*m != NULL) {
-			module_unload(*m);
-		}
-		*m = NULL;
-	} else {
+	if (ret == 0) {
 		strncpy((*m)->name, name, sizeof((*m)->name));
 		sys_slist_append(&_module_list, &(*m)->_mod_list);
 	}
+
+	module_stream_free(ms);
 
 	return ret;
 }

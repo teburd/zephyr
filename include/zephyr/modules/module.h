@@ -10,6 +10,7 @@
 #include <zephyr/sys/slist.h>
 #include <zephyr/modules/elf.h>
 #include <zephyr/modules/symbol.h>
+#include <zephyr/modules/allocator.h>
 #include <sys/types.h>
 
 #ifdef __cplusplus
@@ -32,7 +33,6 @@ struct module_symtable {
 	elf_word sym_cnt;
 	struct module_symbol *syms;
 };
-
 
 /**
  * @brief Enum of module memory regions for lookup tables
@@ -85,30 +85,68 @@ struct module {
 
 	/** Exported symbols from the module, may be used in other modules */
 	struct module_symtable sym_tab;
+
+	/** Allocator used for memory */
+	struct module_allocator *alloc;
 };
 
 /**
  * @brief Module loader context
  *
+ * Provides a context and required functions to load and parse an elf file.
+ * The interface and context is meant to support a wide range of sources of
+ * ELF files from mapped memory with already page aligned ELF sections to
+ * reading off of slow serially connected flash or rom memory.
+ *
+ * To support this the read function is expected to return a pointer. This pointer
+ * is expected to be either a direct mapping to the required information or
+ * a copy of it placed in memory allocated by a module memory allocator.
+ *
  * A source of an ELF stream/blob
  */
 struct module_stream {
-	int (*read)(struct module_stream *s, void *buf, size_t len);
+	int (*read)(struct module_stream *s, enum module_memkind mk, void **mem, size_t len);
 	int (*seek)(struct module_stream *s, size_t pos);
-
-	elf_ehdr_t hdr;
-	elf_shdr_t sects[MOD_SECT_COUNT];
+	struct module_allocator *alloc;
+	elf_ehdr_t *hdr;
+	elf_shdr_t *sects[MOD_SECT_COUNT];
 	uint32_t *sect_map;
 	uint32_t sect_cnt;
 };
 
 /**
- * @brief Read a length of bytes into the given buffer
+ * @brief Read a length of bytes updating the given pointer to the read value.
+ *
+ * This may be a zero-copy or copying read depending on the provided allocator
+ * to the module stream. When copying the memory is allocated on behalf of the
+ * caller with the memory kind being taken into account.
+ *
+ * E.g. for reading the .text section from the elf
+ *
+ * int res = module_read(ms, MOD_MEMKIND_RX, &text_sect, text_sect_len);
+ *
+ * E.g. for reading metadata, like an elf section header
+ *
+ * int res = module_read(ms, MOD_MEMKIND_METADATA, &ms->sects[MOD_SECT_TEXT], text_shdr_len);
+ *
+ * @param ms Module stream
+ * @param mk Memory kind, e.g. MOD_MEMKIND_METADATA
+ * @param mem A double pointer which will be assigned the address of the read data.
+ * @param len Length of data to read from the stream
+ * @retval read_len Length read from the stream
+ * @retval -ENOMEM Allocation failed
+ * @retval -errno Underlying stream error, could be an errno
  */
-int module_read(struct module_stream *ms, void *buf, size_t len);
+int module_read(struct module_stream *ms, enum module_memkind mk, void **mem, size_t len);
 
 /**
  * @brief Seek to an absolute location of the module (elf) file
+ *
+ * @param ms Module stream
+ * @param pos Absolute position to seek to
+ *
+ * @retval 0 Success
+ * @retval -EINVAL Invalid position
  */
 int module_seek(struct module_stream *ms, size_t pos);
 
@@ -130,11 +168,6 @@ struct module *module_from_name(const char *name);
  * @brief Load a module
  *
  * Loads relevant ELF data into memory and provides a structure to work with it.
- *
- * Only relocatable ELF files are currently supported (partially linked).
- *
- * Internally a module specific heap is used to allocate dynamic structures which
- * are freed when the module is unloaded.
  *
  * @param[in] modstr A byte stream like object that provides a source for loadable code
  * @param[in] name A string identifier for the module
