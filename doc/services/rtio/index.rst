@@ -22,20 +22,16 @@ DMA transfer lists.
 Problem
 *******
 
-An application wishing to do complex DMA or interrupt driven operations today
-in Zephyr requires direct knowledge of the hardware and how it works. There is
-no understanding in the DMA API of other Zephyr devices and how they relate.
+The core issue RTIO tries to solve is the blocking I/O problem. Hardware is inherently
+parallel in its ability to perform I/O. Hardware vendors provide features specifically
+to support ongoing background I/O operations with notifications of completion. An API
+should support this while providing a uniform interface for all Zephyr applications.
 
-This means doing complex audio, video, or sensor streaming requires direct
-hardware knowledge or leaky abstractions over DMA controllers. Neither is ideal.
-
-To enable asynchronous operations, especially with DMA, a description of what
-to do rather than direct operations through C and callbacks is needed. Enabling
-DMA features such as channels with priority, and sequences of transfers requires
-more than a simple list of descriptions.
-
-Using DMA and/or interrupt driven I/O shouldn't dictate whether or not the
-call is blocking or not.
+DMA while a core part of offloading I/O tasks to the hardware is not uniform and varies
+a great deal. Not every peripheral supports using DMA. Not every DMA supports the same
+feature set. In some cases the peripheral itself can directly access memory, has a command
+queue, and features that look like DMA itself. RTIO is meant to be a uniform interface
+while allowing for hardware to be maximally used.
 
 Inspiration, introducing io_uring
 *********************************
@@ -129,6 +125,8 @@ Canceling an already queued operation is possible but not guaranteed. If the
 SQE has not yet started, it's likely that a call to :c:func:`rtio_sqe_cancel`
 will remove the SQE and never run it. If, however, the SQE already started
 running, the cancel request will be ignored.
+
+
 
 Memory pools
 ************
