@@ -536,6 +536,9 @@ static int mcux_lpi2c_init(const struct device *dev)
 static const struct i2c_driver_api mcux_lpi2c_driver_api = {
 	.configure = mcux_lpi2c_configure,
 	.transfer = mcux_lpi2c_transfer,
+#if CONFIG_I2C_RTIO
+	.iodev_submit = mcux_lpi2c_submit,
+#endif
 #if CONFIG_I2C_MCUX_LPI2C_BUS_RECOVERY
 	.recover_bus = mcux_lpi2c_recover_bus,
 #endif /* CONFIG_I2C_MCUX_LPI2C_BUS_RECOVERY */
@@ -573,7 +576,14 @@ static const struct i2c_driver_api mcux_lpi2c_driver_api = {
 				 DT_INST_PROP(n, bus_idle_timeout)),	\
 	};								\
 									\
-	static struct mcux_lpi2c_data mcux_lpi2c_data_##n;		\
+	COND_CODE_1(CONFIG_I2C_RTIO,					\
+		(RTIO_DEFINE(_i2c##n##_lpi2c_rtio,			\
+			DT_INST_PROP_OR(n, sq_size, CONFIG_I2C_RTIO_SQ_SIZE), \
+			DT_INST_PROP_OR(n, cq_size, CONFIG_I2C_RTIO_CQ_SIZE))); \
+									\
+	static struct mcux_lpi2c_data mcux_lpi2c_data_##n = {		\
+		COND_CODE_1(CONFIG_I2C_RTIO, (.r = &_i2c##n_lpi2c_rtio,))\
+	};								\
 									\
 	I2C_DEVICE_DT_INST_DEFINE(n, mcux_lpi2c_init, NULL,		\
 				&mcux_lpi2c_data_##n,			\
