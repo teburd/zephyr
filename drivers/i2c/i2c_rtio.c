@@ -47,3 +47,76 @@ struct rtio_sqe *i2c_rtio_copy(struct rtio *r,
 
 	return sqe;
 }
+
+
+static int i2c_rtio_transfer(const struct i2c_rtio *ctx, struct i2c_msg *msgs, uint8_t num_msgs,
+				  uint16_t addr)
+	struct i2c_rtio *const dev_data = ctx;
+	struct rtio_iodev *iodev = &dev_data->iodev;
+	struct rtio *const r = dev_data->r;
+	struct rtio_sqe *sqe = NULL;
+	struct rtio_cqe *cqe = NULL;
+	int res = 0;
+
+	k_sem_take(&dev_data->r_lock, K_FOREVER);
+
+	dev_data->dt_spec.addr = addr;
+
+	sqe = i2c_rtio_copy(r, iodev, msgs, num_msgs);
+	if (sqe == NULL) {
+		LOG_ERR("Not enough submission queue entries");
+		res = -ENOMEM;
+		goto out;
+	}
+
+	sqe->flags &= ~RTIO_SQE_TRANSACTION;
+
+	rtio_submit(r, 1);
+
+	cqe = rtio_cqe_consume(r);
+	__ASSERT(cqe != NULL, "Expected valid completion");
+	while (cqe != NULL) {
+		res = cqe->result;
+		cqe = rtio_cqe_consume(r);
+	}
+	rtio_cqe_release_all(r);
+
+out:
+	k_sem_give(&dev_data->r_lock);
+	return res;
+
+}
+
+static int i2c_rtio_recovery(const struct i2c_rtio *ctx)
+{
+	struct i2c_rtio *const ctx = dev->data;
+	struct rtio_iodev *iodev = &ctx->iodev;
+	struct rtio *const r = ctx->r;
+	struct rtio_sqe *sqe = NULL;
+	struct rtio_cqe *cqe = NULL;
+	int res = 0;
+
+	k_sem_take(&dev_data->r_lock, K_FOREVER);
+
+	sqe = rtio_sqe_acquire(r);
+	if (sqe == NULL) {
+		LOG_ERR("Not enough submission queue entries");
+		res = -ENOMEM;
+		goto out;
+	}
+
+	sqe->op = RTIO_SQE_OP_I2C_RECOVERY;
+	sqe->iodev = iodev;
+
+	rtio_submit(r, 1);
+
+	cqe = rtio_cqe_consume(r);
+	res = cqe->result;
+	__ASSERT(cqe != NULL, "Expected valid completion");
+	rtio_cqe_release_all(r);
+
+out:
+	k_sem_give(&ctx->r_lock);
+	return res;
+}
+
