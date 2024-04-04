@@ -343,7 +343,7 @@ static int bma4xx_submit_one_shot(const struct device *dev, struct rtio_iodev_sq
 	struct bma4xx_data *bma4xx = dev->data;
 
 	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
-	const enum sensor_channel *const channels = cfg->channels;
+	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
 
 	uint32_t min_buf_len = sizeof(struct bma4xx_encoded_data);
@@ -370,7 +370,11 @@ static int bma4xx_submit_one_shot(const struct device *dev, struct rtio_iodev_sq
 
 	/* Determine what channels we need to fetch */
 	for (int i = 0; i < num_channels; i++) {
-		switch (channels[i]) {
+		if (channels[i].chan_idx != 0) {
+			LOG_ERR("Only channel index 0 supported");
+			return -ENOTSUP;
+		}
+		switch (channels[i].chan_type) {
 		case SENSOR_CHAN_ALL:
 			edata->has_accel = 1;
 #ifdef CONFIG_BMA4XX_TEMPERATURE

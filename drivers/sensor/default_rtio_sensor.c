@@ -46,12 +46,13 @@ const struct rtio_iodev_api __sensor_iodev_api = {
  * @param[in] num_channels Number of channels on the @p channels array
  * @return The number of samples required to read the given channels
  */
-static inline int compute_num_samples(const enum sensor_channel *channels, size_t num_channels)
+static inline int compute_num_samples(const struct sensor_chan_spec *const channels,
+				      size_t num_channels)
 {
 	int num_samples = 0;
 
 	for (size_t i = 0; i < num_channels; ++i) {
-		num_samples += SENSOR_CHANNEL_3_AXIS(channels[i]) ? 3 : 1;
+		num_samples += SENSOR_CHANNEL_3_AXIS(channels[i].chan_type) ? 3 : 1;
 	}
 
 	return num_samples;
@@ -113,7 +114,7 @@ static inline int check_header_contains_channel(const struct sensor_data_generic
 static void sensor_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
 	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
-	const enum sensor_channel *const channels = cfg->channels;
+	const struct sensor_chan_spec *const channels = cfg->channels;
 	const int num_output_samples = compute_num_samples(channels, cfg->count);
 	uint32_t min_buf_len = compute_min_buf_len(num_output_samples);
 	uint64_t timestamp_ns = k_ticks_to_ns_floor64(k_uptime_ticks());
@@ -148,24 +149,26 @@ static void sensor_submit_fallback(const struct device *dev, struct rtio_iodev_s
 	/* Populate values, update shift, and set channels */
 	for (size_t i = 0, sample_idx = 0; i < cfg->count; ++i) {
 		struct sensor_value value[3];
-		const int num_samples = SENSOR_CHANNEL_3_AXIS(channels[i]) ? 3 : 1;
+		const int num_samples = SENSOR_CHANNEL_3_AXIS(channels[i].chan_type) ? 3 : 1;
 
 		/* Get the current channel requested by the user */
-		rc = sensor_channel_get(dev, channels[i], value);
+		rc = sensor_channel_get(dev, channels[i].chan_type, value);
 
 		if (num_samples == 3) {
 			header->channels[sample_idx++] =
-				rc == 0 ? channels[i] - 3 : SENSOR_CHAN_MAX;
+				rc == 0 ? channels[i].chan_type - 3 : SENSOR_CHAN_MAX;
 			header->channels[sample_idx++] =
-				rc == 0 ? channels[i] - 2 : SENSOR_CHAN_MAX;
+				rc == 0 ? channels[i].chan_type - 2 : SENSOR_CHAN_MAX;
 			header->channels[sample_idx++] =
-				rc == 0 ? channels[i] - 1 : SENSOR_CHAN_MAX;
+				rc == 0 ? channels[i].chan_type - 1 : SENSOR_CHAN_MAX;
 		} else {
-			header->channels[sample_idx++] = rc == 0 ? channels[i] : SENSOR_CHAN_MAX;
+			header->channels[sample_idx++] =
+				rc == 0 ? channels[i].chan_type : SENSOR_CHAN_MAX;
 		}
 
 		if (rc != 0) {
-			LOG_DBG("Failed to get channel %d, skipping", channels[i]);
+			LOG_DBG("Failed to get channel (type: %d, index %d), skipping",
+				channels[i].chan_type, channels[i].chan_idx);
 			continue;
 		}
 
@@ -474,9 +477,8 @@ static int decode(const uint8_t *buffer, enum sensor_channel channel, size_t cha
 {
 	const struct sensor_data_generic_header *header =
 		(const struct sensor_data_generic_header *)buffer;
-	const q31_t *q =
-		(const q31_t *)(buffer + sizeof(struct sensor_data_generic_header) +
-				header->num_channels * sizeof(enum sensor_channel));
+	const q31_t *q = (const q31_t *)(buffer + sizeof(struct sensor_data_generic_header) +
+					 header->num_channels * sizeof(enum sensor_channel));
 	int count = 0;
 
 	if (*fit != 0 || max_count < 1) {

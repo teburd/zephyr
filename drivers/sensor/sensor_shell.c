@@ -217,7 +217,7 @@ static enum dynamic_command_context current_cmd_ctx = NONE;
 K_MUTEX_DEFINE(cmd_get_mutex);
 
 /* Crate a single common config for one-shot reading */
-static enum sensor_channel iodev_sensor_shell_channels[SENSOR_CHAN_ALL];
+static struct sensor_chan_spec iodev_sensor_shell_channels[SENSOR_CHAN_ALL];
 static struct sensor_read_config iodev_sensor_shell_read_config = {
 	.sensor = NULL,
 	.is_streaming = false,
@@ -444,8 +444,8 @@ void sensor_shell_processing_callback(int result, uint8_t *buf, uint32_t buf_len
 				shell_info(ctx->sh,
 					   "channel idx=%d %s shift=%d num_samples=%d "
 					   "value=%" PRIsensor_three_axis_data,
-					   channel, sensor_channel_name[channel],
-					   data->shift, accumulator_buffer.count,
+					   channel, sensor_channel_name[channel], data->shift,
+					   accumulator_buffer.count,
 					   PRIsensor_three_axis_data_arg(*data, 0));
 				break;
 			}
@@ -521,12 +521,12 @@ static int cmd_get_sensor(const struct shell *sh, size_t argc, char *argv[])
 	}
 
 	if (argc == 2) {
-		/* read all channels */
+		/* read all channel types */
 		for (int i = 0; i < ARRAY_SIZE(iodev_sensor_shell_channels); ++i) {
 			if (SENSOR_CHANNEL_3_AXIS(i)) {
 				continue;
 			}
-			iodev_sensor_shell_channels[count++] = i;
+			iodev_sensor_shell_channels[count++] = (struct sensor_chan_spec){i, 0};
 		}
 	} else {
 		/* read specific channels */
@@ -538,7 +538,8 @@ static int cmd_get_sensor(const struct shell *sh, size_t argc, char *argv[])
 				shell_error(sh, "Failed to read channel (%s)", argv[i]);
 				continue;
 			}
-			iodev_sensor_shell_channels[count++] = chan;
+			iodev_sensor_shell_channels[count++] =
+				(struct sensor_chan_spec){chan, 0};
 		}
 	}
 
@@ -569,7 +570,6 @@ static int cmd_get_sensor(const struct shell *sh, size_t argc, char *argv[])
 
 	return 0;
 }
-
 
 static int cmd_sensor_attr_set(const struct shell *shell_ptr, size_t argc, char *argv[])
 {
@@ -975,10 +975,8 @@ static void data_ready_trigger_handler(const struct device *sensor,
 			value.val1 = micro_value / 1000000;
 			value.val2 = (int32_t)llabs(micro_value - (value.val1 * 1000000));
 			LOG_INF("sensor=%.*s, chan=%s, num_samples=%u, data=%d.%06d",
-				sensor_name_len_before_at, sensor_name,
-				sensor_channel_name[i],
-				stats[i].count,
-				value.val1, value.val2);
+				sensor_name_len_before_at, sensor_name, sensor_channel_name[i],
+				stats[i].count, value.val1, value.val2);
 
 			stats[i].accumulator = 0;
 			stats[i].count = 0;
@@ -1018,7 +1016,7 @@ static int cmd_trig_sensor(const struct shell *sh, size_t argc, char **argv)
 
 		if (sensor_idx < 0) {
 			shell_error(sh, "Unable to support more simultaneous sensor trigger"
-				    " devices");
+					" devices");
 			err = -ENOTSUP;
 		} else {
 			struct sample_stats *stats = sensor_stats[sensor_idx];

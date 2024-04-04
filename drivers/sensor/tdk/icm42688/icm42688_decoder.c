@@ -178,7 +178,7 @@ static uint8_t icm42688_encode_channel(enum sensor_channel chan)
 	return encode_bmask;
 }
 
-int icm42688_encode(const struct device *dev, const enum sensor_channel *const channels,
+int icm42688_encode(const struct device *dev, const struct sensor_chan_spec *const channels,
 		    const size_t num_channels, uint8_t *buf)
 {
 	struct icm42688_dev_data *data = dev->data;
@@ -187,7 +187,7 @@ int icm42688_encode(const struct device *dev, const enum sensor_channel *const c
 	edata->channels = 0;
 
 	for (int i = 0; i < num_channels; i++) {
-		edata->channels |= icm42688_encode_channel(channels[i]);
+		edata->channels |= icm42688_encode_channel(channels[i].chan_type);
 	}
 
 	edata->header.is_fifo = false;
