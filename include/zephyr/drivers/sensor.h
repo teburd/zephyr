@@ -977,7 +977,50 @@ static inline int sensor_stream(struct rtio_iodev *iodev, struct rtio *ctx, void
 }
 
 /**
- * @brief Read data from a sensor.
+ * @brief Blocking one shot read of samples from a sensor into a buffer
+ *
+ * Using @p cfg, read data from the device by using the provided RTIO context
+ * @p ctx. This call will generate a @ref rtio_sqe that will be given the provided buffer. The call
+ * will wait for the read to complete before returning to the caller.
+ *
+ * @param[in] iodev The iodev created by @ref SENSOR_DT_READ_IODEV
+ * @param[in] ctx The RTIO context to service the read
+ * @param[in] buf Pointer to memory to read sample data into
+ * @param[in] buf_len Size in bytes of the given memory that are valid to read into
+ * @return 0 on success
+ * @return < 0 on error
+ */
+static inline int sensor_read(struct rtio_iodev *iodev, struct rtio *ctx, uint8_t *buf,
+			      size_t buf_len)
+{
+	if (IS_ENABLED(CONFIG_USERSPACE)) {
+		struct rtio_sqe sqe;
+
+		rtio_sqe_prep_read(&sqe, iodev, RTIO_PRIO_NORM, buf, buf_len, buf);
+		rtio_sqe_copy_in(ctx, &sqe, 1);
+	} else {
+		struct rtio_sqe *sqe = rtio_sqe_acquire(ctx);
+
+		if (sqe == NULL) {
+			return -ENOMEM;
+		}
+		rtio_sqe_prep_read(sqe, iodev, RTIO_PRIO_NORM, buf, buf_len, buf);
+	}
+	rtio_submit(ctx, 1);
+
+	struct rtio_cqe *cqe = rtio_cqe_consume(ctx);
+	int res = cqe->result;
+
+	__ASSERT(cqe->userdata != buf,
+		 "consumed non-matching completion for sensor read into buffer %p\n", buf);
+
+	rtio_cqe_release(ctx, cqe);
+
+	return res;
+}
+
+/**
+ * @brief One shot non-blocking read with pool allocated buffer
  *
  * Using @p cfg, read one snapshot of data from the device by using the provided RTIO context
  * @p ctx. This call will generate a @ref rtio_sqe that will leverage the RTIO's internal
@@ -989,7 +1032,8 @@ static inline int sensor_stream(struct rtio_iodev *iodev, struct rtio *ctx, void
  * @return 0 on success
  * @return < 0 on error
  */
-static inline int sensor_read(struct rtio_iodev *iodev, struct rtio *ctx, void *userdata)
+static inline int sensor_read_async_mempool(struct rtio_iodev *iodev, struct rtio *ctx,
+					    void *userdata)
 {
 	if (IS_ENABLED(CONFIG_USERSPACE)) {
 		struct rtio_sqe sqe;
