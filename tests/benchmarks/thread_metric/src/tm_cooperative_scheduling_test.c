@@ -65,11 +65,13 @@ void tm_cooperative_thread_report(void);
 
 void tm_cooperative_scheduling_initialize(void);
 
-/* Define main entry point.  */
+#include <zephyr/kernel.h>
 
+/* Define main entry point.  */
 int main(void)
 {
-
+	printf("struct k_thread takes up %d bytes\n", sizeof(struct k_thread));
+	
 	/* Initialize the test.  */
 	tm_initialize(tm_cooperative_scheduling_initialize);
 

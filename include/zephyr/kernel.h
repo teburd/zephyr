@@ -797,7 +797,7 @@ struct _static_thread_data {
 #define Z_THREAD_COMMON_DEFINE(name, stack_size,			\
 			       entry, p1, p2, p3,			\
 			       prio, options, delay)			\
-	struct k_thread _k_thread_obj_##name;				\
+	STRUCT_SECTION_ITERABLE(struct k_thread, _k_thread_obj_##name);	\
 	STRUCT_SECTION_ITERABLE(_static_thread_data,			\
 				_k_thread_data_##name) =		\
 		Z_THREAD_INITIALIZER(&_k_thread_obj_##name,		\

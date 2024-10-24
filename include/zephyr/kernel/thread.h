@@ -376,6 +376,13 @@ struct k_thread {
 	struct _thread_arch arch;
 };
 
+/* Ensure k_thread struct is cache line sized */
+/**
+#ifdef CONFIG_DCACHE
+BUILD_ASSERT((sizeof(struct k_thread) == CONFIG_DCACHE_LINE_SIZE), "k_thread size should be cache line sized");
+#endif
+*/
+
 typedef struct k_thread _thread_t;
 typedef struct k_thread *k_tid_t;
 

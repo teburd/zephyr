@@ -2,6 +2,8 @@
 
 #include <zephyr/linker/iterable_sections.h>
 
+ITERABLE_SECTION_RAM(k_thread, Z_LINK_ITERABLE_SUBALIGN)
+
 #if defined(CONFIG_NETWORKING)
 #ifndef NETWORK_RAM_SECTIONS
 #define NETWORK_RAM_SECTIONS \
