@@ -23,6 +23,8 @@
 #include "tm_api.h"
 
 #include <zephyr/kernel.h>
+#include <zephyr/cache.h>
+#include <zephyr/sys/iterable_sections.h>
 
 #define TM_TEST_NUM_THREADS        10
 #define TM_TEST_STACK_SIZE         1024
@@ -34,7 +36,7 @@
 #error "*** Tests are only designed for single processor systems! ***"
 #endif
 
-static struct k_thread test_thread[TM_TEST_NUM_THREADS];
+STRUCT_SECTION_ITERABLE_ARRAY(k_thread, test_thread, TM_TEST_NUM_THREADS);
 static K_THREAD_STACK_ARRAY_DEFINE(test_stack, TM_TEST_NUM_THREADS, TM_TEST_STACK_SIZE);
 
 static struct k_sem test_sem[TM_TEST_NUM_SEMAPHORES];
@@ -51,6 +53,8 @@ static char __aligned(4) test_slab_buffer[TM_TEST_NUM_SLABS][8 * 128];
  */
 void tm_initialize(void (*test_initialization_function)(void))
 {
+	sys_cache_data_enable();
+	sys_cache_instr_enable();
 	test_initialization_function();
 }
 

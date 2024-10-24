@@ -10,8 +10,47 @@
 #include <zephyr/sys/math_extras.h>
 #include <zephyr/sys/dlist.h>
 
-extern int32_t z_sched_prio_cmp(struct k_thread *thread_1,
-	struct k_thread *thread_2);
+/*
+ * Return value same as e.g. memcmp
+ * > 0 -> thread 1 priority  > thread 2 priority
+ * = 0 -> thread 1 priority == thread 2 priority
+ * < 0 -> thread 1 priority  < thread 2 priority
+ * Do not rely on the actual value returned aside from the above.
+ * (Again, like memcmp.)
+ */
+static int32_t ALWAYS_INLINE z_sched_prio_cmp(struct k_thread *thread_1,
+	struct k_thread *thread_2)
+{
+	/* `prio` is <32b, so the below cannot overflow. */
+	int32_t b1 = thread_1->base.prio;
+	int32_t b2 = thread_2->base.prio;
+
+	if (b1 != b2) {
+		return b2 - b1;
+	}
+
+#ifdef CONFIG_SCHED_DEADLINE
+	/* If we assume all deadlines live within the same "half" of
+	 * the 32 bit modulus space (this is a documented API rule),
+	 * then the latest deadline in the queue minus the earliest is
+	 * guaranteed to be (2's complement) non-negative.  We can
+	 * leverage that to compare the values without having to check
+	 * the current time.
+	 */
+	uint32_t d1 = thread_1->base.prio_deadline;
+	uint32_t d2 = thread_2->base.prio_deadline;
+
+	if (d1 != d2) {
+		/* Sooner deadline means higher effective priority.
+		 * Doing the calculation with unsigned types and casting
+		 * to signed isn't perfect, but at least reduces this
+		 * from UB on overflow to impdef.
+		 */
+		return (int32_t) (d2 - d1);
+	}
+#endif /* CONFIG_SCHED_DEADLINE */
+	return 0;
+}
 
 bool z_priq_rb_lessthan(struct rbnode *a, struct rbnode *b);
 
@@ -41,6 +80,7 @@ bool z_priq_rb_lessthan(struct rbnode *a, struct rbnode *b);
 #define _priq_run_add		z_priq_mq_add
 #define _priq_run_remove	z_priq_mq_remove
 #define _priq_run_best		z_priq_mq_best
+#define _priq_run_rotate        z_priq_mq_rotate
 static ALWAYS_INLINE void z_priq_mq_add(struct _priq_mq *pq, struct k_thread *thread);
 static ALWAYS_INLINE void z_priq_mq_remove(struct _priq_mq *pq, struct k_thread *thread);
 #endif
@@ -182,6 +222,22 @@ static ALWAYS_INLINE void z_priq_mq_remove(struct _priq_mq *pq,
 		pq->bitmask[pos.idx] &= ~BIT(pos.bit);
 	}
 }
+
+/*
+ * When a running thread is yielded and MULTIQ is in use the 
+ * queue head can simply *rotate* to the next thread in the list
+ * rather than removing and requeuing the thread.
+ */
+static ALWAYS_INLINE void z_priq_mq_rotate(struct _priq_mq *pq, 
+                                           struct k_thread *thread)
+{
+	struct prio_info pos = get_prio_info(thread->base.prio);
+
+	pq->queues[pos.offset_prio].head = thread->base.qnode_dlist.next;
+	pq->queues[pos.offset_prio].tail = &thread->base.qnode_dlist;
+	thread->base.qnode_dlist.next = &pq->queues[pos.offset_prio];;
+}
+
 #endif /* CONFIG_SCHED_MULTIQ */
 
 
