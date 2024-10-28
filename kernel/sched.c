@@ -1070,11 +1070,13 @@ void z_impl_k_yield(void)
 
 	k_spinlock_key_t key = k_spin_lock(&_sched_spinlock);
 
-	if (!IS_ENABLED(CONFIG_SMP) ||
-	    z_is_thread_queued(_current)) {
-		dequeue_thread(_current);
+	if (!IS_ENABLED(CONFIG_SMP)) {
+		__ASSERT(z_is_thread_queued(_current), "Yielding a thread not in the queued state");
+		_priq_requeue(_current);
+	} else {
+		/* On SMP running threads are not in the run queue */
+		queue_thread(_current);
 	}
-	queue_thread(_current);
 	update_cache(1);
 	z_swap(&_sched_spinlock, key);
 }

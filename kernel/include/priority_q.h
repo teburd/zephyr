@@ -202,7 +202,8 @@ static ALWAYS_INLINE struct prio_info get_prio_info(int8_t old_prio)
 static ALWAYS_INLINE void z_priq_mq_init(struct _priq_mq *q)
 {
 	for (int i = 0; i < ARRAY_SIZE(q->queues); i++) {
-		sys_dlist_init(&q->queues[i]);
+		q->queues[i].head = NULL;
+		q->queues[i].tail = NULL;
 	}
 }
 
@@ -210,8 +211,20 @@ static ALWAYS_INLINE void z_priq_mq_add(struct _priq_mq *pq,
 					struct k_thread *thread)
 {
 	struct prio_info pos = get_prio_info(thread->base.prio);
+	if(pq->queues[pos.offset_prio].head == NULL) {
+		pq->queues[pos.offset_prio].head = &thread->base.qnode_dlist;
+		pq->queues[pos.offset_prio].tail = &thread->base.qnode_dlist;
+		thread->base.qnode_dlist.next = &thread->base.qnode_dlist;
+		thread->base.qnode_dlist.prev = &thread->base.qnode_dlist;
+	} else {
+		sys_dlist_qnode_t *tail = pq->queues[pos.offset_prio].tail;
 
-	sys_dlist_append(&pq->queues[pos.offset_prio], &thread->base.qnode_dlist);
+		thread->base.qnode_dlist.next = pq->queues[pos.offset_prio].head;
+		thread->base.qnode_dlist.prev = tail;
+		tail->next = &thread->base.qnode_dlist;
+		pq->queues[pos.offset_prio].tail = &thread->base.qnode_dlist;
+	}
+
 	pq->bitmask[pos.idx] |= BIT(pos.bit);
 }
 
@@ -219,11 +232,28 @@ static ALWAYS_INLINE void z_priq_mq_remove(struct _priq_mq *pq,
 					   struct k_thread *thread)
 {
 	struct prio_info pos = get_prio_info(thread->base.prio);
+	sys_dlist_qnode_t *next = thread->base.qnode_dlist.next;
+	sys_dlist_qnode_t *prev = thread->base.qnode_dlist.prev;
 
-	sys_dlist_remove(&thread->base.qnode_dlist);
-	if (sys_dlist_is_empty(&pq->queues[pos.offset_prio])) {
+	/* thread is the only one in the ring  */
+	if (next == &thread->base.qnode_dlist) {
+		pq->queues[pos.offset_prio].head = NULL;
+		pq->queues[pos.offset_prio].tail = NULL;
 		pq->bitmask[pos.idx] &= ~BIT(pos.bit);
+	} else {
+		prev->next = next;
+		next->prev = prev;
+		if (pq->queues[pos.offset_prio].head == &thread->base.qnode_dlist){
+			pq->queues[pos.offset_prio].head = next;
+		}
+
+		if (pq->queues[pos.offset_prio].tail == &thread->base.qnode_dlist){
+			pq->queues[pos.offset_prio].tail = next;
+		}
 	}
+
+	thread->base.qnode_dlist.next = NULL;
+	thread->base.qnode_dlist.prev = NULL;
 }
 
 static ALWAYS_INLINE void z_priq_mq_requeue(struct _priq_mq *mq,
@@ -231,8 +261,13 @@ static ALWAYS_INLINE void z_priq_mq_requeue(struct _priq_mq *mq,
 {
 	struct prio_info pos = get_prio_info(thread->base.prio);
 
-	pr->queues[pos.offset_prio].head = thread->base.qnode_dlist.next;
-	pr->queues[pos.offset_prio].tail = pr->queues[pos.offset_prio].tail.next;
+	__ASSERT_NO_MSG(pr->queues[pos.offset_prio].head == &thread->base.qnode_dlist);
+
+	ARG_UNUSED(thread);
+
+	/* Rotate the head and tail to the next thread struct in the ring of threads */
+	pr->queues[pos.offset_prio].head = pr->queues[pos.offset_prio].head->next;
+	pr->queues[pos.offset_prio].tail = pr->queues[pos.offset_prio].tail->next;
 }
 
 static ALWAYS_INLINE struct k_thread *z_priq_mq_best(struct _priq_mq *pq)
