@@ -26,6 +26,7 @@ bool z_priq_rb_lessthan(struct rbnode *a, struct rbnode *b);
 #define _priq_run_init		z_priq_dumb_init
 #define _priq_run_add		z_priq_dumb_add
 #define _priq_run_remove	z_priq_dumb_remove
+#define _priq_run_requeue	z_priq_dumb_requeue
 # if defined(CONFIG_SCHED_CPU_MASK)
 #  define _priq_run_best	z_priq_dumb_mask_best
 # else
@@ -36,6 +37,7 @@ bool z_priq_rb_lessthan(struct rbnode *a, struct rbnode *b);
 #define _priq_run_init		z_priq_rb_init
 #define _priq_run_add		z_priq_rb_add
 #define _priq_run_remove	z_priq_rb_remove
+#define _priq_run_requeue	z_priq_rb_requeue
 #define _priq_run_best		z_priq_rb_best
  /* Multi Queue Scheduling */
 #elif defined(CONFIG_SCHED_MULTIQ)
@@ -43,6 +45,7 @@ bool z_priq_rb_lessthan(struct rbnode *a, struct rbnode *b);
 #define _priq_run_init		z_priq_mq_init
 #define _priq_run_add		z_priq_mq_add
 #define _priq_run_remove	z_priq_mq_remove
+#define _priq_run_requeue	z_priq_mq_requeue
 #define _priq_run_best		z_priq_mq_best
 #endif /* Run Queue Aliases */
 
@@ -84,6 +87,13 @@ static ALWAYS_INLINE void z_priq_dumb_remove(sys_dlist_t *pq, struct k_thread *t
 	ARG_UNUSED(pq);
 
 	sys_dlist_remove(&thread->base.qnode_dlist);
+}
+
+static ALWAYS_INLINE void z_priq_dumb_requeue(sys_dlist_t *pq,
+					      struct k_thread *thread)
+{
+	z_priq_dumb_remove(pq, thread);
+	z_priq_dumb_add(pq, thread);
 }
 
 static ALWAYS_INLINE struct k_thread *z_priq_dumb_best(sys_dlist_t *pq)
@@ -155,6 +165,12 @@ static ALWAYS_INLINE void z_priq_rb_remove(struct _priq_rb *pq, struct k_thread 
 	}
 }
 
+static ALWAYS_INLINE void z_priq_rb_requeue(struct _priq_rb *pq, struct k_thread *thread)
+{
+	z_priq_rb_remove(pq, thread);
+	z_priq_rb_add(pq, thread);
+}
+
 static ALWAYS_INLINE struct k_thread *z_priq_rb_best(struct _priq_rb *pq)
 {
 	struct k_thread *thread = NULL;
@@ -208,6 +224,15 @@ static ALWAYS_INLINE void z_priq_mq_remove(struct _priq_mq *pq,
 	if (sys_dlist_is_empty(&pq->queues[pos.offset_prio])) {
 		pq->bitmask[pos.idx] &= ~BIT(pos.bit);
 	}
+}
+
+static ALWAYS_INLINE void z_priq_mq_requeue(struct _priq_mq *mq,
+					    struct k_thread *thread)
+{
+	struct prio_info pos = get_prio_info(thread->base.prio);
+
+	pr->queues[pos.offset_prio].head = thread->base.qnode_dlist.next;
+	pr->queues[pos.offset_prio].tail = pr->queues[pos.offset_prio].tail.next;
 }
 
 static ALWAYS_INLINE struct k_thread *z_priq_mq_best(struct _priq_mq *pq)
