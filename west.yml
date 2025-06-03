@@ -371,8 +371,9 @@ manifest:
       revision: 9b07780aca6fb21f82a241ba386ad9b379809337
       path: modules/lib/zcbor
     - name: zenoh-pico
-      remote: teburd
+      url: https://github.com/teburd/zenoh-pico
       revision: zenoh-zephyr-updates
+      path: modules/lib/zenoh-pico
   # zephyr-keep-sorted-stop
 
   self:
