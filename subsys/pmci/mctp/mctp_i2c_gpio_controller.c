@@ -13,13 +13,12 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/pmci/mctp/mctp_i2c_gpio_controller.h>
 #include <crc-16-ccitt.h>
+#include <libmctp.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(mctp_i2c_gpio_controller, CONFIG_MCTP_LOG_LEVEL);
 
-
-static void mctp_start_rx(struct mctp_binding_i2c_gpio_controller *b,
-			  bool chained_rx);
+static void mctp_start_rx(struct mctp_binding_i2c_gpio_controller *b, bool chained_rx);
 
 static void rx_completion(struct rtio *r, const struct rtio_sqe *sqe, void *arg0)
 {
@@ -30,13 +29,44 @@ static void rx_completion(struct rtio *r, const struct rtio_sqe *sqe, void *arg0
 		rtio_cqe_release(r, cqe);
 	}
 
-	struct mctp_pktbuf *pkt = mctp_pktbuf_alloc(&b->binding, b->rx_buf_len);
+	/* If the pkt is to another node on this bus, we need to forward it instead of receiving it
+	 * as libmctp doesn't do this for us (ugh)
+	 */
+	struct mctp_hdr hdr;
 
-	memcpy(pkt->data, b->rx_buf, b->rx_buf_len);
+	memcpy(&hdr, b->rx_buf, 4);
 
-	LOG_DBG("giving pkt to mctp, len %d", b->rx_buf_len);
-	mctp_bus_rx(&b->binding, pkt);
+	LOG_DBG("message from %u to %u received", hdr.src, hdr.dest);
 
+	bool forwarded = false;
+
+	for (int i = 0; i < b->num_endpoints; i++) {
+		if (b->endpoint_ids[i] == hdr.dest) {
+			LOG_DBG("fowarding message");
+			mctp_message_tx(b->binding.mctp, hdr.dest, false, 0,
+					&b->rx_buf[sizeof(struct mctp_hdr)],
+					b->rx_buf_len - sizeof(struct mctp_hdr));
+			LOG_DBG("forwarded...");
+			forwarded = true;
+			break;
+		}
+	}
+
+	if (!forwarded) {
+		struct mctp_pktbuf *pkt =
+			mctp_pktbuf_alloc(&b->binding, sizeof(struct mctp_pktbuf) + b->rx_buf_len);
+
+		if (pkt == NULL) {
+			LOG_ERR("Out of memory receiving message");
+			goto out;
+		}
+
+		memcpy(pkt->data, b->rx_buf, b->rx_buf_len);
+		LOG_DBG("giving pkt to mctp, len %d", b->rx_buf_len);
+		mctp_bus_rx(&b->binding, pkt);
+	}
+
+out:
 	/* Walk our pending bits from the current index, and start the next one if needed */
 	struct mctp_i2c_gpio_controller_cb *cb = b->inflight_rx;
 
@@ -46,7 +76,6 @@ static void rx_completion(struct rtio *r, const struct rtio_sqe *sqe, void *arg0
 	/* Try and start the next transfer if one is pending */
 	mctp_start_rx(b, true);
 }
-
 
 static void rx_len_completion(struct rtio *r, const struct rtio_sqe *sqe, void *arg0)
 {
@@ -64,8 +93,8 @@ static void rx_len_completion(struct rtio *r, const struct rtio_sqe *sqe, void *
 	struct rtio_sqe *callback_sqe = rtio_sqe_acquire(b->r_rx);
 
 	LOG_DBG("reading buf %d", b->rx_buf_len);
-	rtio_sqe_prep_tiny_write(write_msg_addr_sqe, iodev, RTIO_PRIO_NORM,
-			&mctp_tx_msg_addr, 1, NULL);
+	rtio_sqe_prep_tiny_write(write_msg_addr_sqe, iodev, RTIO_PRIO_NORM, &mctp_tx_msg_addr, 1,
+				 NULL);
 	write_msg_addr_sqe->flags |= RTIO_SQE_TRANSACTION;
 
 	rtio_sqe_prep_read(read_msg_sqe, iodev, RTIO_PRIO_NORM, b->rx_buf, b->rx_buf_len, NULL);
@@ -112,8 +141,8 @@ static void mctp_start_rx(struct mctp_binding_i2c_gpio_controller *b, bool chain
 	struct rtio_sqe *read_len_sqe = rtio_sqe_acquire(b->r_rx);
 	struct rtio_sqe *callback_sqe = rtio_sqe_acquire(b->r_rx);
 
-	rtio_sqe_prep_tiny_write(write_len_addr_sqe, iodev, RTIO_PRIO_NORM,
-			&mctp_tx_msg_len_addr, 1, NULL);
+	rtio_sqe_prep_tiny_write(write_len_addr_sqe, iodev, RTIO_PRIO_NORM, &mctp_tx_msg_len_addr,
+				 1, NULL);
 	write_len_addr_sqe->flags |= RTIO_SQE_TRANSACTION;
 
 	rtio_sqe_prep_read(read_len_sqe, iodev, RTIO_PRIO_NORM, &b->rx_buf_len, 1, NULL);
@@ -127,7 +156,7 @@ static void mctp_start_rx(struct mctp_binding_i2c_gpio_controller *b, bool chain
 }
 
 void mctp_tx_requested_isr(const struct device *port, struct gpio_callback *cb,
-				 gpio_port_pins_t pins)
+			   gpio_port_pins_t pins)
 {
 	struct mctp_i2c_gpio_controller_cb *cb_data =
 		CONTAINER_OF(cb, struct mctp_i2c_gpio_controller_cb, callback);
@@ -171,20 +200,18 @@ int mctp_i2c_gpio_controller_tx(struct mctp_binding *binding, struct mctp_pktbuf
 	uint8_t addr;
 
 	addr = MCTP_I2C_GPIO_RX_MSG_LEN_ADDR;
-	rtio_sqe_prep_tiny_write(write_len_addr_sqe, iodev, RTIO_PRIO_NORM,
-			&addr, 1, NULL);
+	rtio_sqe_prep_tiny_write(write_len_addr_sqe, iodev, RTIO_PRIO_NORM, &addr, 1, NULL);
 	write_len_addr_sqe->flags |= RTIO_SQE_TRANSACTION;
-	rtio_sqe_prep_tiny_write(write_len_sqe, iodev, RTIO_PRIO_NORM,
-			(uint8_t *)&pktsize, 1, NULL);
+	rtio_sqe_prep_tiny_write(write_len_sqe, iodev, RTIO_PRIO_NORM, (uint8_t *)&pktsize, 1,
+				 NULL);
 	write_len_sqe->flags |= RTIO_SQE_TRANSACTION;
 	addr = MCTP_I2C_GPIO_RX_MSG_ADDR;
-	rtio_sqe_prep_tiny_write(write_addr_sqe, iodev, RTIO_PRIO_NORM,
-			&addr, 1, NULL);
+	rtio_sqe_prep_tiny_write(write_addr_sqe, iodev, RTIO_PRIO_NORM, &addr, 1, NULL);
 	write_addr_sqe->flags |= RTIO_SQE_TRANSACTION;
 	write_addr_sqe->iodev_flags |= RTIO_IODEV_I2C_RESTART;
-	rtio_sqe_prep_write(write_data_sqe, iodev, RTIO_PRIO_NORM,
-			&pkt->data[pkt->start], pktsize, NULL);
-	write_data_sqe->iodev_flags |=  RTIO_IODEV_I2C_STOP;
+	rtio_sqe_prep_write(write_data_sqe, iodev, RTIO_PRIO_NORM, &pkt->data[pkt->start], pktsize,
+			    NULL);
+	write_data_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
 	rtio_submit(b->r_tx, 4);
 
