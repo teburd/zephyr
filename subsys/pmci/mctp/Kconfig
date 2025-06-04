@@ -25,6 +25,11 @@ config MCTP_SOCKETS
 	  When using the zephyr socket-like API a maximum number of available sockets to open
 	  is decided with this option.
 
+config MCTP_ENDPOINT_ID
+	int "MCTP Endpoint ID"
+	help
+	  The endpoint ID this device will use for all socket-like activity.
+
 config MCTP_UART
 	bool "MCTP UART Binding"
 	depends on UART_ASYNC_API

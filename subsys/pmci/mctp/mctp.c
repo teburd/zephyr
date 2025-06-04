@@ -11,6 +11,9 @@
 #include <zephyr/sys/sys_heap.h>
 #include <libmctp.h>
 
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(mctp, CONFIG_MCTP_LOG_LEVEL);
+
 struct mctp_buf {
 	sys_snode_t node;
 	size_t len;
@@ -20,11 +23,12 @@ struct mctp_buf {
 
 struct mctp_sock {
 	uint8_t endpoint_id;
-	struct k_spinlock lock;
 	sys_slist_t buf_list;
+	struct k_sem bufs_avail;
 };
 
 static struct {
+	struct k_spinlock lock;
 	struct mctp_sock sockets[CONFIG_MCTP_SOCKETS];
 	uint8_t endpoint_to_socket[UINT8_MAX];
 } mctp_sockets;
@@ -67,7 +71,7 @@ static void *mctp_heap_realloc(void *ptr, size_t bytes)
 	return new_ptr;
 }
 
-static void mctp_rx_message(uint8_t source_eid, bool tag_owner uint8_t msg_tag, void *data,
+static void mctp_rx_message(uint8_t source_eid, bool tag_owner, uint8_t msg_tag, void *data,
 			    void *msg, size_t len)
 {
 	k_spinlock_key_t key = k_spin_lock(&mctp_sockets.lock);
@@ -78,7 +82,7 @@ static void mctp_rx_message(uint8_t source_eid, bool tag_owner uint8_t msg_tag, 
 		goto out;
 	}
 
-	struct mctp_sock *sock = mctp_sockets.sockets[sock_id];
+	struct mctp_sock *sock = &mctp_sockets.sockets[sock_id];
 	struct mctp_buf *buf = mctp_heap_alloc(sizeof(struct mctp_buf) + len);
 
 	if (buf == NULL) {
@@ -89,27 +93,30 @@ static void mctp_rx_message(uint8_t source_eid, bool tag_owner uint8_t msg_tag, 
 	memcpy(buf->buf, msg, len);
 	buf->len = len;
 	buf->offs = 0;
-
-	sys_slist_append_list(&sock->buf_list, &buf->node);
-
-	k_sem_give(sock->bufs_avail);
+	sys_slist_append(&sock->buf_list, &buf->node);
+	k_sem_give(&sock->bufs_avail);
 
 out:
 	k_spin_unlock(&mctp_sockets.lock, key);
 }
 
-static int mctp_init(void)
+static struct mctp *mctp_ctx;
+
+static int zephyr_mctp_init(void)
 {
 	sys_heap_init(&mctp_heap.heap, MCTP_MEM, sizeof(MCTP_MEM));
 	mctp_set_alloc_ops(mctp_heap_alloc, mctp_heap_free, mctp_heap_realloc);
 	mctp_ctx = mctp_init();
 	mctp_set_rx_all(mctp_ctx, mctp_rx_message, NULL);
+
 	return 0;
 }
 
 int zephyr_mctp_register_bus(struct mctp_binding *binding)
 {
 	mctp_register_bus(mctp_ctx, binding, CONFIG_MCTP_ENDPOINT_ID);
+
+	return 0;
 }
 
 int zephyr_mctp_open(uint8_t endpoint_id)
@@ -123,10 +130,10 @@ int zephyr_mctp_open(uint8_t endpoint_id)
 	}
 
 	struct mctp_sock *sock = NULL;
-	k_spinlock_key_t key = k_spin_lock(&mctp_lock);
+	k_spinlock_key_t key = k_spin_lock(&mctp_sockets.lock);
 
 	for (sock_id = 0; sock_id < CONFIG_MCTP_SOCKETS; sock_id++) {
-		if (mctp_sockets.sockets[sock_id].endpoint_id != 0) {
+		if (mctp_sockets.sockets[sock_id].endpoint_id == 0) {
 			sock = &mctp_sockets.sockets[sock_id];
 			break;
 		}
@@ -140,10 +147,10 @@ int zephyr_mctp_open(uint8_t endpoint_id)
 
 	sock->endpoint_id = endpoint_id;
 	k_sem_init(&sock->bufs_avail, 0, K_SEM_MAX_LIMIT);
-	sock->buf = NULL;
+	sys_slist_init(&sock->buf_list);
 
 unlock_out:
-	k_spin_unlock(&mctp_lock, key);
+	k_spin_unlock(&mctp_sockets.lock, key);
 out:
 	return sock_id;
 }
@@ -154,7 +161,7 @@ static struct mctp_sock *get_socket(int sock_id)
 		return NULL;
 	}
 
-	return mctp_sockets.sockets[sock_id];
+	return &mctp_sockets.sockets[sock_id];
 }
 
 int zephyr_mctp_endpoint(int sock_id, uint8_t *endpoint)
@@ -186,7 +193,7 @@ int zephyr_mctp_write(int sock_id, uint8_t *msg, size_t len)
 		return -EINVAL;
 	}
 
-	int rc = mctp_message_tx(mctp_context, sock->endpoint_id, false, 0, msg, len);
+	int rc = mctp_message_tx(mctp_ctx, sock->endpoint_id, false, 0, msg, len);
 
 	return rc;
 }
@@ -204,8 +211,8 @@ int zephyr_mctp_read(int sock_id, uint8_t *msg, size_t *len)
 
 	size_t read_len = 0;
 
-	while (k_sem_take(socks->bufs_avail, K_NO_WAIT) == 0 && read_len < *len) {
-		sys_snode_t *head = sys_slist_peek_head(sock->buf_list);
+	while (k_sem_take(&sock->bufs_avail, K_NO_WAIT) == 0 && read_len < *len) {
+		sys_snode_t *head = sys_slist_peek_head(&sock->buf_list);
 		struct mctp_buf *buf = CONTAINER_OF(head, struct mctp_buf, node);
 		size_t copy_len = MIN(buf->len - buf->offs, *len - read_len);
 
@@ -215,9 +222,9 @@ int zephyr_mctp_read(int sock_id, uint8_t *msg, size_t *len)
 
 		if (copy_len < (buf->len - buf->offs)) {
 			buf->offs = copy_len;
-			k_sem_give(sock->bufs_avail);
+			k_sem_give(&sock->bufs_avail);
 		} else {
-			sys_slist_get(sock->buf_list);
+			sys_slist_get(&sock->buf_list);
 		}
 	}
 
@@ -239,13 +246,12 @@ int zephyr_mctp_read_exact(int sock_id, uint8_t *msg, size_t len)
 
 	size_t read_len = 0;
 
-	while (read_len < *len) {
-		rc = k_sem_take(sock->bufs_avail, K_FOREVER);
-		__ASSERT_NO_MSG(rc == 0);
+	while (read_len < len) {
+		k_sem_take(&sock->bufs_avail, K_FOREVER);
 
-		sys_snode_t *head = sys_slist_peek_head(sock->buf_list);
+		sys_snode_t *head = sys_slist_peek_head(&sock->buf_list);
 		struct mctp_buf *buf = CONTAINER_OF(head, struct mctp_buf, node);
-		size_t copy_len = MIN(buf->len - buf->offs, *len - read_len);
+		size_t copy_len = MIN(buf->len - buf->offs, len - read_len);
 
 		memcpy(&msg[read_len], &buf->buf[buf->offs], copy_len);
 
@@ -253,13 +259,13 @@ int zephyr_mctp_read_exact(int sock_id, uint8_t *msg, size_t len)
 
 		if (copy_len < (buf->len - buf->offs)) {
 			buf->offs = copy_len;
-			k_sem_give(sock->bufs_avail);
+			k_sem_give(&sock->bufs_avail);
 		} else {
-			sys_slist_get(sock->buf_list);
+			sys_slist_get(&sock->buf_list);
 		}
 	}
 
 	return 0;
 }
 
-SYS_INIT_NAMED(mctp, mctp_init, POST_KERNEL, 0);
+SYS_INIT_NAMED(mctp, zephyr_mctp_init, POST_KERNEL, 0);
