@@ -53,6 +53,8 @@ enum llext_mem {
 	LLEXT_MEM_PREINIT,      /**< Array of early setup functions */
 	LLEXT_MEM_INIT,         /**< Array of setup functions */
 	LLEXT_MEM_FINI,         /**< Array of cleanup functions */
+	LLEXT_MEM_GOT,          /**< Global Offset Table */
+	LLEXT_MEM_PLT,          /**< Procedure Lookup Table */
 
 	LLEXT_MEM_COUNT,        /**< Number of regions managed by LLEXT */
 };
