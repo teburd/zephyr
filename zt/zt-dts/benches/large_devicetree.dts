@@ -1,0 +1,278 @@
+/dts-v1/;
+
+/ {
+    model = "QEMU ARM virt 9.0 with lots of devices";
+    compatible = "qemu,arm-virt";
+    interrupt-parent = <0x8001>;
+    #size-cells = <0x2>;
+    #address-cells = <0x2>;
+
+    fw-cfg@50000000 {
+        dma-coherent;
+        reg = <0x0 0x50000000 0x0 0x18>;
+        compatible = "qemu,fw-cfg-mmio";
+    };
+
+    virtio_mmio@a000000 {
+        interrupts = <0x0 0x10 0x4>;
+        reg = <0x0 0xa000000 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    virtio_mmio@a000200 {
+        interrupts = <0x0 0x11 0x4>;
+        reg = <0x0 0xa000200 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    virtio_mmio@a000400 {
+        interrupts = <0x0 0x12 0x4>;
+        reg = <0x0 0xa000400 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    virtio_mmio@a000600 {
+        interrupts = <0x0 0x13 0x4>;
+        reg = <0x0 0xa000600 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    virtio_mmio@a000800 {
+        interrupts = <0x0 0x14 0x4>;
+        reg = <0x0 0xa000800 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    virtio_mmio@a000a00 {
+        interrupts = <0x0 0x15 0x4>;
+        reg = <0x0 0xa000a00 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    virtio_mmio@a000c00 {
+        interrupts = <0x0 0x16 0x4>;
+        reg = <0x0 0xa000c00 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    virtio_mmio@a000e00 {
+        interrupts = <0x0 0x17 0x4>;
+        reg = <0x0 0xa000e00 0x0 0x200>;
+        compatible = "virtio,mmio";
+    };
+
+    pcie@10000000 {
+        interrupt-map-mask = <0x1800 0x0 0x0 0x7>;
+        #interrupt-cells = <0x1>;
+        ranges = <0x1000000 0x0 0x0 0x0 0x3eff0000 0x0 0x10000 0x2000000 0x0 0x10000000 0x0 0x10000000 0x0 0x2eff0000 0x3000000 0x2 0x0 0x2 0x0 0x2 0x0>;
+        reg = <0x0 0x10000000 0x0 0x10000000>;
+        msi-parent = <0x8002>;
+        iommu-map = <0x0 0x8003 0x0 0x10000>;
+        dma-coherent;
+        bus-range = <0x0 0xff>;
+        linux,pci-domain = <0x0>;
+        #size-cells = <0x2>;
+        #address-cells = <0x3>;
+        device_type = "pci";
+        compatible = "pci-host-ecam-generic";
+    };
+
+    intc@8040000 {
+        interrupts = <0x1 0x9 0x4>;
+        reg = <0x0 0x8040000 0x0 0x20000 0x0 0x8060000 0x0 0x20000>;
+        compatible = "arm,gic-400";
+        ranges = <0x0 0x8040000 0x0 0x8040000 0x0 0x40000>;
+        #interrupt-cells = <0x3>;
+        #size-cells = <0x2>;
+        #address-cells = <0x2>;
+        interrupt-controller;
+        phandle = <0x8001>;
+    };
+
+    timer {
+        interrupts = <0x1 0xd 0x4 0x1 0xe 0x4 0x1 0xb 0x4 0x1 0xa 0x4>;
+        compatible = "arm,armv7-timer";
+    };
+
+    chosen {
+        stdout-path = "/pl011@9000000";
+    };
+
+    memory@80000000 {
+        reg = <0x0 0x80000000 0x0 0x80000000>;
+        device_type = "memory";
+    };
+
+    cpus {
+        #size-cells = <0x0>;
+        #address-cells = <0x1>;
+
+        cpu@0 {
+            reg = <0x0>;
+            compatible = "arm,cortex-a72";
+            device_type = "cpu";
+        };
+
+        cpu@1 {
+            reg = <0x1>;
+            compatible = "arm,cortex-a72";
+            device_type = "cpu";
+        };
+
+        cpu@2 {
+            reg = <0x2>;
+            compatible = "arm,cortex-a72";
+            device_type = "cpu";
+        };
+
+        cpu@3 {
+            reg = <0x3>;
+            compatible = "arm,cortex-a72";
+            device_type = "cpu";
+        };
+    };
+
+    pl011@9000000 {
+        interrupts = <0x0 0x21 0x4>;
+        reg = <0x0 0x9000000 0x0 0x1000>;
+        compatible = "arm,pl011\0arm,primecell";
+        clocks = <0x8004 0x0>;
+        clock-names = "uartclk";
+    };
+
+    pmu {
+        interrupts = <0x1 0x7 0x4>;
+        compatible = "arm,cortex-a72-pmu";
+    };
+
+    psci {
+        migrate = <0xc4000005>;
+        cpu_on = <0xc4000003>;
+        cpu_off = <0x84000002>;
+        sys_poweroff = <0x84000008>;
+        sys_reset = <0x84000009>;
+        cpu_suspend = <0xc4000001>;
+        method = "hvc";
+        compatible = "arm,psci-0.2\0arm,psci";
+    };
+
+    gpio-keys {
+        #size-cells = <0x0>;
+        compatible = "gpio-keys";
+
+        poweroff {
+            gpios = <0x8005 0x3 0x0>;
+            linux,code = <0x74>;
+            label = "GPIO Key Poweroff";
+        };
+    };
+
+    gpio-leds {
+        compatible = "gpio-leds";
+
+        heartbeat {
+            gpios = <0x8005 0x0 0x0>;
+            linux,default-trigger = "heartbeat";
+            label = "led0";
+        };
+
+        mmc0 {
+            gpios = <0x8005 0x1 0x0>;
+            linux,default-trigger = "mmc0";
+            label = "led1";
+        };
+
+        cpu {
+            gpios = <0x8005 0x2 0x0>;
+            linux,default-trigger = "cpu";
+            label = "led2";
+        };
+    };
+
+    pl061@9030000 {
+        interrupts = <0x0 0x22 0x4>;
+        reg = <0x0 0x9030000 0x0 0x1000>;
+        compatible = "arm,pl061\0arm,primecell";
+        #gpio-cells = <0x2>;
+        gpio-controller;
+        clocks = <0x8004 0x0>;
+        clock-names = "apb_pclk";
+        phandle = <0x8005>;
+    };
+
+    pl031@9010000 {
+        interrupts = <0x0 0x2 0x4>;
+        reg = <0x0 0x9010000 0x0 0x1000>;
+        compatible = "arm,pl031\0arm,primecell";
+        clocks = <0x8004 0x0>;
+        clock-names = "apb_pclk";
+    };
+
+    pl022@9020000 {
+        interrupts = <0x0 0x0 0x4>;
+        reg = <0x0 0x9020000 0x0 0x1000>;
+        compatible = "arm,pl022\0arm,primecell";
+        clocks = <0x8004 0x0>;
+        clock-names = "sspclk";
+        dmas = <0x0>;
+    };
+
+    clocks {
+        #size-cells = <0x0>;
+        #address-cells = <0x1>;
+
+        apb-pclk {
+            clock-output-names = "clk24mhz";
+            clock-frequency = <0x16e3600>;
+            #clock-cells = <0x0>;
+            compatible = "fixed-clock";
+            phandle = <0x8004>;
+        };
+    };
+
+    gic-ipi {
+        compatible = "arm,gic-ipi";
+        interrupt-parent = <0x8001>;
+        interrupts = <0x1 0xf 0x4>;
+    };
+
+    platform-bus@c000000 {
+        interrupt-parent = <0x8001>;
+        ranges = <0x0 0x0 0xc000000 0x2000000>;
+        #size-cells = <0x1>;
+        #address-cells = <0x1>;
+        compatible = "qemu,platform\0simple-bus";
+    };
+
+    smmu@9050000 {
+        dma-coherent;
+        reg = <0x0 0x9050000 0x0 0x20000>;
+        compatible = "arm,mmu-401";
+        #global-interrupts = <0x1>;
+        #iommu-cells = <0x1>;
+        interrupts = <0x0 0x26 0x4 0x0 0x27 0x4 0x0 0x28 0x4 0x0 0x29 0x4>;
+        phandle = <0x8003>;
+    };
+
+    smmu@9070000 {
+        dma-coherent;
+        reg = <0x0 0x9070000 0x0 0x20000>;
+        compatible = "arm,mmu-401";
+        #global-interrupts = <0x1>;
+        #iommu-cells = <0x1>;
+        interrupts = <0x0 0x30 0x4 0x0 0x31 0x4 0x0 0x32 0x4 0x0 0x33 0x4>;
+    };
+
+    its@8080000 {
+        msi-controller;
+        reg = <0x0 0x8080000 0x0 0x20000>;
+        compatible = "arm,gic-v3-its";
+        phandle = <0x8002>;
+    };
+
+    sysbus {
+        compatible = "simple-bus";
+        #size-cells = <0x2>;
+        #address-cells = <0x2>;
+    };
+};

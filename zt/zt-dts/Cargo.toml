@@ -1,0 +1,16 @@
+[package]
+name = "zt-dts"
+description = "DTS lexer and parser for Zephyr"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+criterion =  { version = "0.7", features = ["html_reports"] }
+
+[dependencies]
+log = "0.4.28"
+logos = "0.16"
+
+[[bench]]
+name = "parse_dts"
+harness = false
