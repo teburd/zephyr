@@ -22,10 +22,10 @@ pub enum PropertyValue<'source> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeviceNode<'source> {
-    name: &'source str,
-    labels: Vec<&'source str>,
-    properties: HashMap<&'source str, Vec<PropertyValue<'source>>>,
-    child_nodes: HashMap<&'source str, Self>,
+    pub name: &'source str,
+    pub labels: Vec<&'source str>,
+    pub properties: HashMap<&'source str, Vec<PropertyValue<'source>>>,
+    pub child_nodes: HashMap<&'source str, Self>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
