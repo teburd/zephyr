@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright 2026 Infineon Technologies AG
+# SPDX-License-Identifier: Apache-2.0
+
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_IFX_PERI_DIV  ifx_peri_div.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_IFX_PERI_FRACT_DIV ifx_peri_fract_div.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_IFX_PERI_MUX ifx_peri_mux.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_IFX_HF_DIV ifx_hf_div.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_IFX_HF_MUX ifx_hf_mux.c)
+zephyr_library_sources_ifdef(CONFIG_CLOCK_MANAGEMENT_IFX_DPLL ifx_dpll.c)
