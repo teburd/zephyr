@@ -272,7 +272,6 @@ extern "C" {
 
 /** @cond ignore */
 struct rtio_sqe;
-struct rtio_iodev_sqe;
 struct rtio_iodev;
 struct rtio;
 /** @endcond */
@@ -290,10 +289,10 @@ typedef void (*rtio_callback_t)(struct rtio *r, const struct rtio_sqe *sqe, int 
 /**
  * @typedef rtio_signaled_t
  * @brief Callback signature for RTIO_OP_AWAIT signaled
- * @param iodev_sqe IODEV submission for the await op
+ * @param sqe IODEV submission for the await op
  * @param userdata Userdata
  */
-typedef void (*rtio_signaled_t)(struct rtio_iodev_sqe *iodev_sqe, void *userdata);
+typedef void (*rtio_signaled_t)(struct rtio_sqe *sqe, void *userdata);
 
 /**
  * @brief A submission queue event
@@ -380,16 +379,7 @@ struct rtio_sqe {
 			void *userdata;
 		} await;
 	};
-};
 
-
-/**
- * @brief IO device submission queue entry
- *
- * May be cast safely to and from a rtio_sqe as they occupy the same memory provided by the pool
- */
-struct rtio_iodev_sqe {
-	struct rtio_sqe sqe;
 	struct mpsc_node q;
 	struct rtio_iodev_sqe *next;
 	struct rtio *r;
@@ -741,7 +731,7 @@ struct rtio_sqe_pool {
 	struct mpsc free_q;
 	const uint16_t pool_size;
 	uint16_t pool_free;
-	struct rtio_iodev_sqe *pool;
+	struct rtio_sqe *pool;
 };
 
 static inline struct rtio_iodev_sqe *rtio_sqe_pool_alloc(struct rtio_sqe_pool *pool)
@@ -752,16 +742,16 @@ static inline struct rtio_iodev_sqe *rtio_sqe_pool_alloc(struct rtio_sqe_pool *p
 		return NULL;
 	}
 
-	struct rtio_iodev_sqe *iodev_sqe = CONTAINER_OF(node, struct rtio_iodev_sqe, q);
+	struct rtio_sqe *sqe = CONTAINER_OF(node, struct rtio_sqe, q);
 
 	pool->pool_free--;
 
-	return iodev_sqe;
+	return sqe;
 }
 
-static inline void rtio_sqe_pool_free(struct rtio_sqe_pool *pool, struct rtio_iodev_sqe *iodev_sqe)
+static inline void rtio_sqe_pool_free(struct rtio_sqe_pool *pool, struct rtio_sqe *sqe)
 {
-	mpsc_push(&pool->free_q, &iodev_sqe->q);
+	mpsc_push(&pool->free_q, &sqe->q);
 
 	pool->pool_free++;
 }
@@ -771,7 +761,7 @@ static inline void rtio_sqe_pool_free(struct rtio_sqe_pool *pool, struct rtio_io
 /* clang-format off */
 
 #define Z_RTIO_SQE_POOL_DEFINE(name, sz)			\
-	static struct rtio_iodev_sqe CONCAT(_sqe_pool_, name)[sz];	\
+	static struct rtio_sqe CONCAT(_sqe_pool_, name)[sz];	\
 	STRUCT_SECTION_ITERABLE(rtio_sqe_pool, name) = {	\
 		.free_q = MPSC_INIT((name.free_q)),	\
 		.pool_size = sz,				\
