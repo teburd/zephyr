@@ -31,7 +31,7 @@ static void rm3100_complete_result(struct rtio *ctx, const struct rtio_sqe *sqe,
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	struct rtio_cqe *cqe;
 	int err = 0;
 
@@ -52,9 +52,10 @@ static void rm3100_complete_result(struct rtio *ctx, const struct rtio_sqe *sqe,
 	LOG_DBG("One-shot fetch completed");
 }
 
-static void rm3100_submit_one_shot(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void rm3100_submit_one_shot(const struct device *dev,
+				   struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
 	uint32_t min_buf_len = sizeof(struct rm3100_encoded_data);
@@ -119,9 +120,10 @@ static void rm3100_submit_one_shot(const struct device *dev, struct rtio_iodev_s
 	rtio_submit(data->rtio.ctx, 0);
 }
 
-static void rm3100_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void rm3100_submit(const struct device *dev,
+			  struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		rm3100_submit_one_shot(dev, iodev_sqe);

@@ -12,7 +12,7 @@
 LOG_MODULE_DECLARE(ADXL367, CONFIG_SENSOR_LOG_LEVEL);
 
 static void adxl367_sqe_done(const struct adxl367_dev_config *cfg,
-	struct rtio_iodev_sqe *iodev_sqe, int res)
+	struct rtio_sqe *iodev_sqe, int res)
 {
 	if (res < 0) {
 		rtio_iodev_sqe_err(iodev_sqe, res);
@@ -73,10 +73,11 @@ static void adxl367_fifo_flush_rtio(const struct device *dev)
 	rtio_submit(data->rtio_ctx, 0);
 }
 
-void adxl367_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void adxl367_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe)
 {
 	const struct sensor_read_config *cfg =
-			(const struct sensor_read_config *)iodev_sqe->sqe.iodev->data;
+			(const struct sensor_read_config *) iodev_sqe->iodev->data;
 	struct adxl367_data *data = (struct adxl367_data *)dev->data;
 	const struct adxl367_dev_config *cfg_367 = dev->config;
 	uint8_t int_mask = 0;
@@ -157,7 +158,7 @@ static void adxl367_fifo_read_cb(struct rtio *rtio_ctx, const struct rtio_sqe *s
 
 	const struct device *dev = (const struct device *)arg;
 	const struct adxl367_dev_config *cfg = (const struct adxl367_dev_config *)dev->config;
-	struct rtio_iodev_sqe *iodev_sqe = sqe->userdata;
+	struct rtio_sqe *iodev_sqe = sqe->userdata;
 
 	adxl367_sqe_done(cfg, iodev_sqe, 0);
 }
@@ -203,7 +204,7 @@ static void adxl367_process_fifo_samples_cb(struct rtio *r, const struct rtio_sq
 	const struct device *dev = (const struct device *)arg;
 	struct adxl367_data *data = (struct adxl367_data *)dev->data;
 	const struct adxl367_dev_config *cfg = (const struct adxl367_dev_config *)dev->config;
-	struct rtio_iodev_sqe *current_sqe = data->sqe;
+	struct rtio_sqe *current_sqe = data->sqe;
 	uint16_t fifo_samples = ((data->fifo_ent[0]) | ((data->fifo_ent[1] & 0x3) << 8));
 	size_t sample_numb = adxl367_get_numb_of_samp_in_pkt(data);
 	size_t packet_size = sample_numb;
@@ -422,13 +423,13 @@ static void adxl367_process_status_cb(struct rtio *r, const struct rtio_sqe *sqe
 	const struct device *dev = (const struct device *)arg;
 	struct adxl367_data *data = (struct adxl367_data *) dev->data;
 	const struct adxl367_dev_config *cfg = (const struct adxl367_dev_config *) dev->config;
-	struct rtio_iodev_sqe *current_sqe = data->sqe;
+	struct rtio_sqe *current_sqe = data->sqe;
 	struct sensor_read_config *read_config;
 	uint8_t status = data->status;
 
 	__ASSERT(data->sqe != NULL, "%s data->sqe = NULL", __func__);
 
-	read_config = (struct sensor_read_config *)data->sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) data->sqe->iodev->data;
 
 	__ASSERT(read_config != NULL, "%s read_config = NULL", __func__);
 

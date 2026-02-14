@@ -24,7 +24,7 @@ static void bma4xx_complete_result(struct rtio *ctx, const struct rtio_sqe *sqe,
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	struct rtio_cqe *cqe;
 	int err = 0;
 
@@ -47,7 +47,8 @@ static void bma4xx_complete_result(struct rtio *ctx, const struct rtio_sqe *sqe,
  * RTIO submit and encoding
  */
 
-static void bma4xx_submit_one_shot(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void bma4xx_submit_one_shot(const struct device *dev,
+				   struct rtio_sqe *iodev_sqe)
 {
 	const struct bma4xx_data *bma4xx = dev->data;
 	const struct bma4xx_config *drv_cfg = dev->config;
@@ -142,9 +143,9 @@ static void bma4xx_submit_one_shot(const struct device *dev, struct rtio_iodev_s
 	rtio_submit(bma4xx->r, 0);
 }
 
-void bma4xx_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void bma4xx_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		bma4xx_submit_one_shot(dev, iodev_sqe);

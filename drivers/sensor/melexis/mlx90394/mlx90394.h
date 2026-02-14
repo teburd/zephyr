@@ -53,7 +53,7 @@ struct mlx90394_data {
 	bool initialized;
 #ifdef CONFIG_SENSOR_ASYNC_API
 	struct {
-		struct rtio_iodev_sqe *iodev_sqe;
+		struct rtio_sqe *iodev_sqe;
 		uint64_t timestamp;
 		enum mlx90394_reg_config_val config_val;
 	} work_ctx;
@@ -90,7 +90,7 @@ struct mlx90394_encoded_data {
 };
 
 int mlx90394_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
-void mlx90394_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void mlx90394_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 #endif
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_MLX90394_MLX90394_H_ */

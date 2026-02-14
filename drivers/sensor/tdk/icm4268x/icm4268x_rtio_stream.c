@@ -15,9 +15,10 @@
 
 LOG_MODULE_DECLARE(ICM4268X_RTIO, CONFIG_SENSOR_LOG_LEVEL);
 
-void icm4268x_submit_stream(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe)
+void icm4268x_submit_stream(const struct device *sensor,
+			    struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct icm4268x_dev_cfg *dev_cfg = (const struct icm4268x_dev_cfg *)sensor->config;
 	struct icm4268x_dev_data *data = sensor->data;
 	struct icm4268x_cfg new_config = data->cfg;
@@ -76,7 +77,7 @@ icm4268x_get_read_config_trigger(const struct sensor_read_config *cfg,
 static inline void icm4268x_stream_result(const struct device *dev, int result)
 {
 	struct icm4268x_dev_data *drv_data = dev->data;
-	struct rtio_iodev_sqe *streaming_sqe = drv_data->streaming_sqe;
+	struct rtio_sqe *streaming_sqe = drv_data->streaming_sqe;
 
 	drv_data->streaming_sqe = NULL;
 	if (result < 0) {

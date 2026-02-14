@@ -381,7 +381,7 @@ struct rtio_sqe {
 	};
 
 	struct mpsc_node q;
-	struct rtio_iodev_sqe *next;
+	struct rtio_sqe *next;
 	struct rtio *r;
 };
 
@@ -394,8 +394,8 @@ struct rtio_sqe {
 #else
 #define RTIO_CACHE_LINE_SIZE 64
 #endif
-BUILD_ASSERT(sizeof(struct rtio_iodev_sqe) <= RTIO_CACHE_LINE_SIZE,
-	"RTIO performs best when the submissions queue entries are less than a cache line")
+BUILD_ASSERT(sizeof(struct rtio_sqe) <= RTIO_CACHE_LINE_SIZE,
+	     "RTIO performs best when the submissions queue entries are less than a cache line")
 #endif
 /** @endcond */
 
@@ -656,12 +656,12 @@ static inline void rtio_sqe_prep_delay(struct rtio_sqe *sqe,
  * @retval NULL if current sqe is last in transaction
  * @return struct rtio_sqe * if available
  */
-static inline struct rtio_iodev_sqe *rtio_txn_next(const struct rtio_iodev_sqe *iodev_sqe)
+static inline struct rtio_sqe *rtio_txn_next(const struct rtio_sqe *iodev_sqe)
 {
-	struct rtio_iodev_sqe *next = NULL;
+	struct rtio_sqe *next = NULL;
 
 	SYS_PORT_TRACING_FUNC_ENTER(rtio, txn_next, iodev_sqe->r, iodev_sqe);
-	if (iodev_sqe->sqe.flags & RTIO_SQE_TRANSACTION) {
+	if (iodev_sqe->flags & RTIO_SQE_TRANSACTION) {
 		next = iodev_sqe->next;
 	}
 	SYS_PORT_TRACING_FUNC_EXIT(rtio, txn_next, iodev_sqe->r, next);
@@ -677,12 +677,12 @@ static inline struct rtio_iodev_sqe *rtio_txn_next(const struct rtio_iodev_sqe *
  * @retval NULL if current sqe is last in chain
  * @return struct rtio_sqe * if available
  */
-static inline struct rtio_iodev_sqe *rtio_chain_next(const struct rtio_iodev_sqe *iodev_sqe)
+static inline struct rtio_sqe *rtio_chain_next(const struct rtio_sqe *iodev_sqe)
 {
-	struct rtio_iodev_sqe *next = NULL;
+	struct rtio_sqe *next = NULL;
 
 	SYS_PORT_TRACING_FUNC_ENTER(rtio, txn_next, iodev_sqe->r, iodev_sqe);
-	if (iodev_sqe->sqe.flags & RTIO_SQE_CHAINED) {
+	if (iodev_sqe->flags & RTIO_SQE_CHAINED) {
 		next = iodev_sqe->next;
 	}
 	SYS_PORT_TRACING_FUNC_EXIT(rtio, txn_next, iodev_sqe->r, next);
@@ -697,7 +697,7 @@ static inline struct rtio_iodev_sqe *rtio_chain_next(const struct rtio_iodev_sqe
  * @retval NULL if current sqe is last in chain
  * @return struct rtio_iodev_sqe * if available
  */
-static inline struct rtio_iodev_sqe *rtio_iodev_sqe_next(const struct rtio_iodev_sqe *iodev_sqe)
+static inline struct rtio_sqe *rtio_iodev_sqe_next(const struct rtio_sqe *iodev_sqe)
 {
 	return iodev_sqe->next;
 }
@@ -712,14 +712,14 @@ static inline struct rtio_iodev_sqe *rtio_iodev_sqe_next(const struct rtio_iodev
  * @param[in] callback Callback called when SQE is signaled
  * @param[in] userdata User data passed to callback
  */
-static inline void rtio_iodev_sqe_await_signal(struct rtio_iodev_sqe *iodev_sqe,
+static inline void rtio_iodev_sqe_await_signal(struct rtio_sqe *iodev_sqe,
 					       rtio_signaled_t callback,
 					       void *userdata)
 {
-	iodev_sqe->sqe.await.callback = callback;
-	iodev_sqe->sqe.await.userdata = userdata;
+	iodev_sqe->await.callback = callback;
+	iodev_sqe->await.userdata = userdata;
 
-	if (!atomic_cas(&iodev_sqe->sqe.await.ok, 0, 1)) {
+	if (!atomic_cas(&iodev_sqe->await.ok, 0, 1)) {
 		callback(iodev_sqe, userdata);
 	}
 }
@@ -734,7 +734,7 @@ struct rtio_sqe_pool {
 	struct rtio_sqe *pool;
 };
 
-static inline struct rtio_iodev_sqe *rtio_sqe_pool_alloc(struct rtio_sqe_pool *pool)
+static inline struct rtio_sqe *rtio_sqe_pool_alloc(struct rtio_sqe_pool *pool)
 {
 	struct mpsc_node *node = mpsc_pop(&pool->free_q);
 

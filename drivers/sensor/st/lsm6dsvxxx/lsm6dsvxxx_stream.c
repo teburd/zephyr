@@ -68,11 +68,12 @@ int lsm6dsvxxx_gbias_get_config(const struct device *dev, enum sensor_channel ch
 	return 0;
 }
 
-void lsm6dsvxxx_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void lsm6dsvxxx_submit_stream(const struct device *dev,
+			      struct rtio_sqe *iodev_sqe)
 {
 	struct lsm6dsvxxx_data *data = dev->data;
 	const struct lsm6dsvxxx_config *config = dev->config;
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	struct trigger_config trig_cfg = { 0 };
 
 	lsm6dsvxxx_gpio_pin_disable(config, data->drdy_gpio);
@@ -157,7 +158,7 @@ static void lsm6dsvxxx_read_fifo_cb(struct rtio *r, const struct rtio_sqe *sqe,
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(data->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)data->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) data->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 
@@ -361,7 +362,7 @@ static void lsm6dsvxxx_read_status_cb(struct rtio *r, const struct rtio_sqe *sqe
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(data->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)data->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) data->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 

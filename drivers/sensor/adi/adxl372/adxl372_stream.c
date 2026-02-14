@@ -68,10 +68,11 @@ static void adxl372_fifo_flush_rtio(const struct device *dev)
 	rtio_submit(data->rtio_ctx, 0);
 }
 
-void adxl372_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void adxl372_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe)
 {
 	const struct sensor_read_config *cfg =
-		(const struct sensor_read_config *)iodev_sqe->sqe.iodev->data;
+		(const struct sensor_read_config *) iodev_sqe->iodev->data;
 	struct adxl372_data *data = (struct adxl372_data *)dev->data;
 	const struct adxl372_dev_config *cfg_372 = dev->config;
 	uint8_t int_value = (uint8_t)~ADXL372_INT1_MAP_FIFO_FULL_MSK;
@@ -133,7 +134,7 @@ static void adxl372_fifo_read_cb(struct rtio *rtio_ctx, const struct rtio_sqe *s
 {
 	const struct device *dev = (const struct device *)arg;
 	const struct adxl372_dev_config *cfg = (const struct adxl372_dev_config *)dev->config;
-	struct rtio_iodev_sqe *iodev_sqe = sqe->userdata;
+	struct rtio_sqe *iodev_sqe = sqe->userdata;
 
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 
@@ -172,7 +173,7 @@ static void adxl372_process_fifo_samples_cb(struct rtio *r, const struct rtio_sq
 	const struct device *dev = (const struct device *)arg;
 	struct adxl372_data *data = (struct adxl372_data *)dev->data;
 	const struct adxl372_dev_config *cfg = (const struct adxl372_dev_config *)dev->config;
-	struct rtio_iodev_sqe *current_sqe = data->sqe;
+	struct rtio_sqe *current_sqe = data->sqe;
 	uint16_t fifo_samples = (((data->fifo_ent[0] & 0x3) << 8) | data->fifo_ent[1]);
 	size_t sample_set_size = adxl372_get_packet_size(cfg);
 
@@ -304,7 +305,7 @@ static void adxl372_process_status1_cb(struct rtio *r, const struct rtio_sqe *sq
 	const struct device *dev = (const struct device *)arg;
 	struct adxl372_data *data = (struct adxl372_data *)dev->data;
 	const struct adxl372_dev_config *cfg = (const struct adxl372_dev_config *)dev->config;
-	struct rtio_iodev_sqe *current_sqe = data->sqe;
+	struct rtio_sqe *current_sqe = data->sqe;
 	struct sensor_read_config *read_config;
 	uint8_t status1 = data->status1;
 
@@ -312,7 +313,7 @@ static void adxl372_process_status1_cb(struct rtio *r, const struct rtio_sqe *sq
 		return;
 	}
 
-	read_config = (struct sensor_read_config *)data->sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) data->sqe->iodev->data;
 
 	if (read_config == NULL) {
 		return;

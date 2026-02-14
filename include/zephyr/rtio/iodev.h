@@ -24,7 +24,7 @@ extern "C" {
  */
 
 /** @cond ignore */
-struct rtio_iodev_sqe;
+struct rtio_sqe;
 /** @endcond */
 
 /**
@@ -39,7 +39,7 @@ struct rtio_iodev_api {
 	 *
 	 * @param iodev_sqe Submission queue entry
 	 */
-	void (*submit)(struct rtio_iodev_sqe *iodev_sqe);
+	void (*submit)(struct rtio_sqe *iodev_sqe);
 };
 
 /**

@@ -160,7 +160,7 @@ static void lsm6dsvxxx_one_shot_complete_cb(struct rtio *ctx, const struct rtio_
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	int err = 0;
 
 	err = rtio_flush_completion_queue(ctx);
@@ -172,10 +172,11 @@ static void lsm6dsvxxx_one_shot_complete_cb(struct rtio *ctx, const struct rtio_
 	}
 }
 
-static void lsm6dsvxxx_submit_one_shot(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void lsm6dsvxxx_submit_one_shot(const struct device *dev,
+				       struct rtio_sqe *iodev_sqe)
 {
 	const struct lsm6dsvxxx_config *config = dev->config;
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
 	uint32_t min_buf_len = sizeof(struct lsm6dsvxxx_rtio_data);
@@ -291,9 +292,9 @@ static void lsm6dsvxxx_submit_one_shot(const struct device *dev, struct rtio_iod
 	}
 }
 
-void lsm6dsvxxx_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void lsm6dsvxxx_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		lsm6dsvxxx_submit_one_shot(dev, iodev_sqe);

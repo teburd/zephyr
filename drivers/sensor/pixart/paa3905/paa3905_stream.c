@@ -24,15 +24,15 @@ LOG_MODULE_REGISTER(PAA3905_STREAM, CONFIG_SENSOR_LOG_LEVEL);
 static inline void handle_result_on_error(const struct device *dev, int err)
 {
 	struct paa3905_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 
 	data->stream.iodev_sqe = NULL;
 	rtio_iodev_sqe_err(iodev_sqe, err);
 }
 
-static void paa3905_chip_recovery_handler(struct rtio_iodev_sqe *iodev_sqe)
+static void paa3905_chip_recovery_handler(struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	struct paa3905_data *data = dev->data;
 	int err;
@@ -250,9 +250,9 @@ static inline bool settings_changed(const struct paa3905_stream *a,
 }
 
 void paa3905_stream_submit(const struct device *dev,
-			   struct rtio_iodev_sqe *iodev_sqe)
+			   struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *read_config = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *read_config = iodev_sqe->iodev->data;
 	struct paa3905_data *data = dev->data;
 	const struct paa3905_config *cfg = dev->config;
 	int err;

@@ -549,7 +549,7 @@ struct bmi08x_accel_data {
 	uint16_t range;
 #if defined(CONFIG_SENSOR_ASYNC_API)
 	struct {
-		struct rtio_iodev_sqe *iodev_sqe;
+		struct rtio_sqe *iodev_sqe;
 		atomic_t state;
 		uint8_t fifo_wm;
 	} stream;
@@ -580,7 +580,7 @@ struct bmi08x_gyro_data {
 	uint16_t range;
 #if defined(CONFIG_SENSOR_ASYNC_API)
 	struct {
-		struct rtio_iodev_sqe *iodev_sqe;
+		struct rtio_sqe *iodev_sqe;
 		atomic_t state;
 		uint8_t fifo_wm;
 	} stream;

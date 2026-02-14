@@ -12,10 +12,10 @@
 
 LOG_MODULE_DECLARE(ADXL345, CONFIG_SENSOR_LOG_LEVEL);
 
-static void adxl345_submit_fetch(struct rtio_iodev_sqe *iodev_sqe)
+static void adxl345_submit_fetch(struct rtio_sqe *iodev_sqe)
 {
 	const struct sensor_read_config *cfg =
-			(const struct sensor_read_config *) iodev_sqe->sqe.iodev->data;
+			(const struct sensor_read_config *) iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	int rc;
 	uint32_t min_buffer_len = sizeof(struct adxl345_dev_data);
@@ -41,10 +41,10 @@ static void adxl345_submit_fetch(struct rtio_iodev_sqe *iodev_sqe)
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 }
 
-void adxl345_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void adxl345_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
 	const struct sensor_read_config *cfg =
-			(const struct sensor_read_config *) iodev_sqe->sqe.iodev->data;
+			(const struct sensor_read_config *) iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		struct rtio_work_req *req = rtio_work_req_alloc();

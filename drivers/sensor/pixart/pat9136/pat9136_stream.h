@@ -14,6 +14,6 @@
 int pat9136_stream_init(const struct device *dev);
 
 void pat9136_stream_submit(const struct device *dev,
-			   struct rtio_iodev_sqe *iodev_sqe);
+			   struct rtio_sqe *iodev_sqe);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_PAT9136_STREAM_H_ */

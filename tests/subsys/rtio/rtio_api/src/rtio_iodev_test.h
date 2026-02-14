@@ -20,8 +20,8 @@ struct rtio_iodev_test_data {
 	struct mpsc io_q;
 
 	/* Currently executing transaction */
-	struct rtio_iodev_sqe *txn_head;
-	struct rtio_iodev_sqe *txn_curr;
+	struct rtio_sqe *txn_head;
+	struct rtio_sqe *txn_curr;
 
 	/* Count of submit calls */
 	atomic_t submit_count;
@@ -52,7 +52,7 @@ static void rtio_iodev_test_next(struct rtio_iodev_test_data *data, bool complet
 		goto out;
 	}
 
-	struct rtio_iodev_sqe *next_sqe = CONTAINER_OF(next, struct rtio_iodev_sqe, q);
+	struct rtio_sqe *next_sqe = CONTAINER_OF(next, struct rtio_sqe, q);
 
 	data->txn_head = next_sqe;
 	data->txn_curr = next_sqe;
@@ -80,7 +80,8 @@ static void rtio_iodev_test_complete(struct rtio_iodev_test_data *data, int stat
 	rtio_iodev_test_next(data, true);
 }
 
-static void rtio_iodev_await_signaled(struct rtio_iodev_sqe *iodev_sqe, void *userdata)
+static void rtio_iodev_await_signaled(struct rtio_sqe *iodev_sqe,
+				      void *userdata)
 {
 	struct rtio_iodev_test_data *data = userdata;
 
@@ -90,12 +91,12 @@ static void rtio_iodev_await_signaled(struct rtio_iodev_sqe *iodev_sqe, void *us
 static void rtio_iodev_timer_fn(struct k_timer *tm)
 {
 	struct rtio_iodev_test_data *data = CONTAINER_OF(tm, struct rtio_iodev_test_data, timer);
-	struct rtio_iodev_sqe *iodev_sqe = data->txn_curr;
+	struct rtio_sqe *iodev_sqe = data->txn_curr;
 	uint8_t *buf;
 	uint32_t buf_len;
 	int rc;
 
-	switch (iodev_sqe->sqe.op) {
+	switch (iodev_sqe->op) {
 	case RTIO_OP_NOP:
 		rtio_iodev_test_complete(data, data->result);
 		break;
@@ -106,7 +107,7 @@ static void rtio_iodev_timer_fn(struct k_timer *tm)
 			return;
 		}
 		/* For reads the test device copies from the given userdata */
-		memcpy(buf, ((uint8_t *)iodev_sqe->sqe.userdata), 16);
+		memcpy(buf, ((uint8_t *) iodev_sqe->userdata), 16);
 		rtio_iodev_test_complete(data, data->result);
 		break;
 	case RTIO_OP_AWAIT:
@@ -117,9 +118,9 @@ static void rtio_iodev_timer_fn(struct k_timer *tm)
 	}
 }
 
-static void rtio_iodev_test_submit(struct rtio_iodev_sqe *iodev_sqe)
+static void rtio_iodev_test_submit(struct rtio_sqe *iodev_sqe)
 {
-	struct rtio_iodev *iodev = (struct rtio_iodev *)iodev_sqe->sqe.iodev;
+	struct rtio_iodev *iodev = (struct rtio_iodev *) iodev_sqe->iodev;
 	struct rtio_iodev_test_data *data = iodev->data;
 
 	atomic_inc(&data->submit_count);

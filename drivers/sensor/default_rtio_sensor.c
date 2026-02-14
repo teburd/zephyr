@@ -21,11 +21,12 @@ LOG_MODULE_REGISTER(sensor_compat, CONFIG_SENSOR_LOG_LEVEL);
  */
 BUILD_ASSERT((sizeof(struct sensor_data_generic_header) % sizeof(struct sensor_chan_spec)) == 0);
 
-static void sensor_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+static void sensor_submit_fallback(const struct device *dev,
+				   struct rtio_sqe *iodev_sqe);
 
-static void sensor_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+static void sensor_iodev_submit(struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	const struct sensor_driver_api *api = dev->api;
 
@@ -113,9 +114,9 @@ static inline int check_header_contains_channel(const struct sensor_data_generic
  *
  * @param[in] iodev_sqe The read submission queue event
  */
-static void sensor_submit_fallback_sync(struct rtio_iodev_sqe *iodev_sqe)
+static void sensor_submit_fallback_sync(struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const int num_output_samples = compute_num_samples(channels, cfg->count);
@@ -272,7 +273,8 @@ static void sensor_submit_fallback_sync(struct rtio_iodev_sqe *iodev_sqe)
  * @param[in] dev The sensor device to read
  * @param[in] iodev_sqe The read submission queue event
  */
-static void sensor_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void sensor_submit_fallback(const struct device *dev,
+				   struct rtio_sqe *iodev_sqe)
 {
 	struct rtio_work_req *req = rtio_work_req_alloc();
 

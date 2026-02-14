@@ -50,7 +50,7 @@ struct pat9136_encoded_data {
 struct pat9136_stream {
 	struct gpio_callback cb;
 	const struct device *dev;
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 	struct {
 		struct k_timer backup;
 		struct {

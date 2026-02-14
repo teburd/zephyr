@@ -104,7 +104,7 @@ static inline void icm45686_stream_result(const struct device *dev,
 {
 	struct icm45686_data *data = dev->data;
 	const struct icm45686_config *cfg = dev->config;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 
 	(void)atomic_set(&data->stream.state, ICM45686_STREAM_OFF);
 	memset(&data->stream.data, 0, sizeof(data->stream.data));
@@ -369,9 +369,9 @@ static inline bool settings_changed(const struct icm45686_stream *a,
 }
 
 void icm45686_stream_submit(const struct device *dev,
-			    struct rtio_iodev_sqe *iodev_sqe)
+			    struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *read_cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *read_cfg = iodev_sqe->iodev->data;
 	struct icm45686_data *data = dev->data;
 	const struct icm45686_config *cfg = dev->config;
 	const bool wm_gt_ths = !cfg->settings.fifo_watermark_equals;

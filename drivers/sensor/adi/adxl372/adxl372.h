@@ -332,7 +332,7 @@ struct adxl372_data {
 #endif
 #endif /* CONFIG_ADXL372_TRIGGER */
 #ifdef CONFIG_ADXL372_STREAM
-	struct rtio_iodev_sqe *sqe;
+	struct rtio_sqe *sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint8_t status1;
@@ -398,7 +398,8 @@ BUILD_ASSERT(sizeof(struct adxl372_fifo_data) % 4 == 0,
 int adxl372_spi_init(const struct device *dev);
 int adxl372_i2c_init(const struct device *dev);
 
-void adxl372_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl372_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe);
 void adxl372_stream_irq_handler(const struct device *dev);
 
 #ifdef CONFIG_ADXL372_TRIGGER
@@ -415,7 +416,7 @@ int adxl372_init_interrupt(const struct device *dev);
 #ifdef CONFIG_SENSOR_ASYNC_API
 int adxl372_get_accel_data(const struct device *dev, bool maxpeak,
 			   struct adxl372_xyz_accel_data *accel_data);
-void adxl372_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl372_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 int adxl372_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 void adxl372_accel_convert(struct sensor_value *val, int16_t sample);
 #endif /* CONFIG_SENSOR_ASYNC_API */

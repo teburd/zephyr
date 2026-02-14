@@ -615,7 +615,7 @@ static void bmp581_complete_result(struct rtio *ctx, const struct rtio_sqe *sqe,
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)arg;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)arg;
 	struct rtio_cqe *cqe;
 	int err = 0;
 
@@ -689,9 +689,10 @@ static void bmp581_submit_one_shot(const struct device *dev, struct rtio_iodev_s
 	rtio_submit(conf->bus.rtio.ctx, 0);
 }
 
-static void bmp581_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void bmp581_submit(const struct device *dev,
+			  struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		bmp581_submit_one_shot(dev, iodev_sqe);

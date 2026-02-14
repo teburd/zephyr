@@ -44,7 +44,7 @@ struct paa3905_encoded_data {
 struct paa3905_stream {
 	struct gpio_callback cb;
 	const struct device *dev;
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 	struct k_timer timer;
 	struct {
 		struct {

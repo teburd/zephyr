@@ -45,7 +45,7 @@ struct rm3100_config {
 struct rm3100_stream {
 	struct gpio_callback cb;
 	const struct device *dev;
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 	struct {
 		struct {
 			bool drdy : 1;

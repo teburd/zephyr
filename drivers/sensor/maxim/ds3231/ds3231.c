@@ -104,14 +104,14 @@ struct sensor_ds3231_edata {
 	uint16_t raw_temp;
 };
 
-void sensor_ds3231_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
+void sensor_ds3231_submit_sync(struct rtio_sqe *iodev_sqe)
 {
 	uint32_t min_buf_len = sizeof(struct sensor_ds3231_edata);
 	int rc;
 	uint8_t *buf;
 	uint32_t buf_len;
 
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 
@@ -144,7 +144,8 @@ void sensor_ds3231_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 }
 
-void sensor_ds3231_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void sensor_ds3231_submit(const struct device *dev,
+			  struct rtio_sqe *iodev_sqe)
 {
 	struct rtio_work_req *req = rtio_work_req_alloc();
 

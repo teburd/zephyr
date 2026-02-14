@@ -246,7 +246,8 @@ out:
 	}
 }
 
-static void mcux_lpi2c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void mcux_lpi2c_submit(const struct device *dev,
+			      struct rtio_sqe *iodev_sqe)
 {
 	struct mcux_lpi2c_data *data = dev->data;
 	struct i2c_rtio *const ctx = data->ctx;

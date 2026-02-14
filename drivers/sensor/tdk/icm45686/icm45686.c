@@ -131,7 +131,7 @@ static void icm45686_complete_result(struct rtio *ctx,
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	struct rtio_cqe *cqe;
 	int err = 0;
 
@@ -153,9 +153,9 @@ static void icm45686_complete_result(struct rtio *ctx,
 }
 
 static inline void icm45686_submit_one_shot(const struct device *dev,
-					    struct rtio_iodev_sqe *iodev_sqe)
+					    struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
 	uint32_t min_buf_len = sizeof(struct icm45686_encoded_data);
@@ -205,9 +205,10 @@ static inline void icm45686_submit_one_shot(const struct device *dev,
 	rtio_submit(data->bus.rtio.ctx, 0);
 }
 
-static void icm45686_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void icm45686_submit(const struct device *dev,
+			    struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		icm45686_submit_one_shot(dev, iodev_sqe);

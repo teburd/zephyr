@@ -11,7 +11,7 @@
 
 LOG_MODULE_DECLARE(MMC56X3, CONFIG_SENSOR_LOG_LEVEL);
 
-void mmc56x3_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
+void mmc56x3_submit_sync(struct rtio_sqe *iodev_sqe)
 {
 	uint32_t min_buf_len = sizeof(struct mmc56x3_encoded_data);
 	int rc;
@@ -19,7 +19,7 @@ void mmc56x3_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
 	uint32_t buf_len;
 	uint64_t cycles;
 
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
@@ -89,7 +89,7 @@ void mmc56x3_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 }
 
-void mmc56x3_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void mmc56x3_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
 	struct rtio_work_req *req = rtio_work_req_alloc();
 

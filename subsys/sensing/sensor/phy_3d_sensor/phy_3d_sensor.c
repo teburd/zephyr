@@ -160,9 +160,9 @@ static int phy_3d_sensor_attr_set(const struct device *dev,
 }
 
 static void phy_3d_sensor_submit(const struct device *dev,
-		struct rtio_iodev_sqe *sqe)
+		struct rtio_sqe *sqe)
 {
-	struct sensing_submit_config *config = (struct sensing_submit_config *)sqe->sqe.iodev->data;
+	struct sensing_submit_config *config = (struct sensing_submit_config *) sqe->iodev->data;
 	const struct phy_3d_sensor_config *cfg = dev->config;
 	struct phy_3d_sensor_data *data = dev->data;
 	const struct phy_3d_sensor_custom *custom = data->customs[config->info_index];

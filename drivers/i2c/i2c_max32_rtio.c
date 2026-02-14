@@ -328,7 +328,7 @@ static void max32_complete(const struct device *dev, int status)
 	}
 }
 
-static void max32_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void max32_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
 	struct max32_i2c_data *data = dev->data;
 	struct i2c_rtio *const ctx = data->ctx;

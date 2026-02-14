@@ -61,7 +61,8 @@ static bool i2c_nrfx_twi_rtio_msg_start(const struct device *dev, uint8_t flags,
 	return false;
 }
 
-static void i2c_nrfx_twi_rtio_sqe_signaled(struct rtio_iodev_sqe *iodev_sqe, void *userdata)
+static void i2c_nrfx_twi_rtio_sqe_signaled(struct rtio_sqe *iodev_sqe,
+					   void *userdata)
 {
 	const struct device *dev = userdata;
 
@@ -74,7 +75,7 @@ static bool i2c_nrfx_twi_rtio_start(const struct device *dev)
 	struct i2c_rtio *ctx = dev_data->ctx;
 	struct rtio_sqe *sqe = &ctx->txn_curr->sqe;
 	struct i2c_dt_spec *dt_spec = sqe->iodev->data;
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 
 	switch (sqe->op) {
 	case RTIO_OP_RX:
@@ -99,7 +100,7 @@ static bool i2c_nrfx_twi_rtio_start(const struct device *dev)
 		(void)i2c_nrfx_twi_recover_bus(dev);
 		return false;
 	case RTIO_OP_AWAIT:
-		iodev_sqe = CONTAINER_OF(sqe, struct rtio_iodev_sqe, sqe);
+		iodev_sqe = sqe;
 		rtio_iodev_sqe_await_signal(iodev_sqe, i2c_nrfx_twi_rtio_sqe_signaled,
 					    (void *)dev);
 		return false;
@@ -161,7 +162,8 @@ static void event_handler(nrfx_twi_evt_t const *p_event, void *p_context)
 	i2c_nrfx_twi_rtio_complete(dev, status);
 }
 
-static void i2c_nrfx_twi_rtio_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_seq)
+static void i2c_nrfx_twi_rtio_submit(const struct device *dev,
+				     struct rtio_sqe *iodev_seq)
 {
 	struct i2c_nrfx_twi_rtio_data *data = dev->data;
 	struct i2c_rtio *const ctx = data->ctx;

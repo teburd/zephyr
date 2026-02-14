@@ -200,13 +200,14 @@ static void lsm6dsv16x_config_fifo(const struct device *dev, struct trigger_conf
 	}
 }
 
-void lsm6dsv16x_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void lsm6dsv16x_submit_stream(const struct device *dev,
+			      struct rtio_sqe *iodev_sqe)
 {
 	struct lsm6dsv16x_data *lsm6dsv16x = dev->data;
 #if LSM6DSVXXX_ANY_INST_ON_BUS_STATUS_OKAY(i3c)
 	const struct lsm6dsv16x_config *config = dev->config;
 #endif
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	struct trigger_config trig_cfg = { 0 };
 
 	if (!ON_I3C_BUS(config) || (I3C_INT_PIN(config))) {
@@ -294,7 +295,7 @@ static void lsm6dsv16x_read_fifo_cb(struct rtio *r, const struct rtio_sqe *sqe,
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(lsm6dsv16x->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)lsm6dsv16x->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) lsm6dsv16x->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 
@@ -507,7 +508,7 @@ static void lsm6dsv16x_read_status_cb(struct rtio *r, const struct rtio_sqe *sqe
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(lsm6dsv16x->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)lsm6dsv16x->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) lsm6dsv16x->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 

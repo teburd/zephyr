@@ -13,12 +13,13 @@
 LOG_MODULE_REGISTER(adc_compat, CONFIG_ADC_LOG_LEVEL);
 
 #if CONFIG_RTIO_WORKQ
-static void adc_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+static void adc_submit_fallback(const struct device *dev,
+				struct rtio_sqe *iodev_sqe);
 #endif /* CONFIG_RTIO_WORKQ */
 
-static void adc_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+static void adc_iodev_submit(struct rtio_sqe *iodev_sqe)
 {
-	const struct adc_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct adc_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->adc;
 	const struct adc_driver_api *api = dev->api;
 
@@ -146,9 +147,9 @@ uint8_t adc_convert_vref_to_shift(uint16_t vref_mv)
  *
  * @param[in] iodev_sqe The read submission queue event
  */
-static void adc_submit_fallback_sync(struct rtio_iodev_sqe *iodev_sqe)
+static void adc_submit_fallback_sync(struct rtio_sqe *iodev_sqe)
 {
-	const struct adc_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct adc_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->adc;
 	const struct adc_dt_spec *adc_spec = cfg->adc_spec;
 	const int num_output_samples = cfg->adc_spec_cnt;
@@ -236,7 +237,8 @@ static void adc_submit_fallback_sync(struct rtio_iodev_sqe *iodev_sqe)
  * @param[in] dev The ADC device to read
  * @param[in] iodev_sqe The read submission queue event
  */
-static void adc_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void adc_submit_fallback(const struct device *dev,
+				struct rtio_sqe *iodev_sqe)
 {
 	struct rtio_work_req *req = rtio_work_req_alloc();
 

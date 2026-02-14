@@ -25,8 +25,8 @@ struct i3c_rtio {
 	struct rtio *r;
 	struct mpsc io_q;
 	struct rtio_iodev iodev;
-	struct rtio_iodev_sqe *txn_head;
-	struct rtio_iodev_sqe *txn_curr;
+	struct rtio_sqe *txn_head;
+	struct rtio_sqe *txn_curr;
 	struct i3c_device_desc *i3c_desc;
 };
 
@@ -76,7 +76,7 @@ bool i3c_rtio_complete(struct i3c_rtio *ctx, int status);
  * @retval true Next submission is ready to start
  * @retval false No new submission to start or submissions are in progress already
  */
-bool i3c_rtio_submit(struct i3c_rtio *ctx, struct rtio_iodev_sqe *iodev_sqe);
+bool i3c_rtio_submit(struct i3c_rtio *ctx, struct rtio_sqe *iodev_sqe);
 
 /**
  * @brief Configure the I3C bus controller

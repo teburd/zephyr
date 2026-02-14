@@ -50,19 +50,19 @@ static inline size_t get_sqe_clock_cycles(struct rtio_sqe *sqe)
 
 static inline struct rtio_sqe *get_next_sqe(struct rtio_sqe *sqe)
 {
-	struct rtio_iodev_sqe *curr_iodev_sqe = CONTAINER_OF(sqe, struct rtio_iodev_sqe, sqe);
-	struct rtio_iodev_sqe *next_iodev_sqe = rtio_txn_next(curr_iodev_sqe);
+	struct rtio_sqe *curr_iodev_sqe = sqe;
+	struct rtio_sqe *next_iodev_sqe = rtio_txn_next(curr_iodev_sqe);
 
-	return &next_iodev_sqe->sqe;
+	return &next_iodev_sqe;
 }
 
 static inline size_t get_total_sqe_clock_cycles(struct rtio_sqe *head)
 {
 	size_t total_size = 0;
-	struct rtio_iodev_sqe *curr_iodev_sqe = CONTAINER_OF(head, struct rtio_iodev_sqe, sqe);
+	struct rtio_sqe *curr_iodev_sqe = head;
 
 	while (curr_iodev_sqe != NULL) {
-		total_size += get_sqe_clock_cycles(&curr_iodev_sqe->sqe);
+		total_size += get_sqe_clock_cycles(&curr_iodev_sqe);
 		curr_iodev_sqe = rtio_txn_next(curr_iodev_sqe);
 	}
 
@@ -386,7 +386,8 @@ static void lpspi_rtio_iodev_complete(const struct device *dev, int status)
 	}
 }
 
-static void lpspi_rtio_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void lpspi_rtio_submit(const struct device *dev,
+			      struct rtio_sqe *iodev_sqe)
 {
 	struct lpspi_data *data = (struct lpspi_data *)dev->data;
 	struct lpspi_driver_data *drv_data = (struct lpspi_driver_data *)data->driver_data;

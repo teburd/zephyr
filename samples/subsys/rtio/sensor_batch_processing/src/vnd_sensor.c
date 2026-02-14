@@ -53,14 +53,14 @@ static int vnd_sensor_iodev_read(const struct device *dev, uint8_t *buf,
 }
 
 static void vnd_sensor_iodev_execute(const struct device *dev,
-		struct rtio_iodev_sqe *iodev_sqe)
+		struct rtio_sqe *iodev_sqe)
 {
 	const struct vnd_sensor_config *config = dev->config;
 	uint8_t *buf = NULL;
 	uint32_t buf_len;
 	int result;
 
-	if (iodev_sqe->sqe.op == RTIO_OP_RX) {
+	if (iodev_sqe->op == RTIO_OP_RX) {
 		result = rtio_sqe_rx_buf(iodev_sqe, config->sample_size, config->sample_size, &buf,
 					 &buf_len);
 		if (result != 0) {
@@ -80,9 +80,9 @@ static void vnd_sensor_iodev_execute(const struct device *dev,
 	}
 }
 
-static void vnd_sensor_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+static void vnd_sensor_iodev_submit(struct rtio_sqe *iodev_sqe)
 {
-	struct vnd_sensor_data *data = (struct vnd_sensor_data *) iodev_sqe->sqe.iodev;
+	struct vnd_sensor_data *data = (struct vnd_sensor_data *) iodev_sqe->iodev;
 
 	mpsc_push(&data->io_q, &iodev_sqe->q);
 }
@@ -93,7 +93,8 @@ static void vnd_sensor_handle_int(const struct device *dev)
 	struct mpsc_node *node = mpsc_pop(&data->io_q);
 
 	if (node != NULL) {
-		struct rtio_iodev_sqe *iodev_sqe = CONTAINER_OF(node, struct rtio_iodev_sqe, q);
+		struct rtio_sqe *iodev_sqe = CONTAINER_OF(node,
+							  struct rtio_sqe, q);
 
 		vnd_sensor_iodev_execute(dev, iodev_sqe);
 	} else {

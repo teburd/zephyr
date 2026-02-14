@@ -207,7 +207,7 @@ struct lsm6dsvxxx_data {
 	uint8_t out_xl;
 	uint8_t out_tp;
 
-	struct rtio_iodev_sqe *streaming_sqe;
+	struct rtio_sqe *streaming_sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 
@@ -303,7 +303,7 @@ int lsm6dsvxxx_get_decoder(const struct device *dev, const struct sensor_decoder
 void lsm6dsvxxx_rtio_rd_transaction(const struct device *dev,
 				 uint8_t *regs, uint8_t regs_num,
 				 struct spi_buf *buf,
-				 struct rtio_iodev_sqe *iodev_sqe,
+				 struct rtio_sqe *iodev_sqe,
 				 rtio_callback_t complete_op_cb);
 #ifdef CONFIG_LSM6DSVXXX_TRIGGER
 int lsm6dsvxxx_init_interrupt(const struct device *dev);

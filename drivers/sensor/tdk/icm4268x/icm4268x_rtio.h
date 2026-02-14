@@ -10,9 +10,10 @@
 #include <zephyr/device.h>
 #include <zephyr/rtio/rtio.h>
 
-void icm4268x_submit(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe);
+void icm4268x_submit(const struct device *sensor, struct rtio_sqe *iodev_sqe);
 
-void icm4268x_submit_stream(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe);
+void icm4268x_submit_stream(const struct device *sensor,
+			    struct rtio_sqe *iodev_sqe);
 
 void icm4268x_fifo_event(const struct device *dev);
 

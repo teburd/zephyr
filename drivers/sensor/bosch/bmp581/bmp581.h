@@ -333,7 +333,7 @@ enum bmp581_event {
 struct bmp581_stream {
 	const struct device *dev;
 	struct gpio_callback cb;
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 	enum bmp581_event enabled_mask;
 	uint8_t fifo_thres;
 	atomic_t state;

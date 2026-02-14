@@ -15,8 +15,10 @@
 #include <zephyr/rtio/rtio.h>
 #include <zephyr/rtio/work.h>
 
-void lsm6dsvxxx_submit(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe);
-void lsm6dsvxxx_submit_stream(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe);
+void lsm6dsvxxx_submit(const struct device *sensor,
+		       struct rtio_sqe *iodev_sqe);
+void lsm6dsvxxx_submit_stream(const struct device *sensor,
+			      struct rtio_sqe *iodev_sqe);
 void lsm6dsvxxx_stream_irq_handler(const struct device *dev);
 
 int lsm6dsvxxx_gbias_config(const struct device *dev, enum sensor_channel chan,

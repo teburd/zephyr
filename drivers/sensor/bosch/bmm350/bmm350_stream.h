@@ -11,6 +11,6 @@
 int bmm350_stream_init(const struct device *dev);
 
 void bmm350_stream_submit(const struct device *dev,
-			  struct rtio_iodev_sqe *iodev_sqe);
+			  struct rtio_sqe *iodev_sqe);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_BMM350_STREAM_H_ */

@@ -233,7 +233,7 @@ struct adxl362_data {
 #ifdef CONFIG_ADXL362_STREAM
 	uint8_t status;
 	uint8_t fifo_ent[2];
-	struct rtio_iodev_sqe *sqe;
+	struct rtio_sqe *sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint64_t timestamp;
@@ -293,7 +293,8 @@ BUILD_ASSERT(sizeof(struct adxl362_fifo_data) % 4 == 0,
 #	define ADXL362_DEFAULT_ODR_ACC		ADXL362_ODR_400_HZ
 #endif
 
-void adxl362_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl362_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe);
 void adxl362_stream_irq_handler(const struct device *dev);
 int adxl362_fifo_read(const struct device *dev, void *buff, size_t length);
 
@@ -319,7 +320,7 @@ int adxl362_clear_data_ready(const struct device *dev);
 #ifdef CONFIG_SENSOR_ASYNC_API
 int adxl362_rtio_fetch(const struct device *dev,
 				struct adxl362_sample_data *sample_data);
-void adxl362_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl362_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 int adxl362_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 void adxl362_accel_convert(struct sensor_value *val, int accel,
 				  int range);

@@ -488,7 +488,7 @@ struct bmm350_stream {
 	atomic_t state;
 	const struct device *dev;
 	struct gpio_callback cb;
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 };
 
 struct bmm350_data {

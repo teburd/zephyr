@@ -44,11 +44,12 @@ static void iis3dwb_config_fifo(const struct device *dev, struct trigger_config 
 	}
 }
 
-void iis3dwb_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void iis3dwb_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe)
 {
 	struct iis3dwb_data *iis3dwb = dev->data;
 	const struct iis3dwb_config *config = dev->config;
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	struct trigger_config trig_cfg = {0};
 	bool cfg_changed = false;
 
@@ -158,7 +159,7 @@ static void iis3dwb_read_fifo_cb(struct rtio *r, const struct rtio_sqe *sqe, int
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(iis3dwb->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)iis3dwb->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) iis3dwb->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 
@@ -354,7 +355,7 @@ static void iis3dwb_read_status_cb(struct rtio *r, const struct rtio_sqe *sqe, i
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(iis3dwb->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)iis3dwb->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) iis3dwb->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 

@@ -13,6 +13,6 @@
 int rm3100_stream_init(const struct device *dev);
 
 void rm3100_stream_submit(const struct device *dev,
-			  struct rtio_iodev_sqe *iodev_sqe);
+			  struct rtio_sqe *iodev_sqe);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_RM3100_STREAM_H_ */

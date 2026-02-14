@@ -17,9 +17,11 @@ int lsm6dsv16x_gbias_config(const struct device *dev, enum sensor_channel chan,
 			    const struct sensor_value *val);
 int lsm6dsv16x_gbias_get_config(const struct device *dev, enum sensor_channel chan,
 				enum sensor_attribute attr, struct sensor_value *val);
-void lsm6dsv16x_submit(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe);
+void lsm6dsv16x_submit(const struct device *sensor,
+		       struct rtio_sqe *iodev_sqe);
 
-void lsm6dsv16x_submit_stream(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe);
+void lsm6dsv16x_submit_stream(const struct device *sensor,
+			      struct rtio_sqe *iodev_sqe);
 void lsm6dsv16x_stream_irq_handler(const struct device *dev);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_LSM6DSV16X_RTIO_H_ */

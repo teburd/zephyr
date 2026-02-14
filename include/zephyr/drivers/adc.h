@@ -971,7 +971,7 @@ typedef int (*adc_api_read)(const struct device *dev,
  *        stream request.
  */
 typedef void (*adc_api_submit)(const struct device *dev,
-				  struct rtio_iodev_sqe *sqe);
+				  struct rtio_sqe *sqe);
 
 /**
  * @brief Get the decoder associate with the given device

@@ -25,7 +25,7 @@ void mlx90394_async_fetch(struct k_work *work)
 	struct mlx90394_data *data = CONTAINER_OF(dwork, struct mlx90394_data, async_fetch_work);
 	const struct device *dev = data->dev;
 	const struct sensor_read_config *cfg =
-		data->work_ctx.iodev_sqe->sqe.iodev->data;
+		data->work_ctx.iodev_sqe->iodev->data;
 	struct mlx90394_encoded_data *edata;
 	uint32_t buf_len = sizeof(struct mlx90394_encoded_data);
 	uint8_t *buf;
@@ -94,10 +94,10 @@ void mlx90394_async_fetch(struct k_work *work)
 	rtio_iodev_sqe_ok(data->work_ctx.iodev_sqe, 0);
 }
 
-void mlx90394_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void mlx90394_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
 	int rc;
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	struct mlx90394_data *data = dev->data;
 	uint64_t cycles;
 

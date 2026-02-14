@@ -903,7 +903,7 @@ typedef int (*spi_api_io_async)(const struct device *dev,
  * @brief Callback API for submitting work to a SPI device with RTIO
  */
 typedef void (*spi_api_iodev_submit)(const struct device *dev,
-				     struct rtio_iodev_sqe *iodev_sqe);
+				     struct rtio_sqe *iodev_sqe);
 #endif /* CONFIG_SPI_RTIO */
 
 /**
@@ -1359,9 +1359,9 @@ static inline int spi_write_signal(const struct device *dev,
  *                  defined by SPI_IODEV_DEFINE.
  *                  Must live as long as the request is in flight.
  */
-static inline void spi_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+static inline void spi_iodev_submit(struct rtio_sqe *iodev_sqe)
 {
-	const struct spi_dt_spec *dt_spec = (const struct spi_dt_spec *)iodev_sqe->sqe.iodev->data;
+	const struct spi_dt_spec *dt_spec = (const struct spi_dt_spec *) iodev_sqe->iodev->data;
 	const struct device *dev = dt_spec->bus;
 	const struct spi_driver_api *api = (const struct spi_driver_api *)dev->api;
 

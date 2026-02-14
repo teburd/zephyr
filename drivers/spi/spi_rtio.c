@@ -18,9 +18,9 @@ const struct rtio_iodev_api spi_iodev_api = {
 	.submit = spi_iodev_submit,
 };
 
-static void spi_rtio_iodev_default_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
+static void spi_rtio_iodev_default_submit_sync(struct rtio_sqe *iodev_sqe)
 {
-	struct spi_dt_spec *dt_spec = iodev_sqe->sqe.iodev->data;
+	struct spi_dt_spec *dt_spec = iodev_sqe->iodev->data;
 	const struct device *dev = dt_spec->bus;
 	uint8_t num_msgs = 0;
 	int err = 0;
@@ -31,15 +31,15 @@ static void spi_rtio_iodev_default_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
 	 * This guarantees that linked items will be consumed in the expected
 	 * order, regardless pending items in the workqueue.
 	 */
-	struct rtio_iodev_sqe *txn_head = iodev_sqe;
-	struct rtio_iodev_sqe *txn_curr = iodev_sqe;
+	struct rtio_sqe *txn_head = iodev_sqe;
+	struct rtio_sqe *txn_curr = iodev_sqe;
 
 	/* We allocate the spi_buf's on the stack, to do so
 	 * the count of messages needs to be determined to
 	 * ensure we don't go over the statically sized array.
 	 */
 	do {
-		switch (txn_curr->sqe.op) {
+		switch (txn_curr->op) {
 		case RTIO_OP_RX:
 		case RTIO_OP_TX:
 		case RTIO_OP_TINY_TX:
@@ -47,8 +47,9 @@ static void spi_rtio_iodev_default_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
 			num_msgs++;
 			break;
 		default:
-			LOG_ERR("Invalid op code %d for submission %p", txn_curr->sqe.op,
-				(void *)&txn_curr->sqe);
+			LOG_ERR("Invalid op code %d for submission %p",
+				txn_curr->op,
+				(void *)&txn_curr);
 			err = -EIO;
 			break;
 		}
@@ -87,7 +88,7 @@ static void spi_rtio_iodev_default_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
 	txn_curr = txn_head;
 
 	for (size_t i = 0 ; i < num_msgs ; i++) {
-		struct rtio_sqe *sqe = &txn_curr->sqe;
+		struct rtio_sqe *sqe = &txn_curr;
 
 		switch (sqe->op) {
 		case RTIO_OP_RX:
@@ -135,7 +136,7 @@ static void spi_rtio_iodev_default_submit_sync(struct rtio_iodev_sqe *iodev_sqe)
 }
 
 void spi_rtio_iodev_default_submit(const struct device *dev,
-				   struct rtio_iodev_sqe *iodev_sqe)
+				   struct rtio_sqe *iodev_sqe)
 {
 	LOG_DBG("Executing fallback for dev: %p, sqe: %p", (void *)dev, (void *)iodev_sqe);
 
@@ -366,7 +367,8 @@ static bool spi_rtio_next(struct spi_rtio *ctx, bool completion)
 	struct mpsc_node *next = mpsc_pop(&ctx->io_q);
 
 	if (next != NULL) {
-		struct rtio_iodev_sqe *next_sqe = CONTAINER_OF(next, struct rtio_iodev_sqe, q);
+		struct rtio_sqe *next_sqe = CONTAINER_OF(next,
+							 struct rtio_sqe, q);
 
 		ctx->txn_head = next_sqe;
 		ctx->txn_curr = next_sqe;
@@ -382,7 +384,7 @@ static bool spi_rtio_next(struct spi_rtio *ctx, bool completion)
 
 bool spi_rtio_complete(struct spi_rtio *ctx, int status)
 {
-	struct rtio_iodev_sqe *txn_head = ctx->txn_head;
+	struct rtio_sqe *txn_head = ctx->txn_head;
 	bool result;
 
 	result = spi_rtio_next(ctx, true);
@@ -397,7 +399,7 @@ bool spi_rtio_complete(struct spi_rtio *ctx, int status)
 }
 
 bool spi_rtio_submit(struct spi_rtio *ctx,
-		     struct rtio_iodev_sqe *iodev_sqe)
+		     struct rtio_sqe *iodev_sqe)
 {
 	/** Done */
 	mpsc_push(&ctx->io_q, &iodev_sqe->q);

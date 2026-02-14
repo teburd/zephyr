@@ -15,9 +15,8 @@ K_SEM_DEFINE(work_handler_sem_2, 0, 1);
 K_SEM_DEFINE(work_handler_sem_3, 0, 1);
 static int work_handler_called;
 
-static void work_handler(struct rtio_iodev_sqe *iodev_sqe)
+static void work_handler(struct rtio_sqe *sqe)
 {
-	struct rtio_sqe *sqe = &iodev_sqe->sqe;
 	struct k_sem *sem = (struct k_sem *)sqe->userdata;
 
 	work_handler_called++;
@@ -25,14 +24,14 @@ static void work_handler(struct rtio_iodev_sqe *iodev_sqe)
 
 	k_sem_take(sem, K_FOREVER);
 
-	rtio_executor_ok(iodev_sqe, 0);
+	rtio_executor_ok(sqe, 0);
 }
 
-static void dummy_submit(struct rtio_iodev_sqe *iodev_sqe)
+static void dummy_submit(struct rtio_sqe *sqe)
 {
 	struct rtio_work_req *req = rtio_work_req_alloc();
 
-	rtio_work_req_submit(req, iodev_sqe, work_handler);
+	rtio_work_req_submit(req, sqe, work_handler);
 }
 
 struct rtio_iodev_api r_iodev_test_api = {

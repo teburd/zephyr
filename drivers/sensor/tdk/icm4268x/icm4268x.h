@@ -380,7 +380,7 @@ struct icm4268x_dev_data {
 	struct k_work work;
 #endif
 #ifdef CONFIG_ICM4268X_STREAM
-	struct rtio_iodev_sqe *streaming_sqe;
+	struct rtio_sqe *streaming_sqe;
 	struct icm4268x_bus bus;
 	uint8_t int_status;
 	uint16_t fifo_count;

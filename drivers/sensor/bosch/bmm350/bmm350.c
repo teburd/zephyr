@@ -821,9 +821,10 @@ static void bmm350_submit_one_shot(const struct device *dev, struct rtio_iodev_s
 	rtio_submit(bus->rtio.ctx, 0);
 }
 
-static void bmm350_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void bmm350_submit(const struct device *dev,
+			  struct rtio_sqe *iodev_sqe)
 {
-	struct sensor_read_config *cfg = (struct sensor_read_config *)iodev_sqe->sqe.iodev->data;
+	struct sensor_read_config *cfg = (struct sensor_read_config *) iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		bmm350_submit_one_shot(dev, iodev_sqe);

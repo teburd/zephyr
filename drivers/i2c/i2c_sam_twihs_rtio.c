@@ -214,7 +214,8 @@ static void i2c_sam_twihs_complete(const struct device *dev, int status)
 	}
 }
 
-static void i2c_sam_twihs_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void i2c_sam_twihs_submit(const struct device *dev,
+				 struct rtio_sqe *iodev_sqe)
 {
 	struct i2c_rtio *const ctx = ((struct i2c_sam_twihs_dev_data *)
 		dev->data)->ctx;

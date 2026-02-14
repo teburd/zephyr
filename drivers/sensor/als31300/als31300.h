@@ -182,7 +182,7 @@ int32_t als31300_convert_temperature(uint16_t raw_temp);
 #include <zephyr/drivers/sensor.h>
 
 struct rtio_sqe;
-struct rtio_iodev_sqe;
+struct rtio_sqe;
 struct sensor_read_config;
 struct sensor_decoder_api;
 
@@ -195,7 +195,7 @@ int als31300_encode(const struct device *dev, const struct sensor_read_config *r
 		    uint8_t trigger_status, uint8_t *buf);
 
 /* Async API functions */
-void als31300_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void als31300_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 int als31300_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 #endif
 

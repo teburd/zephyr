@@ -21,7 +21,7 @@ extern "C" {
  *
  * @param iodev_sqe Associated SQE operation.
  */
-typedef void (*rtio_work_submit_t)(struct rtio_iodev_sqe *iodev_sqe);
+typedef void (*rtio_work_submit_t)(struct rtio_sqe *iodev_sqe);
 
 /**
  * @brief RTIO Work request.
@@ -36,7 +36,7 @@ struct rtio_work_req {
 	/** Handle to IODEV SQE containing the operation.
 	 * This is filled inside @ref rtio_work_req_submit.
 	 */
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 
 	/** Callback handler where synchronous operation may be executed.
 	 * This is filled inside @ref rtio_work_req_submit.
@@ -63,7 +63,7 @@ struct rtio_work_req *rtio_work_req_alloc(void);
  * @param handler Callback to handler where work operation is performed.
  */
 void rtio_work_req_submit(struct rtio_work_req *req,
-			  struct rtio_iodev_sqe *iodev_sqe,
+			  struct rtio_sqe *iodev_sqe,
 			  rtio_work_submit_t handler);
 
 /**

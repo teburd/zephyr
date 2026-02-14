@@ -16,12 +16,13 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(LIS2DUX12_RTIO);
 
-void lis2dux12_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void lis2dux12_submit_stream(const struct device *dev,
+			     struct rtio_sqe *iodev_sqe)
 {
 	struct lis2dux12_data *lis2dux12 = dev->data;
 	const struct lis2dux12_config *config = dev->config;
 	const struct lis2dux12_chip_api *chip_api = config->chip_api;
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	struct trigger_config trig_cfg = { 0 };
 
 	gpio_pin_interrupt_configure_dt(lis2dux12->drdy_gpio, GPIO_INT_DISABLE);
@@ -100,7 +101,7 @@ static void lis2dux12_read_fifo_cb(struct rtio *r, const struct rtio_sqe *sqe,
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(lis2dux12->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)lis2dux12->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) lis2dux12->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 
@@ -299,7 +300,7 @@ static void lis2dux12_read_status_cb(struct rtio *r, const struct rtio_sqe *sqe,
 	/* At this point, no sqe request is queued should be considered as a bug */
 	__ASSERT_NO_MSG(lis2dux12->streaming_sqe != NULL);
 
-	read_config = (struct sensor_read_config *)lis2dux12->streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) lis2dux12->streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 	__ASSERT_NO_MSG(read_config->is_streaming == true);
 

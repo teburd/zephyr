@@ -57,7 +57,7 @@ struct max32_adc_data {
 	uint32_t sample_channels;
 	const uint8_t resolution;
 #ifdef CONFIG_ADC_MAX32_STREAM
-	struct rtio_iodev_sqe *sqe;
+	struct rtio_sqe *sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint64_t timestamp;
@@ -107,7 +107,7 @@ static void adc_complete_cb(void *req, int error)
 static void adc_complete_rtio_cb(const struct device *dev)
 {
 	struct max32_adc_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = data->sqe;
+	struct rtio_sqe *iodev_sqe = data->sqe;
 
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 }
@@ -247,10 +247,11 @@ static int start_read_stream(const struct device *dev, const struct adc_sequence
 	return adc_context_wait_for_completion(&data->ctx);
 }
 
-void adc_max32_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void adc_max32_submit_stream(const struct device *dev,
+			     struct rtio_sqe *iodev_sqe)
 {
 	struct max32_adc_data *data = (struct max32_adc_data *)dev->data;
-	const struct adc_read_config *read_cfg = iodev_sqe->sqe.iodev->data;
+	const struct adc_read_config *read_cfg = iodev_sqe->iodev->data;
 	int rc;
 
 	if (data->no_mem == 1) {

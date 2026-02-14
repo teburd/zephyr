@@ -138,22 +138,22 @@ void __weak sys_trace_rtio_cqe_consume_exit_user(const struct rtio *r, const str
 	printk("cqe_consume_exit: rtio: %p\t cqe: %p\n", r, cqe);
 }
 void __weak sys_trace_rtio_txn_next_enter_user(const struct rtio *r,
-					       const struct rtio_iodev_sqe *iodev_sqe)
+					       const struct rtio_sqe *iodev_sqe)
 {
 	printk("txn_next_enter: rtio: %p\t iodev_sqe: %p\n", r, iodev_sqe);
 }
 void __weak sys_trace_rtio_txn_next_exit_user(const struct rtio *r,
-					      const struct rtio_iodev_sqe *iodev_sqe)
+					      const struct rtio_sqe *iodev_sqe)
 {
 	printk("txn_next_exit: rtio: %p\t iodev_sqe: %p\n", r, iodev_sqe);
 }
 void __weak sys_trace_rtio_chain_next_enter_user(const struct rtio *r,
-						 const struct rtio_iodev_sqe *iodev_sqe)
+						 const struct rtio_sqe *iodev_sqe)
 {
 	printk("chain_next_enter: rtio: %p\t iodev_sqe: %p\n", r, iodev_sqe);
 }
 void __weak sys_trace_rtio_chain_next_exit_user(const struct rtio *r,
-						const struct rtio_iodev_sqe *iodev_sqe)
+						const struct rtio_sqe *iodev_sqe)
 {
 	printk("chain_next_exit: rtio: %p\t iodev_sqe: %p\n", r, iodev_sqe);
 }
@@ -457,22 +457,26 @@ void sys_trace_rtio_cqe_consume_exit(const struct rtio *r, const struct rtio_cqe
 	sys_trace_rtio_cqe_consume_exit_user(r, cqe);
 }
 
-void sys_trace_rtio_txn_next_enter(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe)
+void sys_trace_rtio_txn_next_enter(const struct rtio *r,
+				   const struct rtio_sqe *iodev_sqe)
 {
 	sys_trace_rtio_txn_next_enter_user(r, iodev_sqe);
 }
 
-void sys_trace_rtio_txn_next_exit(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe)
+void sys_trace_rtio_txn_next_exit(const struct rtio *r,
+				  const struct rtio_sqe *iodev_sqe)
 {
 	sys_trace_rtio_txn_next_exit_user(r, iodev_sqe);
 }
 
-void sys_trace_rtio_chain_next_enter(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe)
+void sys_trace_rtio_chain_next_enter(const struct rtio *r,
+				     const struct rtio_sqe *iodev_sqe)
 {
 	sys_trace_rtio_chain_next_enter_user(r, iodev_sqe);
 }
 
-void sys_trace_rtio_chain_next_exit(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe)
+void sys_trace_rtio_chain_next_exit(const struct rtio *r,
+				    const struct rtio_sqe *iodev_sqe)
 {
 	sys_trace_rtio_chain_next_exit_user(r, iodev_sqe);
 }

@@ -137,7 +137,7 @@ struct mmc56x3_encoded_data {
 
 int mmc56x3_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 
-void mmc56x3_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void mmc56x3_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 
 int mmc56x3_sample_fetch(const struct device *dev, enum sensor_channel chan);
 

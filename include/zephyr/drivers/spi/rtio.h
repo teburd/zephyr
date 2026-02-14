@@ -23,8 +23,8 @@ struct spi_rtio {
 	struct rtio *r;
 	struct mpsc io_q;
 	struct rtio_iodev iodev;
-	struct rtio_iodev_sqe *txn_head;
-	struct rtio_iodev_sqe *txn_curr;
+	struct rtio_sqe *txn_head;
+	struct rtio_sqe *txn_curr;
 	struct spi_dt_spec dt_spec;
 };
 
@@ -84,7 +84,7 @@ bool spi_rtio_complete(struct spi_rtio *ctx, int status);
  * @retval true Next submission is ready to start
  * @retval false No new submission to start or submissions are in progress already
  */
-bool spi_rtio_submit(struct spi_rtio *ctx, struct rtio_iodev_sqe *iodev_sqe);
+bool spi_rtio_submit(struct spi_rtio *ctx, struct rtio_sqe *iodev_sqe);
 
 /**
  * @brief Perform a SPI Transfer (transceive) in a blocking call
@@ -105,7 +105,7 @@ int spi_rtio_transceive(struct spi_rtio *ctx,
  * native support. For details, see @ref spi_iodev_submit.
  */
 void spi_rtio_iodev_default_submit(const struct device *dev,
-				   struct rtio_iodev_sqe *iodev_sqe);
+				   struct rtio_sqe *iodev_sqe);
 
 #ifdef __cplusplus
 }

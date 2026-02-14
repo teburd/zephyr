@@ -22,7 +22,7 @@ static struct sensing_sensor_register_info hinge_reg = {
 };
 
 struct hinge_angle_context {
-	struct rtio_iodev_sqe *sqe;
+	struct rtio_sqe *sqe;
 	sensing_sensor_handle_t reporters[HINGE_REPORTER_NUM];
 	struct sensing_sensor_value_3d_q31 sample[HINGE_REPORTER_NUM];
 	int has_sample[HINGE_REPORTER_NUM];
@@ -80,7 +80,7 @@ static int hinge_attr_set(const struct device *dev,
 }
 
 static void hinge_submit(const struct device *dev,
-		struct rtio_iodev_sqe *sqe)
+		struct rtio_sqe *sqe)
 {
 	struct hinge_angle_context *data = dev->data;
 
@@ -145,7 +145,7 @@ static void hinge_reporter_on_data_event(sensing_sensor_handle_t handle,
 
 		sample->readings[0].v = calc_hinge_angle(data);
 
-		struct rtio_iodev_sqe *sqe = data->sqe;
+		struct rtio_sqe *sqe = data->sqe;
 
 		data->sqe = NULL;
 		rtio_iodev_sqe_ok(sqe, 0);

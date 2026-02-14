@@ -749,7 +749,8 @@ static void spi_max32_iodev_complete(const struct device *dev, int status)
 	}
 }
 
-static void api_iodev_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void api_iodev_submit(const struct device *dev,
+			     struct rtio_sqe *iodev_sqe)
 {
 	struct max32_spi_data *data = dev->data;
 	struct spi_rtio *rtio_ctx = data->rtio_ctx;

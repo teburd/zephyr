@@ -117,7 +117,7 @@ static int iis3dwb_attr_set(const struct device *dev, enum sensor_channel chan,
 static void iis3dwb_one_shot_complete_cb(struct rtio *ctx, const struct rtio_sqe *sqe, int result,
 					 void *arg)
 {
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	int err = 0;
 
 	ARG_UNUSED(result);
@@ -131,9 +131,10 @@ static void iis3dwb_one_shot_complete_cb(struct rtio *ctx, const struct rtio_sqe
 	}
 }
 
-static void iis3dwb_submit_one_shot(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void iis3dwb_submit_one_shot(const struct device *dev,
+				    struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
 	uint32_t min_buf_len = sizeof(struct iis3dwb_rtio_data);
@@ -245,9 +246,9 @@ static void iis3dwb_submit_one_shot(const struct device *dev, struct rtio_iodev_
 	}
 }
 
-void iis3dwb_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void iis3dwb_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		iis3dwb_submit_one_shot(dev, iodev_sqe);

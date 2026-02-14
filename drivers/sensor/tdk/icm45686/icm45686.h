@@ -106,7 +106,7 @@ struct icm45686_triggers {
 struct icm45686_stream {
 	struct gpio_callback cb;
 	const struct device *dev;
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 	atomic_t state;
 	struct {
 		struct {

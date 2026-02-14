@@ -84,7 +84,7 @@ static void als31300_complete_result(struct rtio *ctx, const struct rtio_sqe *sq
 				     void *arg)
 {
 	ARG_UNUSED(result);
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	struct rtio_cqe *cqe;
 	int err = 0;
 
@@ -144,9 +144,10 @@ int als31300_encode(const struct device *dev, const struct sensor_read_config *r
 /**
  * @brief RTIO submit function using chained SQE approach
  */
-static void als31300_submit_one_shot(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void als31300_submit_one_shot(const struct device *dev,
+				     struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	uint32_t min_buf_len = sizeof(struct als31300_encoded_data);
 	int err;
 	uint8_t *buf;
@@ -199,7 +200,7 @@ static void als31300_submit_one_shot(const struct device *dev, struct rtio_iodev
 /**
  * @brief RTIO submit function
  */
-void als31300_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void als31300_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
 	als31300_submit_one_shot(dev, iodev_sqe);
 }

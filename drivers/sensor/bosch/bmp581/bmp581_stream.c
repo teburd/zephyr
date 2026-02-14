@@ -25,7 +25,7 @@ enum bmp581_stream_state {
 static inline void bmp581_stream_result(const struct device *dev, int err)
 {
 	struct bmp581_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 
 	data->stream.iodev_sqe = NULL;
 	if (err < 0) {
@@ -271,9 +271,9 @@ static inline int bmp581_stream_prep_fifo_wm_async(const struct device *dev)
 }
 
 void bmp581_stream_submit(const struct device *dev,
-			  struct rtio_iodev_sqe *iodev_sqe)
+			  struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *read_config = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *read_config = iodev_sqe->iodev->data;
 	struct bmp581_data *data = dev->data;
 	const struct bmp581_config *cfg = dev->config;
 	int err;

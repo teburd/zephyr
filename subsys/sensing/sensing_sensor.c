@@ -13,9 +13,9 @@
 
 LOG_MODULE_DECLARE(sensing, CONFIG_SENSING_LOG_LEVEL);
 
-static void sensing_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+static void sensing_iodev_submit(struct rtio_sqe *iodev_sqe)
 {
-	struct sensing_sensor *sensor = (struct sensing_sensor *)iodev_sqe->sqe.userdata;
+	struct sensing_sensor *sensor = (struct sensing_sensor *) iodev_sqe->userdata;
 	const struct device *dev = sensor->dev;
 	const struct sensor_driver_api *api = dev->api;
 

@@ -723,7 +723,8 @@ static void spi_stm32_iodev_complete(const struct device *dev, int status)
 	}
 }
 
-static void spi_stm32_iodev_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void spi_stm32_iodev_submit(const struct device *dev,
+				   struct rtio_sqe *iodev_sqe)
 {
 	struct spi_stm32_data *data = dev->data;
 	struct spi_rtio *rtio_ctx = data->rtio_ctx;

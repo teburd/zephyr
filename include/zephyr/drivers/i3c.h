@@ -876,7 +876,7 @@ __subsystem struct i3c_driver_api {
 	 * @return See i3c_iodev_submit()
 	 */
 	void (*iodev_submit)(const struct device *dev,
-			     struct rtio_iodev_sqe *iodev_sqe);
+			     struct rtio_sqe *iodev_sqe);
 #endif /* CONFIG_I3C_RTIO */
 };
 
@@ -2723,7 +2723,8 @@ struct i3c_iodev_data {
  * @param iodev_sqe Prepared submissions queue entry connected to an iodev
  *                  defined by I3C_DT_IODEV_DEFINE.
  */
-void i3c_iodev_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void i3c_iodev_submit_fallback(const struct device *dev,
+			       struct rtio_sqe *iodev_sqe);
 
 /**
  * @brief Submit request(s) to an I3C device with RTIO
@@ -2731,10 +2732,10 @@ void i3c_iodev_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *
  * @param iodev_sqe Prepared submissions queue entry connected to an iodev
  *                  defined by I3C_DT_IODEV_DEFINE.
  */
-static inline void i3c_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+static inline void i3c_iodev_submit(struct rtio_sqe *iodev_sqe)
 {
 	const struct i3c_iodev_data *data =
-		(const struct i3c_iodev_data *)iodev_sqe->sqe.iodev->data;
+		(const struct i3c_iodev_data *) iodev_sqe->iodev->data;
 	const struct i3c_driver_api *api = (const struct i3c_driver_api *)data->bus->api;
 
 	if (api->iodev_submit == NULL) {

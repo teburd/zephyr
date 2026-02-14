@@ -18,9 +18,10 @@
 
 LOG_MODULE_DECLARE(bma4xx, CONFIG_SENSOR_LOG_LEVEL);
 
-void bma4xx_submit_stream(const struct device *sensor, struct rtio_iodev_sqe *iodev_sqe)
+void bma4xx_submit_stream(const struct device *sensor,
+			  struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	struct bma4xx_data *data = sensor->data;
 	struct bma4xx_runtime_config new_config = data->cfg;
 	const struct bma4xx_config *cfg_bma4xx = sensor->config;
@@ -91,7 +92,7 @@ static void bma4xx_complete_cb(struct rtio *r, const struct rtio_sqe *sqe, int r
 	const struct device *dev = arg;
 	struct bma4xx_data *drv_data = dev->data;
 	const struct bma4xx_config *drv_cfg = dev->config;
-	struct rtio_iodev_sqe *iodev_sqe = sqe->userdata;
+	struct rtio_sqe *iodev_sqe = sqe->userdata;
 
 	rtio_iodev_sqe_ok(iodev_sqe, drv_data->fifo_count);
 
@@ -111,7 +112,7 @@ static void bma4xx_fifo_count_cb(struct rtio *r, const struct rtio_sqe *sqe, int
 	drv_data->fifo_count = fifo_count;
 
 	/* Pull a operation from our device iodev queue, validated to only be reads */
-	struct rtio_iodev_sqe *iodev_sqe = drv_data->streaming_sqe;
+	struct rtio_sqe *iodev_sqe = drv_data->streaming_sqe;
 
 	drv_data->streaming_sqe = NULL;
 
@@ -201,14 +202,14 @@ static void bma4xx_int_status_cb(struct rtio *r, const struct rtio_sqe *sqr, int
 	struct bma4xx_data *drv_data = dev->data;
 	const struct bma4xx_config *drv_cfg = dev->config;
 	struct rtio_iodev *iodev = drv_data->iodev;
-	struct rtio_iodev_sqe *streaming_sqe = drv_data->streaming_sqe;
+	struct rtio_sqe *streaming_sqe = drv_data->streaming_sqe;
 	struct sensor_read_config *read_config;
 
 	if (streaming_sqe == NULL) {
 		return;
 	}
 
-	read_config = (struct sensor_read_config *)streaming_sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) streaming_sqe->iodev->data;
 	__ASSERT_NO_MSG(read_config != NULL);
 
 	if (!read_config->is_streaming) {

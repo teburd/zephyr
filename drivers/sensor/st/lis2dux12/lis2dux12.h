@@ -133,7 +133,7 @@ struct lis2dux12_data {
 #endif
 
  #ifdef CONFIG_LIS2DUX12_STREAM
-	struct rtio_iodev_sqe *streaming_sqe;
+	struct rtio_sqe *streaming_sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint64_t timestamp;

@@ -34,7 +34,7 @@ struct afbr_s50_data {
 	 * which should be kept stateless.
 	 */
 	struct {
-		struct rtio_iodev_sqe *iodev_sqe;
+		struct rtio_sqe *iodev_sqe;
 	} rtio;
 	/** Not relevant for the driver (other than Argus section). Useful
 	 * for platform abstractions present under modules sub-directory.
@@ -65,7 +65,7 @@ struct afbr_s50_config {
 
 static inline void handle_error_on_result(struct afbr_s50_data *data, int result)
 {
-	struct rtio_iodev_sqe *iodev_sqe = data->rtio.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->rtio.iodev_sqe;
 	status_t status;
 
 	(void)Argus_StopMeasurementTimer(data->platform.argus.handle);
@@ -185,13 +185,13 @@ static status_t data_ready_callback(status_t status, argus_hnd_t *hnd)
 }
 
 static void afbr_s50_submit_single_shot(const struct device *dev,
-					struct rtio_iodev_sqe *iodev_sqe)
+					struct rtio_sqe *iodev_sqe)
 {
 	struct afbr_s50_data *data = dev->data;
 
 	/** If there's an op in process, reject ignore requests */
 	if (data->rtio.iodev_sqe != NULL &&
-	    FIELD_GET(RTIO_SQE_CANCELED, data->rtio.iodev_sqe->sqe.flags) == 0) {
+	    FIELD_GET(RTIO_SQE_CANCELED, data->rtio.iodev_sqe->flags) == 0) {
 		LOG_WRN("Operation in progress. Rejecting request");
 
 		rtio_iodev_sqe_err(iodev_sqe, -EBUSY);
@@ -251,9 +251,10 @@ static void afbr_s50_submit_streaming(const struct device *dev,
 	}
 }
 
-static void afbr_s50_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void afbr_s50_submit(const struct device *dev,
+			    struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		afbr_s50_submit_single_shot(dev, iodev_sqe);

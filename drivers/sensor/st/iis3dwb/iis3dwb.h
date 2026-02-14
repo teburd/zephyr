@@ -68,7 +68,7 @@ struct iis3dwb_data {
 
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
-	struct rtio_iodev_sqe *streaming_sqe;
+	struct rtio_sqe *streaming_sqe;
 
 #ifdef CONFIG_IIS3DWB_STREAM
 	uint64_t timestamp;

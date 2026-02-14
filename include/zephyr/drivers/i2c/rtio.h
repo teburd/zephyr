@@ -24,8 +24,8 @@ struct i2c_rtio {
 	struct rtio *r;
 	struct mpsc io_q;
 	struct rtio_iodev iodev;
-	struct rtio_iodev_sqe *txn_head;
-	struct rtio_iodev_sqe *txn_curr;
+	struct rtio_sqe *txn_head;
+	struct rtio_sqe *txn_curr;
 	struct i2c_dt_spec dt_spec;
 };
 
@@ -76,7 +76,7 @@ bool i2c_rtio_complete(struct i2c_rtio *ctx, int status);
  * @retval true Next submission is ready to start
  * @retval false No new submission to start or submissions are in progress already
  */
-bool i2c_rtio_submit(struct i2c_rtio *ctx, struct rtio_iodev_sqe *iodev_sqe);
+bool i2c_rtio_submit(struct i2c_rtio *ctx, struct rtio_sqe *iodev_sqe);
 
 /**
  * @brief Configure the I2C bus controller

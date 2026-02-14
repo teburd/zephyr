@@ -11,6 +11,7 @@
 #include <zephyr/device.h>
 #include <zephyr/rtio/rtio.h>
 
-void bmi08x_accel_async_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void bmi08x_accel_async_submit(const struct device *dev,
+			       struct rtio_sqe *iodev_sqe);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_BMI08X_BMI08X_ACCEL_ASYNC_H_ */

@@ -70,7 +70,7 @@ static void pat9136_complete_result(struct rtio *ctx,
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	struct rtio_cqe *cqe;
 	int err = 0;
 
@@ -196,9 +196,10 @@ static void pat9136_submit_one_shot(const struct device *dev, struct rtio_iodev_
 	rtio_submit(data->rtio.ctx, 0);
 }
 
-static void pat9136_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void pat9136_submit(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		pat9136_submit_one_shot(dev, iodev_sqe);

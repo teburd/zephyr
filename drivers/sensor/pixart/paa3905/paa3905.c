@@ -32,7 +32,7 @@ static void paa3905_complete_result(struct rtio *ctx,
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)sqe->userdata;
 	struct rtio_cqe *cqe;
 	int err = 0;
 
@@ -53,9 +53,10 @@ static void paa3905_complete_result(struct rtio *ctx,
 	LOG_DBG("One-shot fetch completed");
 }
 
-static void paa3905_submit_one_shot(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void paa3905_submit_one_shot(const struct device *dev,
+				    struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	struct paa3905_data *data = dev->data;
 	const size_t num_channels = cfg->count;
@@ -117,9 +118,10 @@ static void paa3905_submit_one_shot(const struct device *dev, struct rtio_iodev_
 	rtio_submit(data->rtio.ctx, 0);
 }
 
-static void paa3905_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void paa3905_submit(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		paa3905_submit_one_shot(dev, iodev_sqe);

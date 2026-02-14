@@ -45,9 +45,9 @@ static int icm4268x_rtio_sample_fetch(const struct device *dev, int16_t readings
 	return 0;
 }
 
-void icm4268x_submit_one_shot_sync(struct rtio_iodev_sqe *iodev_sqe)
+void icm4268x_submit_one_shot_sync(struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
@@ -85,7 +85,8 @@ void icm4268x_submit_one_shot_sync(struct rtio_iodev_sqe *iodev_sqe)
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 }
 
-static void icm4268x_submit_one_shot(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void icm4268x_submit_one_shot(const struct device *dev,
+				     struct rtio_sqe *iodev_sqe)
 {
 	struct rtio_work_req *req = rtio_work_req_alloc();
 
@@ -99,9 +100,9 @@ static void icm4268x_submit_one_shot(const struct device *dev, struct rtio_iodev
 	rtio_work_req_submit(req, iodev_sqe, icm4268x_submit_one_shot_sync);
 }
 
-void icm4268x_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void icm4268x_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		icm4268x_submit_one_shot(dev, iodev_sqe);

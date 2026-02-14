@@ -63,7 +63,7 @@ void sys_trace_timer_stop_fn_expiry_exit(struct k_timer *timer);
 struct rtio;
 struct rtio_sqe;
 struct rtio_cqe;
-struct rtio_iodev_sqe;
+struct rtio_sqe;
 struct gpio_callback;
 typedef uint8_t gpio_pin_t;
 typedef uint32_t gpio_flags_t;
@@ -124,10 +124,14 @@ void sys_trace_rtio_cqe_acquire_exit(const struct rtio *r, const struct rtio_cqe
 void sys_trace_rtio_cqe_release(const struct rtio *r, const struct rtio_cqe *cqe);
 void sys_trace_rtio_cqe_consume_enter(const struct rtio *r);
 void sys_trace_rtio_cqe_consume_exit(const struct rtio *r, const struct rtio_cqe *cqe);
-void sys_trace_rtio_txn_next_enter(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe);
-void sys_trace_rtio_txn_next_exit(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe);
-void sys_trace_rtio_chain_next_enter(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe);
-void sys_trace_rtio_chain_next_exit(const struct rtio *r, const struct rtio_iodev_sqe *iodev_sqe);
+void sys_trace_rtio_txn_next_enter(const struct rtio *r,
+				   const struct rtio_sqe *iodev_sqe);
+void sys_trace_rtio_txn_next_exit(const struct rtio *r,
+				  const struct rtio_sqe *iodev_sqe);
+void sys_trace_rtio_chain_next_enter(const struct rtio *r,
+				     const struct rtio_sqe *iodev_sqe);
+void sys_trace_rtio_chain_next_exit(const struct rtio *r,
+				    const struct rtio_sqe *iodev_sqe);
 
 #define sys_port_trace_k_thread_foreach_enter()
 #define sys_port_trace_k_thread_foreach_exit()

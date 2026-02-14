@@ -13,6 +13,7 @@
 
 int bmp581_stream_init(const struct device *dev);
 
-void bmp581_stream_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void bmp581_stream_submit(const struct device *dev,
+			  struct rtio_sqe *iodev_sqe);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_BMP581_STREAM_H_ */

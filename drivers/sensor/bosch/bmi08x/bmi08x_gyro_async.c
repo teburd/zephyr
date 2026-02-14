@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(BMI08X_GYRO_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 static void bmi08x_complete_result(struct rtio *ctx, const struct rtio_sqe *sqe, int result,
 				   void *arg)
 {
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)arg;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)arg;
 
 	(void)rtio_flush_completion_queue(ctx);
 	if (result >= 0) {
@@ -76,9 +76,10 @@ static void bmi08x_submit_one_shot(const struct device *dev, struct rtio_iodev_s
 	rtio_submit(config->rtio_bus.ctx, 0);
 }
 
-void bmi08x_gyro_async_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void bmi08x_gyro_async_submit(const struct device *dev,
+			      struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 
 	if (!cfg->is_streaming) {
 		bmi08x_submit_one_shot(dev, iodev_sqe);

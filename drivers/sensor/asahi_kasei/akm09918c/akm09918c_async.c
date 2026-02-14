@@ -34,9 +34,9 @@ static int akm09918c_flush_cqes(struct rtio *rtio_ctx)
 	return res;
 }
 
-void akm09918c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void akm09918c_submit(const struct device *dev, struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *cfg = iodev_sqe->iodev->data;
 	struct akm09918c_data *data = dev->data;
 	const struct sensor_chan_spec *const channels = cfg->channels;
 	const size_t num_channels = cfg->count;
@@ -76,11 +76,11 @@ void akm09918_after_start_cb(struct rtio *rtio_ctx, const struct rtio_sqe *sqe,
 {
 	ARG_UNUSED(result);
 
-	const struct rtio_iodev_sqe *parent_iodev_sqe = (struct rtio_iodev_sqe *)arg0;
-	const struct sensor_read_config *cfg = parent_iodev_sqe->sqe.iodev->data;
+	const struct rtio_sqe *parent_iodev_sqe = (struct rtio_sqe *)arg0;
+	const struct sensor_read_config *cfg = parent_iodev_sqe->iodev->data;
 	const struct device *dev = cfg->sensor;
 	struct akm09918c_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)arg0;
+	struct rtio_sqe *iodev_sqe = (struct rtio_sqe *)arg0;
 	uint64_t cycles;
 	int rc;
 
@@ -157,8 +157,8 @@ void akm09918_complete_cb(struct rtio *rtio_ctx, const struct rtio_sqe *sqe, int
 {
 	ARG_UNUSED(result);
 
-	struct rtio_iodev_sqe *parent_iodev_sqe = (struct rtio_iodev_sqe *)arg0;
-	struct rtio_sqe *parent_sqe = &parent_iodev_sqe->sqe;
+	struct rtio_sqe *parent_iodev_sqe = (struct rtio_sqe *)arg0;
+	struct rtio_sqe *parent_sqe = &parent_iodev_sqe;
 	struct akm09918c_encoded_data *edata =
 		(struct akm09918c_encoded_data *)(parent_sqe->rx.buf);
 	int rc;

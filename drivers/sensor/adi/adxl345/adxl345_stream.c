@@ -11,10 +11,11 @@
 
 LOG_MODULE_DECLARE(ADXL345, CONFIG_SENSOR_LOG_LEVEL);
 
-void adxl345_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void adxl345_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe)
 {
 	const struct sensor_read_config *cfg =
-			(const struct sensor_read_config *) iodev_sqe->sqe.iodev->data;
+			(const struct sensor_read_config *) iodev_sqe->iodev->data;
 	struct adxl345_dev_data *data = (struct adxl345_dev_data *)dev->data;
 	const struct adxl345_dev_config *cfg_345 = dev->config;
 	uint8_t int_value = (uint8_t)~ADXL345_INT_MAP_WATERMARK_MSK;
@@ -112,7 +113,7 @@ static void adxl345_fifo_read_cb(struct rtio *rtio_ctx, const struct rtio_sqe *s
 	const struct device *dev = (const struct device *)arg;
 	struct adxl345_dev_data *data = (struct adxl345_dev_data *) dev->data;
 	const struct adxl345_dev_config *cfg = (const struct adxl345_dev_config *) dev->config;
-	struct rtio_iodev_sqe *iodev_sqe = sqe->userdata;
+	struct rtio_sqe *iodev_sqe = sqe->userdata;
 
 	if (data->fifo_samples == 0) {
 		data->fifo_total_bytes = 0;
@@ -130,7 +131,7 @@ static void adxl345_process_fifo_samples_cb(struct rtio *r, const struct rtio_sq
 	const struct device *dev = (const struct device *)arg;
 	struct adxl345_dev_data *data = (struct adxl345_dev_data *) dev->data;
 	const struct adxl345_dev_config *cfg = (const struct adxl345_dev_config *) dev->config;
-	struct rtio_iodev_sqe *current_sqe = data->sqe;
+	struct rtio_sqe *current_sqe = data->sqe;
 	uint16_t fifo_samples = (data->fifo_ent[0]) & SAMPLE_MASK;
 	size_t sample_set_size = SAMPLE_SIZE;
 	uint16_t fifo_bytes = fifo_samples * SAMPLE_SIZE;
@@ -247,7 +248,7 @@ static void adxl345_process_status1_cb(struct rtio *r, const struct rtio_sqe *sq
 	const struct device *dev = (const struct device *)arg;
 	struct adxl345_dev_data *data = (struct adxl345_dev_data *) dev->data;
 	const struct adxl345_dev_config *cfg = (const struct adxl345_dev_config *) dev->config;
-	struct rtio_iodev_sqe *current_sqe = data->sqe;
+	struct rtio_sqe *current_sqe = data->sqe;
 	struct sensor_read_config *read_config;
 	uint8_t status1 = data->status1;
 
@@ -255,7 +256,7 @@ static void adxl345_process_status1_cb(struct rtio *r, const struct rtio_sqe *sq
 		return;
 	}
 
-	read_config = (struct sensor_read_config *)data->sqe->sqe.iodev->data;
+	read_config = (struct sensor_read_config *) data->sqe->iodev->data;
 
 	if (read_config == NULL) {
 		return;

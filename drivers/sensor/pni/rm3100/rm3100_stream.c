@@ -22,7 +22,7 @@ static void rm3100_complete_result(struct rtio *ctx, const struct rtio_sqe *sqe,
 {
 	const struct device *dev = (const struct device *)arg;
 	struct rm3100_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 	struct rtio_cqe *cqe;
 	struct rm3100_encoded_data *edata = sqe->userdata;
 
@@ -186,9 +186,9 @@ static void rm3100_gpio_callback(const struct device *gpio_dev,
 }
 
 void rm3100_stream_submit(const struct device *dev,
-			  struct rtio_iodev_sqe *iodev_sqe)
+			  struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *read_config = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *read_config = iodev_sqe->iodev->data;
 	struct rm3100_data *data = dev->data;
 	const struct rm3100_config *cfg = dev->config;
 	int err;

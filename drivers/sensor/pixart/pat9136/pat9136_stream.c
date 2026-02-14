@@ -50,7 +50,7 @@ static void pat9136_complete_result(struct rtio *ctx,
 {
 	const struct device *dev = (const struct device *)arg;
 	struct pat9136_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 	struct pat9136_encoded_data *edata = sqe->userdata;
 
 	data->stream.iodev_sqe = NULL;
@@ -315,9 +315,9 @@ static inline bool settings_changed(const struct pat9136_stream *a,
 }
 
 void pat9136_stream_submit(const struct device *dev,
-			   struct rtio_iodev_sqe *iodev_sqe)
+			   struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *read_config = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *read_config = iodev_sqe->iodev->data;
 	struct pat9136_data *data = dev->data;
 	const struct pat9136_config *cfg = dev->config;
 	int err;

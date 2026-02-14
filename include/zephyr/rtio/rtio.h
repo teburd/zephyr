@@ -327,7 +327,7 @@ static inline uint32_t rtio_sqe_acquirable(struct rtio *r)
 static inline struct rtio_sqe *rtio_sqe_acquire(struct rtio *r)
 {
 	SYS_PORT_TRACING_FUNC_ENTER(rtio, sqe_acquire, r);
-	struct rtio_iodev_sqe *iodev_sqe = rtio_sqe_pool_alloc(r->sqe_pool);
+	struct rtio_sqe *iodev_sqe = rtio_sqe_pool_alloc(r->sqe_pool);
 
 	if (iodev_sqe == NULL) {
 		SYS_PORT_TRACING_FUNC_EXIT(rtio, sqe_acquire, r, NULL);
@@ -336,8 +336,8 @@ static inline struct rtio_sqe *rtio_sqe_acquire(struct rtio *r)
 
 	mpsc_push(&r->sq, &iodev_sqe->q);
 
-	SYS_PORT_TRACING_FUNC_EXIT(rtio, sqe_acquire, r, &iodev_sqe->sqe);
-	return &iodev_sqe->sqe;
+	SYS_PORT_TRACING_FUNC_EXIT(rtio, sqe_acquire, r, &iodev_sqe);
+	return iodev_sqe;
 }
 
 /**
@@ -354,7 +354,7 @@ static inline struct rtio_sqe *rtio_sqe_acquire(struct rtio *r)
  */
 static inline int rtio_sqe_acquire_array(struct rtio *r, size_t n, struct rtio_sqe **sqes)
 {
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 	size_t i;
 
 	for (i = 0; i < n; i++) {
@@ -362,14 +362,14 @@ static inline int rtio_sqe_acquire_array(struct rtio *r, size_t n, struct rtio_s
 		if (iodev_sqe == NULL) {
 			break;
 		}
-		sqes[i] = &iodev_sqe->sqe;
+		sqes[i] = iodev_sqe;
 	}
 
 	/* Not enough SQEs in the pool */
 	if (i < n) {
 		while (i > 0) {
 			i--;
-			iodev_sqe = CONTAINER_OF(sqes[i], struct rtio_iodev_sqe, sqe);
+			iodev_sqe = sqes[i];
 			rtio_sqe_pool_free(r->sqe_pool, iodev_sqe);
 			sqes[i] = NULL;
 		}
@@ -378,7 +378,7 @@ static inline int rtio_sqe_acquire_array(struct rtio *r, size_t n, struct rtio_s
 	}
 
 	for (i = 0; i < n; i++) {
-		iodev_sqe = CONTAINER_OF(sqes[i], struct rtio_iodev_sqe, sqe);
+		iodev_sqe = sqes[i];
 		mpsc_push(&r->sq, &iodev_sqe->q);
 	}
 
@@ -392,11 +392,11 @@ static inline int rtio_sqe_acquire_array(struct rtio *r, size_t n, struct rtio_s
  */
 static inline void rtio_sqe_drop_all(struct rtio *r)
 {
-	struct rtio_iodev_sqe *iodev_sqe;
+	struct rtio_sqe *iodev_sqe;
 	struct mpsc_node *node = mpsc_pop(&r->sq);
 
 	while (node != NULL) {
-		iodev_sqe = CONTAINER_OF(node, struct rtio_iodev_sqe, q);
+		iodev_sqe = CONTAINER_OF(node, struct rtio_sqe, q);
 		rtio_sqe_pool_free(r->sqe_pool, iodev_sqe);
 		node = mpsc_pop(&r->sq);
 	}
@@ -545,10 +545,11 @@ __syscall void rtio_sqe_signal(struct rtio_sqe *sqe);
 
 static inline void z_impl_rtio_sqe_signal(struct rtio_sqe *sqe)
 {
-	struct rtio_iodev_sqe *iodev_sqe = CONTAINER_OF(sqe, struct rtio_iodev_sqe, sqe);
+	struct rtio_sqe *iodev_sqe = sqe;
 
-	if (!atomic_cas(&iodev_sqe->sqe.await.ok, 0, 1)) {
-		iodev_sqe->sqe.await.callback(iodev_sqe, iodev_sqe->sqe.await.userdata);
+	if (!atomic_cas(&iodev_sqe->await.ok, 0, 1)) {
+		iodev_sqe->await.callback(iodev_sqe,
+					  iodev_sqe->await.userdata);
 	}
 }
 
@@ -558,21 +559,21 @@ static inline void z_impl_rtio_sqe_signal(struct rtio_sqe *sqe)
  * @param iodev_sqe The SQE entry in question.
  * @return The value that should be set for the CQE's flags field.
  */
-static inline uint32_t rtio_cqe_compute_flags(struct rtio_iodev_sqe *iodev_sqe)
+static inline uint32_t rtio_cqe_compute_flags(struct rtio_sqe *iodev_sqe)
 {
 	uint32_t flags = 0;
 
 #ifdef CONFIG_RTIO_SYS_MEM_BLOCKS
-	if (iodev_sqe->sqe.op == RTIO_OP_RX && iodev_sqe->sqe.flags & RTIO_SQE_MEMPOOL_BUFFER) {
+	if (iodev_sqe->op == RTIO_OP_RX && iodev_sqe->flags & RTIO_SQE_MEMPOOL_BUFFER) {
 		struct rtio *r = iodev_sqe->r;
 		struct sys_mem_blocks *mem_pool = r->block_pool;
 		unsigned int blk_index = 0;
 		unsigned int blk_count = 0;
 
-		if (iodev_sqe->sqe.rx.buf) {
-			blk_index = (iodev_sqe->sqe.rx.buf - mem_pool->buffer) >>
+		if (iodev_sqe->rx.buf) {
+			blk_index = (iodev_sqe->rx.buf - mem_pool->buffer) >>
 				    mem_pool->info.blk_sz_shift;
-			blk_count = iodev_sqe->sqe.rx.buf_len >> mem_pool->info.blk_sz_shift;
+			blk_count = iodev_sqe->rx.buf_len >> mem_pool->info.blk_sz_shift;
 		}
 		flags = RTIO_CQE_FLAG_PREP_MEMPOOL(blk_index, blk_count);
 	}
@@ -635,8 +636,8 @@ static inline int z_impl_rtio_cqe_get_mempool_buffer(const struct rtio *r, struc
 }
 
 void rtio_executor_submit(struct rtio *r);
-void rtio_executor_ok(struct rtio_iodev_sqe *iodev_sqe, int result);
-void rtio_executor_err(struct rtio_iodev_sqe *iodev_sqe, int result);
+void rtio_executor_ok(struct rtio_sqe *iodev_sqe, int result);
+void rtio_executor_err(struct rtio_sqe *iodev_sqe, int result);
 
 /**
  * @brief Inform the executor of a submission completion with success
@@ -646,9 +647,9 @@ void rtio_executor_err(struct rtio_iodev_sqe *iodev_sqe, int result);
  * @param iodev_sqe IODev Submission that has succeeded
  * @param result Result of the request
  */
-static inline void rtio_iodev_sqe_ok(struct rtio_iodev_sqe *iodev_sqe, int result)
+static inline void rtio_iodev_sqe_ok(struct rtio_sqe *sqe, int result)
 {
-	rtio_executor_ok(iodev_sqe, result);
+	rtio_executor_ok(sqe, result);
 }
 
 /**
@@ -659,7 +660,7 @@ static inline void rtio_iodev_sqe_ok(struct rtio_iodev_sqe *iodev_sqe, int resul
  * @param iodev_sqe Submission that has failed
  * @param result Result of the request
  */
-static inline void rtio_iodev_sqe_err(struct rtio_iodev_sqe *iodev_sqe, int result)
+static inline void rtio_iodev_sqe_err(struct rtio_sqe *iodev_sqe, int result)
 {
 	rtio_executor_err(iodev_sqe, result);
 }
@@ -727,14 +728,13 @@ static inline void rtio_cqe_submit(struct rtio *r, int result, void *userdata, u
  * @return 0 if @p buf and @p buf_len were successfully filled
  * @return -ENOMEM Not enough memory for @p min_buf_len
  */
-static inline int rtio_sqe_rx_buf(const struct rtio_iodev_sqe *iodev_sqe, uint32_t min_buf_len,
+static inline int rtio_sqe_rx_buf(struct rtio_sqe *sqe,
+				  uint32_t min_buf_len,
 				  uint32_t max_buf_len, uint8_t **buf, uint32_t *buf_len)
 {
-	struct rtio_sqe *sqe = (struct rtio_sqe *)&iodev_sqe->sqe;
-
 #ifdef CONFIG_RTIO_SYS_MEM_BLOCKS
 	if (sqe->op == RTIO_OP_RX && sqe->flags & RTIO_SQE_MEMPOOL_BUFFER) {
-		struct rtio *r = iodev_sqe->r;
+		struct rtio *r = sqe->r;
 
 		if (sqe->rx.buf != NULL) {
 			if (sqe->rx.buf_len < min_buf_len) {
@@ -852,10 +852,10 @@ __syscall int rtio_sqe_cancel(struct rtio_sqe *sqe);
 static inline int z_impl_rtio_sqe_cancel(struct rtio_sqe *sqe)
 {
 	SYS_PORT_TRACING_FUNC(rtio, sqe_cancel, sqe);
-	struct rtio_iodev_sqe *iodev_sqe = CONTAINER_OF(sqe, struct rtio_iodev_sqe, sqe);
+	struct rtio_sqe *iodev_sqe = sqe;
 
 	do {
-		iodev_sqe->sqe.flags |= RTIO_SQE_CANCELED;
+		iodev_sqe->flags |= RTIO_SQE_CANCELED;
 		iodev_sqe = rtio_iodev_sqe_next(iodev_sqe);
 	} while (iodev_sqe != NULL);
 

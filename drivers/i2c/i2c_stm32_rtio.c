@@ -101,11 +101,11 @@ bool i2c_stm32_start(const struct device *dev)
 	int res = 0;
 
 #ifdef CONFIG_I2C_STM32_V2
-	struct rtio_iodev_sqe *iodev_sqe_next = rtio_txn_next(ctx->txn_curr);
+	struct rtio_sqe *iodev_sqe_next = rtio_txn_next(ctx->txn_curr);
 
 	if ((iodev_sqe_next != NULL) &&
 	    ((sqe->iodev_flags & I2C_MSG_STOP) == 0U) &&
-	    ((iodev_sqe_next->sqe.iodev_flags & I2C_MSG_RESTART) == 0U)) {
+	    ((iodev_sqe_next->iodev_flags & I2C_MSG_RESTART) == 0U)) {
 		flags |= I2C_MSG_STM32_USE_RELOAD_MODE;
 	}
 #endif
@@ -196,13 +196,14 @@ int i2c_stm32_get_config(const struct device *dev, uint32_t *config)
 	return 0;
 }
 
-static void i2c_stm32_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+static void i2c_stm32_submit(const struct device *dev,
+			     struct rtio_sqe *iodev_sqe)
 {
 	struct i2c_stm32_data *data = dev->data;
 	struct i2c_rtio *const ctx = data->ctx;
 
 	/* Always set I2C_MSG_RESTART flag on first message in order to send start condition */
-	iodev_sqe->sqe.iodev_flags |= RTIO_IODEV_I2C_RESTART;
+	iodev_sqe->iodev_flags |= RTIO_IODEV_I2C_RESTART;
 
 	if (i2c_rtio_submit(ctx, iodev_sqe)) {
 		i2c_stm32_start(dev);

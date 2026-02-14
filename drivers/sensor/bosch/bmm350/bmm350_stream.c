@@ -23,7 +23,7 @@ enum bmm350_stream_state {
 static void bmm350_stream_result(const struct device *dev, int err)
 {
 	struct bmm350_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 
 	data->stream.iodev_sqe = NULL;
 	if (err < 0) {
@@ -159,9 +159,9 @@ static void bmm350_gpio_callback(const struct device *port, struct gpio_callback
 }
 
 void bmm350_stream_submit(const struct device *dev,
-			  struct rtio_iodev_sqe *iodev_sqe)
+			  struct rtio_sqe *iodev_sqe)
 {
-	const struct sensor_read_config *read_config = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *read_config = iodev_sqe->iodev->data;
 	struct bmm350_data *data = dev->data;
 	const struct bmm350_config *cfg = dev->config;
 	int err;

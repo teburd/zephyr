@@ -14,6 +14,6 @@
 int paa3905_stream_init(const struct device *dev);
 
 void paa3905_stream_submit(const struct device *dev,
-			   struct rtio_iodev_sqe *iodev_sqe);
+			   struct rtio_sqe *iodev_sqe);
 
 #endif /* ZEPHYR_DRIVERS_SENSOR_PAA3905_STREAM_H_ */

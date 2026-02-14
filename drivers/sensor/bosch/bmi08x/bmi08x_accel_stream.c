@@ -32,7 +32,7 @@ static inline void bmi08x_stream_result(const struct device *dev, int result)
 {
 	struct bmi08x_accel_data *data = dev->data;
 	const struct bmi08x_accel_config *config = dev->config;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 
 	data->stream.iodev_sqe = NULL;
 	(void)rtio_flush_completion_queue(config->rtio_bus.ctx);
@@ -54,7 +54,7 @@ static void bmi08x_stream_complete_handler(struct rtio *ctx, const struct rtio_s
 {
 	const struct device *dev = (const struct device *)arg;
 	struct bmi08x_accel_data *data = dev->data;
-	struct rtio_iodev_sqe *iodev_sqe = data->stream.iodev_sqe;
+	struct rtio_sqe *iodev_sqe = data->stream.iodev_sqe;
 	struct bmi08x_accel_encoded_data *edata;
 	uint32_t buf_len;
 	int ret;
@@ -174,11 +174,12 @@ static inline int start_stream(const struct device *dev)
 	return 0;
 }
 
-void bmi08x_accel_stream_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void bmi08x_accel_stream_submit(const struct device *dev,
+				struct rtio_sqe *iodev_sqe)
 {
 	struct bmi08x_accel_data *data = dev->data;
 	const struct bmi08x_accel_config *cfg = dev->config;
-	const struct sensor_read_config *stream_cfg = iodev_sqe->sqe.iodev->data;
+	const struct sensor_read_config *stream_cfg = iodev_sqe->iodev->data;
 	int ret = 0;
 
 	if (stream_cfg->count != 1 ||

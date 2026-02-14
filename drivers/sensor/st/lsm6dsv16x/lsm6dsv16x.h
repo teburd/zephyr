@@ -166,7 +166,7 @@ struct lsm6dsv16x_data {
 	uint8_t gyro_fs;
 
 #ifdef CONFIG_LSM6DSV16X_STREAM
-	struct rtio_iodev_sqe *streaming_sqe;
+	struct rtio_sqe *streaming_sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint64_t timestamp;

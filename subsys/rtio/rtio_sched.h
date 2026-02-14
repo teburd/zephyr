@@ -9,6 +9,6 @@
 #ifndef ZEPHYR_SUBSYS_RTIO_SCHED_H_
 #define ZEPHYR_SUBSYS_RTIO_SCHED_H_
 
-void rtio_sched_alarm(struct rtio_iodev_sqe *iodev_sqe, k_timeout_t timeout);
+void rtio_sched_alarm(struct rtio_sqe *iodev_sqe, k_timeout_t timeout);
 
 #endif /* ZEPHYR_SUBSYS_RTIO_SCHED_H_ */

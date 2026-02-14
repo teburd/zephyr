@@ -31,10 +31,10 @@ static void producer_periodic(struct k_timer *timer)
 		return;
 	}
 
-	struct rtio_iodev_sqe *iodev_sqe = CONTAINER_OF(n, struct rtio_iodev_sqe, q);
+	struct rtio_sqe *iodev_sqe = CONTAINER_OF(n, struct rtio_sqe, q);
 
 	/* Only accept read/rx requests */
-	if (iodev_sqe->sqe.op != RTIO_OP_RX) {
+	if (iodev_sqe->op != RTIO_OP_RX) {
 		rtio_iodev_sqe_err(iodev_sqe, -EINVAL);
 		return;
 	}
@@ -65,9 +65,9 @@ static void producer_periodic(struct k_timer *timer)
 /* Accept incoming commands (e.g. read requests), could come from multiple sources
  * so the only real safe thing to do here is put it into the lock free queue
  */
-static void producer_submit(struct rtio_iodev_sqe *iodev_sqe)
+static void producer_submit(struct rtio_sqe *iodev_sqe)
 {
-	struct mpsc *producer_ioq = iodev_sqe->sqe.iodev->data;
+	struct mpsc *producer_ioq = iodev_sqe->iodev->data;
 
 	mpsc_push(producer_ioq, &iodev_sqe->q);
 }

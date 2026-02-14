@@ -131,7 +131,7 @@ static bool i2c_rtio_next(struct i2c_rtio *ctx, bool completion)
 		return false;
 	}
 
-	ctx->txn_head = CONTAINER_OF(next, struct rtio_iodev_sqe, q);
+	ctx->txn_head = CONTAINER_OF(next, struct rtio_sqe, q);
 	ctx->txn_curr = ctx->txn_head;
 
 	k_spin_unlock(&ctx->slock, key);
@@ -156,7 +156,7 @@ bool i2c_rtio_complete(struct i2c_rtio *ctx, int status)
 	rtio_iodev_sqe_ok(ctx->txn_head, status);
 	return i2c_rtio_next(ctx, true);
 }
-bool i2c_rtio_submit(struct i2c_rtio *ctx, struct rtio_iodev_sqe *iodev_sqe)
+bool i2c_rtio_submit(struct i2c_rtio *ctx, struct rtio_sqe *iodev_sqe)
 {
 	mpsc_push(&ctx->io_q, &iodev_sqe->q);
 	return i2c_rtio_next(ctx, false);

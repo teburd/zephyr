@@ -85,7 +85,7 @@ struct bma4xx_data {
 	struct rtio *r;
 	struct rtio_iodev *iodev;
 #ifdef CONFIG_BMA4XX_STREAM
-	struct rtio_iodev_sqe *streaming_sqe;
+	struct rtio_sqe *streaming_sqe;
 	uint8_t int_status;
 	uint16_t fifo_count;
 	uint64_t timestamp;

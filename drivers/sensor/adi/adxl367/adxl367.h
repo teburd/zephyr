@@ -360,7 +360,7 @@ struct adxl367_data {
 #ifdef CONFIG_ADXL367_STREAM
 	uint8_t status;
 	uint8_t fifo_ent[2];
-	struct rtio_iodev_sqe *sqe;
+	struct rtio_sqe *sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint64_t timestamp;
@@ -433,11 +433,12 @@ int adxl367_trigger_set(const struct device *dev,
 			sensor_trigger_handler_t handler);
 
 int adxl367_init_interrupt(const struct device *dev);
-void adxl367_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl367_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe);
 void adxl367_stream_irq_handler(const struct device *dev);
 
 #ifdef CONFIG_SENSOR_ASYNC_API
-void adxl367_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl367_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 int adxl367_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 int adxl367_get_accel_data(const struct device *dev,
 			   struct adxl367_xyz_accel_data *accel_data);

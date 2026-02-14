@@ -111,7 +111,8 @@ static inline bool rtio_is_i3c(rtio_bus_type bus_type)
  */
 static inline void rtio_read_regs_async(struct rtio *r, struct rtio_iodev *iodev,
 					rtio_bus_type bus_type, struct rtio_regs *regs,
-					struct rtio_iodev_sqe *iodev_sqe, const struct device *dev,
+					struct rtio_sqe *iodev_sqe,
+					const struct device *dev,
 					rtio_callback_t complete_op_cb)
 {
 	struct rtio_sqe *write_addr;

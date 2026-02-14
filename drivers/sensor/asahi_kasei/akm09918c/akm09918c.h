@@ -37,7 +37,7 @@ struct akm09918c_data {
 	uint8_t mode;
 #ifdef CONFIG_SENSOR_ASYNC_API
 	struct akm09918c_async_fetch_ctx {
-		struct rtio_iodev_sqe *iodev_sqe;
+		struct rtio_sqe *iodev_sqe;
 		uint64_t timestamp;
 		struct k_work_delayable async_fetch_work;
 	} work_ctx;
@@ -111,7 +111,7 @@ void akm09918_async_fetch(struct k_work *work);
 
 int akm09918c_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 
-void akm09918c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void akm09918c_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 void akm09918_after_start_cb(struct rtio *rtio_ctx, const struct rtio_sqe *sqe, int result,
 			     void *arg0);
 void akm09918_complete_cb(struct rtio *rtio_ctx, const struct rtio_sqe *sqe, int result,

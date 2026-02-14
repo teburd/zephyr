@@ -237,7 +237,7 @@ typedef int (*i2c_api_transfer_cb_t)(const struct device *dev,
  * @brief Callback API for submitting work to a I2C device with RTIO
  */
 typedef void (*i2c_api_iodev_submit)(const struct device *dev,
-				     struct rtio_iodev_sqe *iodev_sqe);
+				     struct rtio_sqe *iodev_sqe);
 #endif /* CONFIG_I2C_RTIO */
 
 typedef int (*i2c_api_recover_bus_t)(const struct device *dev);
@@ -1093,7 +1093,8 @@ static inline int i2c_transfer_signal(const struct device *dev,
  * @param iodev_sqe Prepared submissions queue entry connected to an iodev
  *                  defined by I2C_DT_IODEV_DEFINE.
  */
-void i2c_iodev_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void i2c_iodev_submit_fallback(const struct device *dev,
+			       struct rtio_sqe *iodev_sqe);
 
 /**
  * @brief Submit request(s) to an I2C device with RTIO
@@ -1101,9 +1102,9 @@ void i2c_iodev_submit_fallback(const struct device *dev, struct rtio_iodev_sqe *
  * @param iodev_sqe Prepared submissions queue entry connected to an iodev
  *                  defined by I2C_DT_IODEV_DEFINE.
  */
-static inline void i2c_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+static inline void i2c_iodev_submit(struct rtio_sqe *iodev_sqe)
 {
-	const struct i2c_dt_spec *dt_spec = (const struct i2c_dt_spec *)iodev_sqe->sqe.iodev->data;
+	const struct i2c_dt_spec *dt_spec = (const struct i2c_dt_spec *) iodev_sqe->iodev->data;
 	const struct device *dev = dt_spec->bus;
 	const struct i2c_driver_api *api = (const struct i2c_driver_api *)dev->api;
 

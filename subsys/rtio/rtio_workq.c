@@ -32,7 +32,7 @@ struct rtio_work_req *rtio_work_req_alloc(void)
 }
 
 void rtio_work_req_submit(struct rtio_work_req *req,
-			  struct rtio_iodev_sqe *iodev_sqe,
+			  struct rtio_sqe *iodev_sqe,
 			  rtio_work_submit_t handler)
 {
 	if (!req) {

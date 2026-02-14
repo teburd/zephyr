@@ -22,7 +22,7 @@ struct phy_3d_sensor_custom {
 struct phy_3d_sensor_data {
 	struct sensor_value sensitivities[PHY_3D_SENSOR_CHANNEL_NUM];
 	const struct phy_3d_sensor_custom **customs;
-	struct rtio_iodev_sqe *sqes;
+	struct rtio_sqe *sqes;
 };
 
 struct phy_3d_sensor_config {

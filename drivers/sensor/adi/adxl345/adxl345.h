@@ -198,7 +198,7 @@ struct adxl345_dev_data {
 #endif
 #endif /* CONFIG_ADXL345_TRIGGER */
 #ifdef CONFIG_ADXL345_STREAM
-	struct rtio_iodev_sqe *sqe;
+	struct rtio_sqe *sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint8_t status1;
@@ -262,7 +262,8 @@ struct adxl345_dev_config {
 #endif
 };
 
-void adxl345_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl345_submit_stream(const struct device *dev,
+			   struct rtio_sqe *iodev_sqe);
 void adxl345_stream_irq_handler(const struct device *dev);
 
 #ifdef CONFIG_ADXL345_TRIGGER
@@ -298,7 +299,7 @@ int adxl345_reg_read_byte(const struct device *dev, uint8_t addr, uint8_t *buf);
 int adxl345_set_op_mode(const struct device *dev, enum adxl345_op_mode op_mode);
 int adxl345_read_sample(const struct device *dev, struct adxl345_sample *sample);
 #ifdef CONFIG_SENSOR_ASYNC_API
-void adxl345_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void adxl345_submit(const struct device *dev, struct rtio_sqe *iodev_sqe);
 int adxl345_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 #endif /* CONFIG_SENSOR_ASYNC_API */
 

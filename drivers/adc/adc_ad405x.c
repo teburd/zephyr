@@ -181,7 +181,7 @@ struct adc_ad405x_data {
 	uint8_t has_drdy;
 #endif /* CONFIG_AD405X_TRIGGER */
 #ifdef CONFIG_AD405X_STREAM
-	struct rtio_iodev_sqe *sqe;
+	struct rtio_sqe *sqe;
 	struct rtio *rtio_ctx;
 	struct rtio_iodev *iodev;
 	uint64_t timestamp;
@@ -401,7 +401,7 @@ static void ad405x_gpio1_callback(const struct device *dev, struct gpio_callback
 		break;
 	case AD405X_DATA_READY:
 #ifdef CONFIG_AD405X_STREAM
-		const struct adc_read_config *cfg_adc = drv_data->sqe->sqe.iodev->data;
+		const struct adc_read_config *cfg_adc = drv_data->sqe->iodev->data;
 
 		if (cfg_adc->is_streaming) {
 			ad405x_stream_irq_handler(drv_data->dev);
@@ -432,7 +432,7 @@ static void ad405x_gpio0_callback(const struct device *dev, struct gpio_callback
 	switch (drv_data->gp0_mode) {
 	case AD405X_DATA_READY:
 #ifdef CONFIG_AD405X_STREAM
-		const struct adc_read_config *cfg_adc = drv_data->sqe->sqe.iodev->data;
+		const struct adc_read_config *cfg_adc = drv_data->sqe->iodev->data;
 
 		if (cfg_adc->is_streaming) {
 			ad405x_stream_irq_handler(drv_data->dev);
@@ -1016,7 +1016,8 @@ static int adc_ad405x_init(const struct device *dev)
 }
 
 #ifdef CONFIG_AD405X_STREAM
-void ad405x_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void ad405x_submit_stream(const struct device *dev,
+			  struct rtio_sqe *iodev_sqe)
 {
 	struct adc_ad405x_data *data = (struct adc_ad405x_data *)dev->data;
 	const struct adc_ad405x_config *cfg_405 = (const struct adc_ad405x_config *)dev->config;
@@ -1172,7 +1173,7 @@ static int ad405x_decoder_decode(const uint8_t *buffer, uint32_t channel, uint32
 
 static void ad405x_process_sample_cb(struct rtio *r, const struct rtio_sqe *sqe, int res, void *arg)
 {
-	struct rtio_iodev_sqe *iodev_sqe = sqe->userdata;
+	struct rtio_sqe *iodev_sqe = sqe->userdata;
 
 	rtio_iodev_sqe_ok(iodev_sqe, 0);
 }
@@ -1181,10 +1182,10 @@ static void ad405x_stream_irq_handler(const struct device *dev)
 {
 	struct adc_ad405x_data *data = (struct adc_ad405x_data *)dev->data;
 	const struct adc_ad405x_config *cfg = (const struct adc_ad405x_config *)dev->config;
-	struct rtio_iodev_sqe *current_sqe = data->sqe;
+	struct rtio_sqe *current_sqe = data->sqe;
 	uint32_t sample_size = 2;
 	enum ad405x_qscale_modes qscale_mode = AD4050_6_12B_MODE;
-	struct adc_read_config *read_config = (struct adc_read_config *)data->sqe->sqe.iodev->data;
+	struct adc_read_config *read_config = (struct adc_read_config *) data->sqe->iodev->data;
 
 	if (read_config == NULL) {
 		return;
