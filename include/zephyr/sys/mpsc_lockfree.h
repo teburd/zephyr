@@ -118,6 +118,26 @@ static inline void mpsc_init(struct mpsc *q)
 }
 
 /**
+ * @brief Push a list of nodes to the queue
+ *
+ * Rather than atomically pushing a single node here the head and tail nodes are already linked
+ * and only the head and tail need to be inserted in the looped queue list.
+ *
+ * @param q Queue to push the nodes to
+ * @param h Head node
+ * @param t Tail node
+ */
+ static ALWAYS_INLINE void mpsc_push_list(struct mpsc *q, struct mpsc_node *h, struct mpsc_node *t)
+ {
+ 	struct mpsc_node *prev;
+
+	mpsc_ptr_set(t->next, NULL);
+
+	prev = (struct mpsc_node *)mpsc_ptr_set_get(q->head, h);
+	mpsc_ptr_set(prev->next, t);
+}
+
+/**
  * @brief Push a node
  *
  * @param q Queue to push the node to
@@ -125,15 +145,13 @@ static inline void mpsc_init(struct mpsc *q)
  */
 static ALWAYS_INLINE void mpsc_push(struct mpsc *q, struct mpsc_node *n)
 {
-	struct mpsc_node *prev;
-	int key;
+	struct mpsc_node *t = n;
 
-	mpsc_ptr_set(n->next, NULL);
+	while (t->next != NULL) {
+		t = t->next;
+	}
 
-	key = arch_irq_lock();
-	prev = (struct mpsc_node *)mpsc_ptr_set_get(q->head, n);
-	mpsc_ptr_set(prev->next, n);
-	arch_irq_unlock(key);
+	mpsc_push_list(q, n, t);
 }
 
 /**
@@ -162,6 +180,7 @@ static inline struct mpsc_node *mpsc_pop(struct mpsc *q)
 	/* If next is non-NULL then a valid node is found, return it */
 	if (next != NULL) {
 		q->tail = next;
+		tail->next = NULL;
 		return tail;
 	}
 
@@ -180,6 +199,7 @@ static inline struct mpsc_node *mpsc_pop(struct mpsc *q)
 
 	if (next != NULL) {
 		q->tail = next;
+		tail->next = NULL;
 		return tail;
 	}
 

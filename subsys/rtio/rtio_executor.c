@@ -125,7 +125,7 @@ void rtio_executor_submit(struct rtio *r)
 			if (curr->sqe.flags  & RTIO_SQE_CANCELED) {
 				next->sqe.flags |= cancel_no_response;
 			}
-			curr->next = next;
+			curr->q.next = node;
 			curr = next;
 			curr->r = r;
 
@@ -134,7 +134,6 @@ void rtio_executor_submit(struct rtio *r)
 				"Expected a valid sqe following transaction or chain flag");
 		}
 
-		curr->next = NULL;
 		curr->r = r;
 
 		rtio_iodev_submit(iodev_sqe, 0);

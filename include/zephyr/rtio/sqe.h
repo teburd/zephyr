@@ -386,12 +386,14 @@ struct rtio_sqe {
 /**
  * @brief IO device submission queue entry
  *
+ * This is used outside of the description of what to operate on and provides more
+ * data to enable the operation to occur. This is internal data to rtio and the iodevs.
+ *
  * May be cast safely to and from a rtio_sqe as they occupy the same memory provided by the pool
  */
 struct rtio_iodev_sqe {
 	struct rtio_sqe sqe;
 	struct mpsc_node q;
-	struct rtio_iodev_sqe *next;
 	struct rtio *r;
 };
 
@@ -672,7 +674,7 @@ static inline struct rtio_iodev_sqe *rtio_txn_next(const struct rtio_iodev_sqe *
 
 	SYS_PORT_TRACING_FUNC_ENTER(rtio, txn_next, iodev_sqe->r, iodev_sqe);
 	if (iodev_sqe->sqe.flags & RTIO_SQE_TRANSACTION) {
-		next = iodev_sqe->next;
+		next = CONTAINER_OF(iodev_sqe->q.next, struct rtio_iodev_sqe, q);
 	}
 	SYS_PORT_TRACING_FUNC_EXIT(rtio, txn_next, iodev_sqe->r, next);
 	return next;
@@ -693,7 +695,7 @@ static inline struct rtio_iodev_sqe *rtio_chain_next(const struct rtio_iodev_sqe
 
 	SYS_PORT_TRACING_FUNC_ENTER(rtio, txn_next, iodev_sqe->r, iodev_sqe);
 	if (iodev_sqe->sqe.flags & RTIO_SQE_CHAINED) {
-		next = iodev_sqe->next;
+		next = CONTAINER_OF(iodev_sqe->q.next, struct rtio_iodev_sqe, q);
 	}
 	SYS_PORT_TRACING_FUNC_EXIT(rtio, txn_next, iodev_sqe->r, next);
 	return next;
@@ -709,7 +711,13 @@ static inline struct rtio_iodev_sqe *rtio_chain_next(const struct rtio_iodev_sqe
  */
 static inline struct rtio_iodev_sqe *rtio_iodev_sqe_next(const struct rtio_iodev_sqe *iodev_sqe)
 {
-	return iodev_sqe->next;
+	struct rtio_iodev_sqe *next = NULL;
+
+	if (iodev_sqe->sqe.flags & RTIO_SQE_CHAINED || iodev_sqe->sqe.flags & RTIO_SQE_TRANSACTION) {
+		next = CONTAINER_OF(iodev_sqe->q.next, struct rtio_iodev_sqe, q);
+	}
+
+	return next;
 }
 
 /**
