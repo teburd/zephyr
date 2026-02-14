@@ -327,17 +327,17 @@ static inline uint32_t rtio_sqe_acquirable(struct rtio *r)
 static inline struct rtio_sqe *rtio_sqe_acquire(struct rtio *r)
 {
 	SYS_PORT_TRACING_FUNC_ENTER(rtio, sqe_acquire, r);
-	struct rtio_sqe *iodev_sqe = rtio_sqe_pool_alloc(r->sqe_pool);
+	struct rtio_sqe *sqe = rtio_sqe_pool_alloc(r->sqe_pool);
 
-	if (iodev_sqe == NULL) {
+	if (sqe == NULL) {
 		SYS_PORT_TRACING_FUNC_EXIT(rtio, sqe_acquire, r, NULL);
 		return NULL;
 	}
 
-	mpsc_push(&r->sq, &iodev_sqe->q);
+	mpsc_push(&r->sq, &sqe->q);
 
-	SYS_PORT_TRACING_FUNC_EXIT(rtio, sqe_acquire, r, &iodev_sqe);
-	return iodev_sqe;
+	SYS_PORT_TRACING_FUNC_EXIT(rtio, sqe_acquire, r, &sqe);
+	return sqe;
 }
 
 /**

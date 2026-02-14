@@ -115,6 +115,14 @@ config MPSC_CLEAR_ALLOCATED
 	  When enabled packet space is zeroed before returning from allocation.
 endif
 
+config MPSC_LOCKFREE_ATOMICS
+	bool "Atomic pointer swap for MPSC queue"
+	default y if CONFIG_SMP
+	help
+	  Use atomic pointer swap with MPSC lockfree queue. This costs some extra time
+	  due to the atomic operations commonly triggering pipeline flushes and memory
+	  barriers.
+
 if SCHED_DEADLINE
 
 config P4WQ_INIT_STAGE_EARLY

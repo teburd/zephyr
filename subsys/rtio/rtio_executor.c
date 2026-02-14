@@ -39,6 +39,7 @@ static void rtio_executor_op(struct rtio_sqe *sqe, int last_result)
 {
 	switch (sqe->op) {
 	case RTIO_OP_CALLBACK:
+		LOG_DBG("callback for %p", sqe);
 		sqe->callback.callback(sqe->r, sqe, last_result, sqe->callback.arg0);
 		rtio_executor_done(sqe, 0, true);
 		break;
@@ -92,9 +93,14 @@ void rtio_executor_submit(struct rtio *r)
 	const uint16_t cancel_no_response = (RTIO_SQE_CANCELED | RTIO_SQE_NO_RESPONSE);
 	struct mpsc_node *node = mpsc_pop(&r->sq);
 
+
+	LOG_DBG("submit %p", r);
+
 	while (node != NULL) {
 		struct rtio_sqe *iodev_sqe = CONTAINER_OF(node,
 							  struct rtio_sqe, q);
+
+		LOG_DBG("sqe %p op %d", iodev_sqe, iodev_sqe->op);
 
 		/* If this submission was cancelled before submit, then generate no response */
 		if (iodev_sqe->flags  & RTIO_SQE_CANCELED) {
@@ -102,7 +108,8 @@ void rtio_executor_submit(struct rtio *r)
 		}
 		iodev_sqe->r = r;
 
-		struct rtio_sqe *curr = iodev_sqe, *next;
+		struct rtio_sqe *curr = iodev_sqe;
+		struct rtio_sqe *next;
 
 		/* Link up transaction or queue list if needed */
 		while (curr->flags & (RTIO_SQE_TRANSACTION | RTIO_SQE_CHAINED)) {
@@ -145,6 +152,8 @@ void rtio_executor_submit(struct rtio *r)
 
 		node = mpsc_pop(&r->sq);
 	}
+
+	LOG_DBG("submit exit");
 }
 
 /**

@@ -298,6 +298,10 @@ typedef void (*rtio_signaled_t)(struct rtio_sqe *sqe, void *userdata);
  * @brief A submission queue event
  */
 struct rtio_sqe {
+	struct mpsc_node q;
+	struct rtio_sqe *next;
+	struct rtio *r;
+
 	uint8_t op; /**< Op code */
 
 	uint8_t prio; /**< Op priority */
@@ -379,10 +383,6 @@ struct rtio_sqe {
 			void *userdata;
 		} await;
 	};
-
-	struct mpsc_node q;
-	struct rtio_sqe *next;
-	struct rtio *r;
 };
 
 
@@ -744,7 +744,10 @@ static inline struct rtio_sqe *rtio_sqe_pool_alloc(struct rtio_sqe_pool *pool)
 
 	struct rtio_sqe *sqe = CONTAINER_OF(node, struct rtio_sqe, q);
 
+
 	pool->pool_free--;
+
+	memset(sqe, 0, sizeof(struct rtio_sqe));
 
 	return sqe;
 }

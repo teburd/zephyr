@@ -971,7 +971,7 @@ void test_rtio_await_iodev_(struct rtio *rtio0, struct rtio *rtio1)
 	rtio_sqe_signal(await_sqe);
 
 	TC_PRINT("Ensure both sqe from rtio0 completed\n");
-	cqe = rtio_cqe_consume_block(rtio0);
+cqe = rtio_cqe_consume_block(rtio0);
 	zassert_not_null(cqe, "Expected a valid cqe");
 	zassert_equal(cqe->userdata, &userdata[0]);
 	rtio_cqe_release(rtio0, cqe);
@@ -1102,21 +1102,22 @@ void callback_stash_result(struct rtio *r, const struct rtio_sqe *sqe,
 	callback_count++;
 }
 
-/*
- * Ensure callbacks work as expected.
- *
- * 1. Callbacks always occur
- * 2. The result code always contains the first error result
- */
-ZTEST(rtio_api, test_rtio_callbacks)
+void test_rtio_callbacks_(struct rtio *r)
 {
-	struct rtio *r = &r_callback_result;
+
 	struct rtio_iodev *iodev = &iodev_test_callback_result;
 	struct rtio_sqe *nop1 = rtio_sqe_acquire(r);
 	struct rtio_sqe *cb1 = rtio_sqe_acquire(r);
 	struct rtio_sqe *nop2 = rtio_sqe_acquire(r);
 	struct rtio_sqe *nop3 = rtio_sqe_acquire(r);
 	struct rtio_sqe *cb2 = rtio_sqe_acquire(r);
+
+
+	zassert_not_null(nop1, "Expected a valid sqe");
+	zassert_not_null(cb1, "Expected a valid sqe");
+	zassert_not_null(nop2, "Expected a valid sqe");
+	zassert_not_null(nop3, "Expected a valid sqe");
+	zassert_not_null(cb2, "Expected a valid sqe");
 
 	rtio_iodev_test_init(&iodev_test_callback_result);
 
@@ -1139,6 +1140,17 @@ ZTEST(rtio_api, test_rtio_callbacks)
 	zassert_equal(callback_result, expected_callback_result,
 		      "expected results given to second callback to be an predefine error");
 	zassert_equal(callback_count, 2, "expected two callbacks to complete");
+}
+
+/*
+ * Ensure callbacks work as expected.
+ *
+ * 1. Callbacks always occur
+ * 2. The result code always contains the first error result
+ */
+ZTEST(rtio_api, test_rtio_callbacks)
+{
+	test_rtio_callbacks_(&r_callback_result);
 }
 
 
