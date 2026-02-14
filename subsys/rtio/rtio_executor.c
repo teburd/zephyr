@@ -91,39 +91,39 @@ static inline void rtio_iodev_submit(struct rtio_sqe *sqe,
 void rtio_executor_submit(struct rtio *r)
 {
 	const uint16_t cancel_no_response = (RTIO_SQE_CANCELED | RTIO_SQE_NO_RESPONSE);
+
 	struct mpsc_node *node = mpsc_pop(&r->sq);
 
 
-	LOG_DBG("submit %p", r);
+	LOG_DBG("submit %p, node %p", r, node);
 
 	while (node != NULL) {
-		struct rtio_sqe *iodev_sqe = CONTAINER_OF(node,
-							  struct rtio_sqe, q);
+		struct rtio_sqe *sqe = CONTAINER_OF(node, struct rtio_sqe, q);
 
-		LOG_DBG("sqe %p op %d", iodev_sqe, iodev_sqe->op);
+		LOG_DBG("sqe %p op %d", sqe, sqe->op);
 
 		/* If this submission was cancelled before submit, then generate no response */
-		if (iodev_sqe->flags  & RTIO_SQE_CANCELED) {
-			iodev_sqe->flags |= cancel_no_response;
+		if (sqe->flags  & RTIO_SQE_CANCELED) {
+			sqe->flags |= cancel_no_response;
 		}
-		iodev_sqe->r = r;
+		sqe->r = r;
 
-		struct rtio_sqe *curr = iodev_sqe;
+		struct rtio_sqe *curr = sqe;
 		struct rtio_sqe *next;
 
 		/* Link up transaction or queue list if needed */
 		while (curr->flags & (RTIO_SQE_TRANSACTION | RTIO_SQE_CHAINED)) {
 #ifdef CONFIG_ASSERT
-			bool transaction = iodev_sqe->flags & RTIO_SQE_TRANSACTION;
-			bool chained = iodev_sqe->flags & RTIO_SQE_CHAINED;
-			bool multishot = iodev_sqe->flags & RTIO_SQE_MULTISHOT;
+			bool transaction = sqe->flags & RTIO_SQE_TRANSACTION;
+			bool chained = sqe->flags & RTIO_SQE_CHAINED;
+			bool multishot = sqe->flags & RTIO_SQE_MULTISHOT;
 
 			__ASSERT((transaction ^ chained ^ multishot) &&
 				 !(transaction && chained && multishot),
 				 "Cannot have more than one of these flags"
 				 " enabled: transaction, chained or multishot");
 #endif
-			node = mpsc_pop(&iodev_sqe->r->sq);
+			node = mpsc_pop(&sqe->r->sq);
 
 			__ASSERT(node != NULL,
 				    "Expected a valid submission in the queue while in a transaction or chain");
@@ -148,7 +148,7 @@ void rtio_executor_submit(struct rtio *r)
 		curr->next = NULL;
 		curr->r = r;
 
-		rtio_iodev_submit(iodev_sqe, 0);
+		rtio_iodev_submit(sqe, 0);
 
 		node = mpsc_pop(&r->sq);
 	}

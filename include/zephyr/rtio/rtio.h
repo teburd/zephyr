@@ -997,6 +997,7 @@ static inline int z_impl_rtio_submit(struct rtio *r, uint32_t wait_count)
 		r->submit_count = wait_count;
 	}
 
+	printk("submitting with r %p\n", r);
 	rtio_executor_submit(r);
 
 	if (wait_count > 0) {

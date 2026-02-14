@@ -1135,6 +1135,7 @@ void test_rtio_callbacks_(struct rtio *r)
 	nop3->flags |= RTIO_SQE_CHAINED;
 	rtio_sqe_prep_callback(cb2, callback_stash_result, NULL, NULL);
 
+	TC_PRINT("test submitting with r %p, acquirables %d\n", r, rtio_sqe_acquirable(r));
 	rtio_submit(r, 5);
 
 	zassert_equal(callback_result, expected_callback_result,
