@@ -36,13 +36,13 @@ pub enum Dts<'source> {
 }
 
 fn parse_hex_u8<'source>(input: &'source str, _span: Range<usize>) -> Result<u8> {
-    //TODO fix this so it works with 0xE or other similar abbreviated hex values
-    u8::from_str_radix(&input[1..input.len() - 1], 16).or(Ok(0u8))
+    let trimmed = input.trim_start_matches("0x");
+    u8::from_str_radix(trimmed, 16).or(Ok(0u8))
 }
 
 fn parse_hex_u32<'source>(input: &'source str, _span: Range<usize>) -> Result<u32> {
-    //TODO fix this so it works with 0xE or other abbreviated hex values
-    u32::from_str_radix(&input[1..input.len() - 1], 16).or(Ok(0u32))
+    let trimmed = input.trim_start_matches("0x");
+    u32::from_str_radix(trimmed, 16).or(Ok(0u32))
 }
 
 fn parse_bytes<'source>(lexer: &mut Lexer<'source, Token<'source>>) -> Result<Vec<u8>> {
