@@ -1,0 +1,11 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
+
+_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+
+zephyr_library(
+    name = "serial",
+    board = _BOARD,
+    srcs = select({CV_X86: ["uart_ns16550.c"], CV_ARM: ["uart_stellaris.c"]}),
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

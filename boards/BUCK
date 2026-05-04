@@ -1,0 +1,1 @@
+# Empty package file — allows boards/all.bzl to be loaded via load("//boards:all.bzl", ...)

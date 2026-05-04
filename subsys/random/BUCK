@@ -1,0 +1,12 @@
+load("//:zephyr_rules.bzl", "zephyr_library")
+
+# x86-only: only in the dep graph when --config zephyr.board=qemu_x86
+zephyr_library(
+    name = "random",
+    board = "qemu_x86",
+    srcs = [
+        "random_test_csprng.c",
+        "random_timer.c",
+    ],
+    visibility = ["PUBLIC"],
+)

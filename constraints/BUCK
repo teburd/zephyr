@@ -1,0 +1,4 @@
+load("//prelude:cfg_rules.bzl", "constraint_setting")
+
+# Board constraint setting — values live in each board's board.bzl / BUCK.
+constraint_setting(name = "board", visibility = ["PUBLIC"])

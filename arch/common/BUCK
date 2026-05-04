@@ -1,0 +1,20 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
+
+_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+
+zephyr_library(
+    name = "arch_common",
+    board = _BOARD,
+    srcs = select({CV_X86: ["init.c"], CV_ARM: ["init.c", "sw_isr_common.c", "xip.c"]}),
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)
+
+# ARM-only: placeholder isr_tables.a (real ISR table .o comes from gen_isr_tables.py at link time)
+zephyr_library(
+    name = "isr_tables",
+    board = "qemu_cortex_m3",
+    srcs = ["isr_tables.c"],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

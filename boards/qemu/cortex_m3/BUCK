@@ -1,0 +1,5 @@
+load(":board.bzl", "declare_targets")
+
+# Board data lives in board.bzl — loaded by boards/all.bzl.
+# Build: buck2 build //samples/hello_world:zephyr --target-platforms //boards/qemu/cortex_m3:qemu_cortex_m3
+declare_targets()

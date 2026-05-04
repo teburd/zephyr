@@ -1,0 +1,23 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "zephyr_object")
+
+# ARM-only: only in the dep graph when --target-platforms //boards/qemu/cortex_m3:qemu_cortex_m3
+zephyr_library(
+    name = "arch_arm_core",
+    board = "qemu_cortex_m3",
+    srcs = [
+        "fatal.c",
+        "nmi.c",
+        "nmi_on_reset.S",
+        "tls.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)
+
+zephyr_object(
+    name = "offsets",
+    board = "qemu_cortex_m3",
+    src = "offsets/offsets.c",
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

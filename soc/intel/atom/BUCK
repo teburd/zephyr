@@ -1,0 +1,1 @@
+# Empty package file — allows soc/intel/atom/soc.bzl to be loaded via load("//soc/intel/atom:soc.bzl", ...)

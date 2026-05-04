@@ -1,0 +1,14 @@
+load("//:zephyr_rules.bzl", "zephyr_library")
+
+# x86-only: only in the dep graph when --target-platforms //boards/qemu/x86:qemu_x86
+zephyr_library(
+    name = "irq_ctrl",
+    board = "qemu_x86",
+    srcs = [
+        "intc_ioapic.c",
+        "intc_loapic.c",
+        "intc_system_apic.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

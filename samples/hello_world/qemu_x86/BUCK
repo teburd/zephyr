@@ -1,0 +1,3 @@
+# Superseded by the platform-configured target.
+# Build with: buck2 build //samples/hello_world:zephyr \
+#               --target-platforms //boards/qemu/x86:qemu_x86

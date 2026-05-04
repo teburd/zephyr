@@ -1,0 +1,47 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
+
+_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+
+_KERNEL_SRCS_COMMON = [
+    "busy_wait.c",
+    "condvar.c",
+    "device.c",
+    "dynamic_disabled.c",
+    "fatal.c",
+    "float.c",
+    "idle.c",
+    "init.c",
+    "kheap.c",
+    "mailbox.c",
+    "main_weak.c",
+    "mempool.c",
+    "mem_slab.c",
+    "msg_q.c",
+    "mutex.c",
+    "pipe.c",
+    "queue.c",
+    "sched.c",
+    "scheduler.c",
+    "sem.c",
+    "sleep.c",
+    "stack.c",
+    "system_work_q.c",
+    "thread.c",
+    "timeout.c",
+    "timer.c",
+    "timeslicing.c",
+    "version.c",
+    "work.c",
+    "sys/sem.c",
+    "sys/thread_entry.c",
+]
+
+_KERNEL_SRCS_X86_ONLY = ["mmu.c", "priority_queues.c", "sys_clock_hw_cycles.c"]
+
+zephyr_library(
+    name = "kernel",
+    board = _BOARD,
+    srcs = _KERNEL_SRCS_COMMON + select({CV_X86: _KERNEL_SRCS_X86_ONLY, CV_ARM: []}),
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

@@ -1,0 +1,56 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "zephyr_link", "zephyr_postprocess", "CV_X86", "CV_ARM")
+
+_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+
+zephyr_library(name = "app", board = _BOARD, srcs = ["src/main.c"])
+
+_WHOLE_X86 = [
+    ":app",
+    "//:libzephyr",
+    "//arch/common:arch_common",
+    "//arch/x86/core:arch_x86_core",
+    "//lib/libc:picolibc",
+    "//lib/libc:libc_common",
+    "//lib/libc:libc_validate",
+    "//subsys/portability/posix:posix",
+    "//subsys/random:random",
+    "//drivers/interrupt_controller:irq_ctrl",
+    "//drivers/console:console",
+    "//drivers/serial:serial",
+    "//drivers/timer:timer",
+]
+
+_WHOLE_ARM = [
+    ":app",
+    "//:libzephyr",
+    "//arch/common:arch_common",
+    "//arch/arm/core:arch_arm_core",
+    "//arch/arm/core/cortex_m:arch_arm_cortex_m",
+    "//lib/libc:picolibc",
+    "//lib/libc:libc_common",
+    "//lib/libc:libc_validate",
+    "//soc/ti/lm3s6965:soc_ti_lm3s6965",
+    "//subsys/portability/posix:posix",
+    "//drivers/console:console",
+    "//drivers/serial:serial",
+    "//drivers/timer:timer",
+]
+
+_WHOLE   = select({CV_X86: _WHOLE_X86, CV_ARM: _WHOLE_ARM})
+_NOARCH  = ["//kernel:kernel"]
+_EXTRA   = select({CV_X86: [], CV_ARM: ["//arch/common:isr_tables"]})
+_OFFSETS = select({CV_X86: "//arch/x86/core:offsets", CV_ARM: "//arch/arm/core:offsets"})
+
+zephyr_link(
+    name = "zephyr_pre0", board = _BOARD, output_name = "zephyr_pre0.elf",
+    use_pre0_linker = True,
+    whole_libs = _WHOLE, noarch_libs = _NOARCH, extra_archives = _EXTRA, offsets = _OFFSETS,
+)
+
+zephyr_postprocess(name = "pp", pre0 = ":zephyr_pre0", board = _BOARD)
+
+zephyr_link(
+    name = "zephyr", board = _BOARD, output_name = "zephyr.elf",
+    whole_libs = _WHOLE, noarch_libs = _NOARCH, extra_archives = _EXTRA, offsets = _OFFSETS,
+    extra_phase_deps = [":pp"],
+)

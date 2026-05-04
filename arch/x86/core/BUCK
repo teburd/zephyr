@@ -1,0 +1,38 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "zephyr_object")
+
+# x86-only: only in the dep graph when --target-platforms //boards/qemu/x86:qemu_x86
+zephyr_library(
+    name = "arch_x86_core",
+    board = "qemu_x86",
+    srcs = [
+        "cpuhalt.c",
+        "cpuid.c",
+        "early_serial.c",
+        "fatal.c",
+        "memmap.c",
+        "multiboot.c",
+        "prep_c.c",
+        "spec_ctrl.c",
+        "tls.c",
+        "x86_mmu.c",
+        "ia32/crt0.S",
+        "ia32/excstub.S",
+        "ia32/fatal.c",
+        "ia32/intstub.S",
+        "ia32/irq_manage.c",
+        "ia32/soft_float_stubs.c",
+        "ia32/swap.S",
+        "ia32/thread.c",
+        "ia32/tls.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)
+
+zephyr_object(
+    name = "offsets",
+    board = "qemu_x86",
+    src = "offsets/offsets.c",
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

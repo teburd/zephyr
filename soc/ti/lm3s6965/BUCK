@@ -1,0 +1,14 @@
+load("//:zephyr_rules.bzl", "zephyr_library")
+
+# ARM-only: only in the dep graph when --target-platforms //boards/qemu/cortex_m3:qemu_cortex_m3
+zephyr_library(
+    name = "soc_ti_lm3s6965",
+    board = "qemu_cortex_m3",
+    srcs = [
+        "reboot.S",
+        "soc_config.c",
+        "sys_arch_reboot.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

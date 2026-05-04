@@ -1,0 +1,33 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
+
+_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+
+_PICOLIBC_SRCS   = glob(["picolibc/*.c"])
+_LIBC_COMMON_SRCS = [
+    "common/source/errno/errno.c",
+    "common/source/stdlib/abort.c",
+    "common/source/stdlib/malloc.c",
+    "common/source/time/time.c",
+]
+
+zephyr_library(
+    name = "picolibc",
+    board = _BOARD,
+    srcs = _PICOLIBC_SRCS,
+    visibility = ["PUBLIC"],
+)
+
+zephyr_library(
+    name = "libc_common",
+    board = _BOARD,
+    srcs = _LIBC_COMMON_SRCS,
+    visibility = ["PUBLIC"],
+)
+
+zephyr_library(
+    name = "libc_validate",
+    board = _BOARD,
+    srcs = ["validate_libc.c"],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)
