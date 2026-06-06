@@ -13,5 +13,9 @@ LM3S6965_SOC = struct(
     external_includes = (              # absolute paths, no -I prefix
         [_HAL_CMSIS + "/CMSIS/Core/Include"] if _HAL_CMSIS else []
     ),
-    soc_lib_label = "//soc/ti/lm3s6965:soc_ti_lm3s6965_qemu_cortex_m3",
+    platform_libs = [
+        "//soc/ti/lm3s6965:soc_ti_lm3s6965",
+        "//drivers/serial:serial",
+        "//drivers/timer:timer",
+    ],
 )

@@ -1,6 +1,5 @@
-load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
-
-_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+load("//:zephyr_rules.bzl", "zephyr_library")
+load("//boards:all.bzl", "BOARD_NAME_SELECT", "driver_src_select")
 
 _LIBZEPHYR_SRCS = [
     "lib/heap/heap.c",
@@ -24,16 +23,10 @@ _LIBZEPHYR_SRCS = [
     "subsys/tracing/tracing_none.c",
 ]
 
-_EXTRA_SRCS_X86 = ["build_qemu_x86/zephyr/misc/generated/configs.c"]
-_EXTRA_SRCS_ARM = [
-    "lib/utils/last_section_id.c",
-    "build_qemu_cortex_m3/zephyr/misc/generated/configs.c",
-]
-
 zephyr_library(
     name = "libzephyr",
-    board = _BOARD,
-    srcs = _LIBZEPHYR_SRCS + select({CV_X86: _EXTRA_SRCS_X86, CV_ARM: _EXTRA_SRCS_ARM}),
+    board = BOARD_NAME_SELECT,
+    srcs = _LIBZEPHYR_SRCS + driver_src_select("libzephyr_extra"),
     supervisor = True,
     visibility = ["PUBLIC"],
 )

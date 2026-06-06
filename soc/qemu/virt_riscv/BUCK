@@ -1,0 +1,10 @@
+load("//:zephyr_rules.bzl", "zephyr_library")
+load("//boards:all.bzl", "RISCV_BOARD_NAME_SELECT")
+
+zephyr_library(
+    name = "soc_qemu_virt_riscv",
+    board = RISCV_BOARD_NAME_SELECT,
+    srcs = ["common/soc.c"],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

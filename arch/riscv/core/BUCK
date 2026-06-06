@@ -1,0 +1,32 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "zephyr_object")
+load("//boards:all.bzl", "RISCV_BOARD_NAME_SELECT")
+
+zephyr_library(
+    name = "arch_riscv_core",
+    board = RISCV_BOARD_NAME_SELECT,
+    srcs = [
+        "cpu_idle.c",
+        "fatal.c",
+        "irq_manage.c",
+        "isr.S",
+        "pmp.c",
+        "pmp.S",
+        "prep_c.c",
+        "reboot.c",
+        "reset.S",
+        "stacktrace.c",
+        "switch.S",
+        "thread.c",
+        "tls.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)
+
+zephyr_object(
+    name = "offsets",
+    board = RISCV_BOARD_NAME_SELECT,
+    src = "offsets/offsets.c",
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

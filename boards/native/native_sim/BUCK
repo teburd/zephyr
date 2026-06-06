@@ -1,0 +1,21 @@
+load(":board.bzl", "declare_targets")
+load("//:zephyr_rules.bzl", "zephyr_library")
+
+# Build: buck2 build //samples/hello_world:zephyr --target-platforms //boards/native/native_sim:native_sim
+declare_targets()
+
+# Board-level C sources (native_sim side of the Zephyr/NSI split)
+zephyr_library(
+    name = "board_native_sim",
+    board = "native_sim",
+    srcs = [
+        "cmdline.c",
+        "cpu_wait.c",
+        "irq_handler.c",
+        "misc.c",
+        "nsi_if.c",
+        "posix_arch_if.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

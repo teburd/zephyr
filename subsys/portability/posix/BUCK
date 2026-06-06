@@ -1,10 +1,9 @@
-load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
-
-_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+load("//:zephyr_rules.bzl", "zephyr_library")
+load("//boards:all.bzl", "BOARD_NAME_SELECT")
 
 zephyr_library(
     name = "posix",
-    board = _BOARD,
+    board = BOARD_NAME_SELECT,
     srcs = [
         "c_lib_ext/fnmatch.c",
         "c_lib_ext/getentropy.c",

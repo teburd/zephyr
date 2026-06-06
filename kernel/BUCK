@@ -1,6 +1,5 @@
-load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
-
-_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
+load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86")
+load("//boards:all.bzl", "BOARD_NAME_SELECT")
 
 _KERNEL_SRCS_COMMON = [
     "busy_wait.c",
@@ -36,12 +35,13 @@ _KERNEL_SRCS_COMMON = [
     "sys/thread_entry.c",
 ]
 
+# x86 needs mmu.c, priority_queues.c, sys_clock_hw_cycles.c; all other boards use only common.
 _KERNEL_SRCS_X86_ONLY = ["mmu.c", "priority_queues.c", "sys_clock_hw_cycles.c"]
 
 zephyr_library(
     name = "kernel",
-    board = _BOARD,
-    srcs = _KERNEL_SRCS_COMMON + select({CV_X86: _KERNEL_SRCS_X86_ONLY, CV_ARM: []}),
+    board = BOARD_NAME_SELECT,
+    srcs = _KERNEL_SRCS_COMMON + select({CV_X86: _KERNEL_SRCS_X86_ONLY, "DEFAULT": []}),
     supervisor = True,
     visibility = ["PUBLIC"],
 )

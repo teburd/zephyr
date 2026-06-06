@@ -11,7 +11,7 @@
   target_platform_detector_spec = target:root//...->//boards/qemu/x86:qemu_x86
 
 [zephyr]
-  root      = /home/tburdick/z/zephyr
-  sdk       = /home/tburdick/zephyr-sdk-1.0.1
-  hal_cmsis = /home/tburdick/z/modules/hal/cmsis_6
-  python    = /home/tburdick/z/env/bin/python
+  root      = .
+  sdk       = ../../zephyr-sdk-1.0.1
+  hal_cmsis = ../modules/hal/cmsis_6
+  python    = ../env/bin/python

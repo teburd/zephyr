@@ -1,0 +1,14 @@
+load("//:zephyr_rules.bzl", "zephyr_library")
+
+# native_sim-only
+zephyr_library(
+    name = "soc_native_inf_clock",
+    board = "native_sim",
+    srcs = [
+        "native_remap.c",
+        "native_tasks.c",
+        "soc.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

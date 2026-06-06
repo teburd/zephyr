@@ -1,0 +1,14 @@
+load("//:zephyr_rules.bzl", "zephyr_library")
+load("//boards:all.bzl", "RISCV_BOARD_NAME_SELECT")
+
+zephyr_library(
+    name = "riscv_privileged",
+    board = RISCV_BOARD_NAME_SELECT,
+    srcs = [
+        "soc_common_irq.c",
+        "soc_irq.S",
+        "vector.S",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

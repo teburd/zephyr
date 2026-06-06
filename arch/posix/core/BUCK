@@ -1,0 +1,25 @@
+load("//:zephyr_rules.bzl", "zephyr_library", "zephyr_object")
+
+# native_sim-only: only in the dep graph when --target-platforms //boards/native/native_sim:native_sim
+zephyr_library(
+    name = "arch_posix_core",
+    board = "native_sim",
+    srcs = [
+        "cpuhalt.c",
+        "fatal.c",
+        "irq.c",
+        "posix_core_nsi.c",
+        "swap.c",
+        "thread.c",
+    ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)
+
+zephyr_object(
+    name = "offsets",
+    board = "native_sim",
+    src = "offsets/offsets.c",
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)

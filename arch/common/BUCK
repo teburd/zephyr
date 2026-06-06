@@ -1,19 +1,23 @@
-load("//:zephyr_rules.bzl", "zephyr_library", "CV_X86", "CV_ARM")
+load("//:zephyr_rules.bzl", "zephyr_library")
+load("//boards:all.bzl", "BOARD_NAME_SELECT", "ISR_TABLES_BOARD_NAME_SELECT", "driver_src_select")
 
-_BOARD = select({CV_X86: "qemu_x86", CV_ARM: "qemu_cortex_m3"})
-
+# init.c is universal; arch-specific extras (sw_isr_common, xip, multilevel_irq)
+# are declared per board in driver_srcs["arch_common_srcs"].
 zephyr_library(
     name = "arch_common",
-    board = _BOARD,
-    srcs = select({CV_X86: ["init.c"], CV_ARM: ["init.c", "sw_isr_common.c", "xip.c"]}),
+    board = BOARD_NAME_SELECT,
+    srcs = ["init.c"] + driver_src_select("arch_common_srcs"),
     supervisor = True,
     visibility = ["PUBLIC"],
 )
 
-# ARM-only: placeholder isr_tables.a (real ISR table .o comes from gen_isr_tables.py at link time)
+# Placeholder isr_tables.a — the real ISR table .o is produced by
+# gen_isr_tables.py at link time (zephyr_postprocess) and injected via
+# extra_archives.  This stub satisfies the linker's undefined-symbol ref
+# during the pre0 pass.  Only ARM Cortex-M and RISC-V use this mechanism.
 zephyr_library(
     name = "isr_tables",
-    board = "qemu_cortex_m3",
+    board = ISR_TABLES_BOARD_NAME_SELECT,
     srcs = ["isr_tables.c"],
     supervisor = True,
     visibility = ["PUBLIC"],

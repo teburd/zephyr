@@ -18,4 +18,17 @@ X86_ARCH = struct(
     # Linker flags
     arch_link_flags  = ["-m32", "-msoft-float"],
     extra_link_flags = [],
+
+    # Platform library deps contributed by this arch to every application.
+    platform_libs = [
+        "//:libzephyr",
+        "//arch/common:arch_common",
+        "//arch/x86/core:arch_x86_core",
+        "//lib/libc:picolibc",
+        "//lib/libc:libc_common",
+        "//lib/libc:libc_validate",
+        "//subsys/portability/posix:posix",
+    ],
+    extra_archives = [],
+    offsets_label  = "//arch/x86/core:offsets",
 )

@@ -7,6 +7,18 @@ QEMU_X86 = struct(
     build_dir              = "build_qemu_x86",
     constraint_value_label = "//boards/qemu/x86:qemu_x86_cv",
     platform_label         = "//boards/qemu/x86:qemu_x86",
+    platform_libs          = ATOM_SOC.arch.platform_libs + ATOM_SOC.platform_libs + [
+        "//drivers/console:console",
+    ],
+    extra_archives         = ATOM_SOC.arch.extra_archives,
+    offsets_label          = ATOM_SOC.arch.offsets_label,
+    driver_srcs = {
+        "console":         ["uart_console.c"],
+        "serial":          ["uart_ns16550.c"],
+        "timer":           ["hpet.c", "sys_clock_init.c"],
+        "arch_common_srcs": [],
+        "libzephyr_extra": ["build_qemu_x86/zephyr/misc/generated/configs.c"],
+    },
 )
 
 def declare_targets():

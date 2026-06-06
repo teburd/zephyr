@@ -1,6 +1,7 @@
 load("//:zephyr_rules.bzl", "zephyr_library")
+load("//boards:all.bzl", "RISCV_BOARD_NAME_SELECT")
 
-# x86-only: only in the dep graph when --target-platforms //boards/qemu/x86:qemu_x86
+# x86-only
 zephyr_library(
     name = "irq_ctrl",
     board = "qemu_x86",
@@ -9,6 +10,15 @@ zephyr_library(
         "intc_loapic.c",
         "intc_system_apic.c",
     ],
+    supervisor = True,
+    visibility = ["PUBLIC"],
+)
+
+# RISC-V: Platform-Level Interrupt Controller
+zephyr_library(
+    name = "intc_plic",
+    board = RISCV_BOARD_NAME_SELECT,
+    srcs = ["intc_plic.c"],
     supervisor = True,
     visibility = ["PUBLIC"],
 )
