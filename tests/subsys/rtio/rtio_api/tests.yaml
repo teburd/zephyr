@@ -53,6 +53,19 @@ tests:
       - CONFIG_RTIO_OP_DELAY=n
     integration_platforms:
       - native_sim
+  rtio.api.no_op_deadline:
+    tags: rtio
+    extra_configs:
+      - CONFIG_RTIO_OP_DEADLINE=n
+    integration_platforms:
+      - native_sim
+  rtio.api.no_timeout_iodev:
+    tags: rtio
+    extra_configs:
+      - CONFIG_RTIO_OP_DELAY=n
+      - CONFIG_RTIO_OP_DEADLINE=n
+    integration_platforms:
+      - native_sim
   rtio.api.no_cqe_callback:
     tags: rtio
     extra_configs:

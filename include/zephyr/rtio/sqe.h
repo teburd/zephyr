@@ -189,6 +189,9 @@ extern "C" {
 /** An operation to await a signal while blocking the iodev (if one is provided) */
 #define RTIO_OP_AWAIT (RTIO_OP_I3C_CCC+1)
 
+/** An operation that bounds how long the chain behind it may take to complete */
+#define RTIO_OP_DEADLINE (RTIO_OP_AWAIT+1)
+
 /**
  * @}
  */
@@ -404,6 +407,13 @@ struct rtio_sqe {
 		} delay;
 #endif
 
+#ifdef CONFIG_RTIO_OP_DEADLINE
+		/** OP_DEADLINE */
+		struct {
+			k_timeout_t timeout; /**< Completion deadline (input). */
+		} deadline;
+#endif
+
 		/** OP_I2C_CONFIGURE */
 		uint32_t i2c_config;
 
@@ -436,6 +446,14 @@ struct rtio_sqe {
 #define RTIO_SQE_ALLOCD   BIT(16)
 /** Set when cancellation of the submission has been requested */
 #define RTIO_SQE_STATUS_CANCELED BIT(17)
+/** Set on every member of a chain headed by an RTIO_OP_DEADLINE guard */
+#define RTIO_SQE_STATUS_GUARDED BIT(18)
+/** Set when a guarded member has completed, in place of returning it to the pool */
+#define RTIO_SQE_STATUS_DONE BIT(19)
+/** Set while an expiry or cancellation of a deadline is being acted on */
+#define RTIO_SQE_STATUS_FINISHING BIT(20)
+/** Set on a deadline once the chain it guards has ended */
+#define RTIO_SQE_STATUS_ENDED BIT(21)
 /** @} */
 
 /**
@@ -498,9 +516,18 @@ struct rtio_iodev_sqe {
 			void *userdata;           /**< Opaque pointer passed to the callback */
 		} await;
 
-#ifdef CONFIG_RTIO_OP_DELAY
-		/** OP_DELAY absolute expiration */
-		k_timepoint_t delay_expiry;
+#ifdef CONFIG_RTIO_TIMEOUT_IODEV
+		/** OP_DELAY and OP_DEADLINE timeout state */
+		struct {
+			/** Absolute expiration */
+			k_timepoint_t expiry;
+			/**
+			 * OP_DEADLINE verdict: 0 while the guarded chain is
+			 * running, the result the guard reports once it
+			 * has stopped it
+			 */
+			int result;
+		} timeout;
 #endif
 	} rt;
 };
@@ -770,6 +797,16 @@ static inline void rtio_sqe_prep_await_executor(struct rtio_sqe *sqe, int8_t pri
 	rtio_sqe_prep_await(sqe, NULL, prio, userdata);
 }
 
+#ifdef CONFIG_RTIO_TIMEOUT_IODEV
+/**
+ * @brief Shared timeout iodev backing RTIO_OP_DELAY and RTIO_OP_DEADLINE submissions
+ *
+ * Both operations are handled by a subsystem-provided timeout iodev rather
+ * than as an executor special case. See subsys/rtio/rtio_timeout.c.
+ */
+extern struct rtio_iodev rtio_timeout_iodev;
+#endif
+
 /**
  * @brief Prepare a delay operation submission which completes after the given timeout
  *
@@ -782,14 +819,6 @@ static inline void rtio_sqe_prep_await_executor(struct rtio_sqe *sqe, int8_t pri
  * @param userdata User supplied pointer to associated data
  */
 #ifdef CONFIG_RTIO_OP_DELAY
-/**
- * @brief Default timeout iodev backing RTIO_OP_DELAY submissions
- *
- * Delay operations are handled by a subsystem-provided timeout iodev rather
- * than as an executor special case. See subsys/rtio/rtio_timeout.c.
- */
-extern struct rtio_iodev rtio_timeout_iodev;
-
 static inline void rtio_sqe_prep_delay(struct rtio_sqe *sqe,
 				       k_timeout_t timeout,
 				       void *userdata)
@@ -804,6 +833,53 @@ static inline void rtio_sqe_prep_delay(struct rtio_sqe *sqe,
 #else
 #define rtio_sqe_prep_delay(sqe, timeout, userdata) \
 	BUILD_ASSERT(false, "CONFIG_RTIO_OP_DELAY not enabled")
+#endif
+
+/**
+ * @brief Prepare a deadline operation submission which bounds the chain behind it
+ *
+ * The deadline operation heads a chain and guards it: the submissions behind it
+ * must all complete within @p timeout. It is dispatched like any chain head, but
+ * rather than holding the chain up it starts the next submission immediately and
+ * runs alongside the work it covers.
+ *
+ * If the chain finishes in time the deadline completes with 0. If @p timeout
+ * elapses first the chain is stopped, each submission that had not completed
+ * reports -ECANCELED, and the deadline itself completes with -ETIMEDOUT after
+ * the chain has unwound. A deadline is enforced where a submission can still be
+ * stopped: one not yet dispatched never reaches its iodev, and one an iodev can
+ * abort is aborted. A transfer the iodev cannot abort runs to its natural
+ * completion, so the deadline completing means the work is over either way.
+ *
+ * Cancelling the deadline with rtio_sqe_cancel() cancels the chain it guards,
+ * which is the one way to stop a whole chain from a single handle.
+ *
+ * The caller sets @ref RTIO_SQE_CHAINED on the prepared submission, as for any
+ * chain head. Pass an absolute timeout (e.g. K_TIMEOUT_ABS_MS()) for a deadline
+ * that does not depend on when the chain is dispatched.
+ *
+ * @note Operation is enabled by default but may be disabled by turning off
+ *       CONFIG_RTIO_OP_DEADLINE
+ *
+ * @param sqe Submission queue entry to prepare
+ * @param timeout The k_timeout_t (e.g. K_MSEC(1)) the guarded chain must complete within
+ * @param userdata User supplied pointer to associated data
+ */
+#ifdef CONFIG_RTIO_OP_DEADLINE
+static inline void rtio_sqe_prep_deadline(struct rtio_sqe *sqe,
+					  k_timeout_t timeout,
+					  void *userdata)
+{
+	memset(sqe, 0, sizeof(struct rtio_sqe));
+	sqe->op = RTIO_OP_DEADLINE;
+	sqe->prio = 0;
+	sqe->iodev = &rtio_timeout_iodev;
+	sqe->deadline.timeout = timeout;
+	sqe->userdata = userdata;
+}
+#else
+#define rtio_sqe_prep_deadline(sqe, timeout, userdata) \
+	BUILD_ASSERT(false, "CONFIG_RTIO_OP_DEADLINE not enabled")
 #endif
 
 /** @brief Prepare an i2c configure op submission */
@@ -918,6 +994,87 @@ static inline void rtio_iodev_sqe_set_canceled(struct rtio_iodev_sqe *iodev_sqe)
 {
 	atomic_or(&iodev_sqe->status, RTIO_SQE_STATUS_CANCELED);
 }
+
+/**
+ * @brief Check whether a submission belongs to a chain guarded by a deadline
+ *
+ * A guarded submission is not returned to the pool as it completes: the whole
+ * chain is released together once it ends, so the guard can walk the chain it
+ * still owns when its deadline elapses.
+ *
+ * @param iodev_sqe Submission queue entry
+ * @retval true The submission is a member of a guarded chain
+ */
+static inline bool rtio_iodev_sqe_is_guarded(const struct rtio_iodev_sqe *iodev_sqe)
+{
+	return (atomic_get(&iodev_sqe->status) & RTIO_SQE_STATUS_GUARDED) != 0;
+}
+
+/**
+ * @brief Mark a guarded submission as having completed
+ *
+ * Takes the place of returning the entry to the pool, which happens for the
+ * whole chain at once when it ends.
+ *
+ * @param iodev_sqe Submission queue entry
+ */
+static inline void rtio_iodev_sqe_set_done(struct rtio_iodev_sqe *iodev_sqe)
+{
+	atomic_or(&iodev_sqe->status, RTIO_SQE_STATUS_DONE);
+}
+
+/**
+ * @brief Check whether a guarded submission has already completed
+ *
+ * @param iodev_sqe Submission queue entry
+ * @retval true The submission completed and is waiting for the chain to end
+ */
+static inline bool rtio_iodev_sqe_is_done(const struct rtio_iodev_sqe *iodev_sqe)
+{
+	return (atomic_get(&iodev_sqe->status) & RTIO_SQE_STATUS_DONE) != 0;
+}
+
+#ifdef CONFIG_RTIO_OP_DEADLINE
+/**
+ * @brief The deadline covering a submission, if it has one
+ *
+ * A deadline is held by the @ref RTIO_OP_DEADLINE submission guarding a chain
+ * rather than by each member, so a member reaches it by walking the chain, which
+ * links its last member back to the guard. An iodev that orders its pending work
+ * by deadline calls this once as it takes a submission in and keeps the value in
+ * its own queue, rather than walking again on every comparison.
+ *
+ * Only valid for a submission the executor has linked, which is any submission
+ * an iodev has been handed.
+ *
+ * @param[in]  iodev_sqe Submission queue entry
+ * @param[out] expiry    Where to store the absolute expiration covering @p iodev_sqe
+ *
+ * @retval true  @p iodev_sqe is covered by a deadline and @p expiry was written
+ * @retval false @p iodev_sqe has no deadline and @p expiry was left alone
+ */
+static inline bool rtio_iodev_sqe_deadline(const struct rtio_iodev_sqe *iodev_sqe,
+					   k_timepoint_t *expiry)
+{
+	const struct rtio_iodev_sqe *curr;
+
+	if (!rtio_iodev_sqe_is_guarded(iodev_sqe)) {
+		return false;
+	}
+
+	/* The walk is bounded by the chain being circular: the guard is reached
+	 * from any member, and coming back around to the start means there is none.
+	 */
+	for (curr = iodev_sqe->next; curr != NULL && curr != iodev_sqe; curr = curr->next) {
+		if (curr->sqe.op == RTIO_OP_DEADLINE) {
+			*expiry = curr->rt.timeout.expiry;
+			return true;
+		}
+	}
+
+	return false;
+}
+#endif /* CONFIG_RTIO_OP_DEADLINE */
 
 /**
  * @brief Await an AWAIT SQE signal from RTIO IODEV

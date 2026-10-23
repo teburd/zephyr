@@ -7,12 +7,12 @@
 
 /**
  * @file
- * @brief RTIO timeout iodev backing the RTIO_OP_DELAY operation.
+ * @brief RTIO timeout iodev backing the RTIO_OP_DELAY and RTIO_OP_DEADLINE operations.
  *
- * Delay submissions are handled like any other iodev operation rather than as
- * an executor special case. The "device" here is the system clock: pending
- * delays are kept in a per-instance list sorted by absolute expiration and
- * driven by a single kernel timeout re-armed to the nearest deadline. The
+ * Both are handled like any other iodev operation rather than as an executor
+ * special case. The "device" here is the system clock: pending submissions are
+ * kept in a per-instance list sorted by absolute expiration and driven by a
+ * single kernel timeout re-armed to the nearest expiration. The
  * absolute expiration lives in the iodev_sqe wrapper's runtime scratch (a
  * single k_timepoint_t, no embedded struct _timeout), keeping the submission
  * description immutable, and reduces the kernel timeout queue to one node per
@@ -21,6 +21,8 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/rtio/rtio.h>
+
+#include "rtio_internal.h"
 
 /** Required to access the Timeout Queue APIs, which are used instead of the
  * Timer APIs because of concerns on size: a shared struct _timeout is cheaper
@@ -55,6 +57,28 @@ static inline void rtio_tq_set_next(struct rtio_iodev_sqe *iodev_sqe, struct rti
 }
 
 /**
+ * @brief Claim a deadline that is being taken out of the list for processing
+ *
+ * A deadline is finished either by the action that takes it out of this list, or
+ * by the chain it guards ending, and the two can run at once on different CPUs.
+ * Claiming under @p data->lock, the same lock every removal from the list holds,
+ * is what lets the chain see that an action is in flight and leave the teardown
+ * to it: a caller that has removed the submission itself knows no action can be
+ * started afterwards, and one that finds it already gone sees the claim.
+ *
+ * Submissions that are not deadlines are finished by their own completion alone
+ * and need no claim.
+ *
+ * @param iodev_sqe Submission being taken out of the list
+ */
+static inline void rtio_tq_claim(struct rtio_iodev_sqe *iodev_sqe)
+{
+	if (IS_ENABLED(CONFIG_RTIO_OP_DEADLINE) && iodev_sqe->sqe.op == RTIO_OP_DEADLINE) {
+		atomic_or(&iodev_sqe->status, RTIO_SQE_STATUS_FINISHING);
+	}
+}
+
+/**
  * @brief Insert a submission into the sorted list
  *
  * @retval true if the submission became the new head (nearest deadline)
@@ -65,7 +89,7 @@ static bool rtio_tq_insert(struct rtio_timeout_iodev_data *data, struct rtio_iod
 	struct rtio_iodev_sqe *curr = data->head;
 
 	while (curr != NULL &&
-	       sys_timepoint_cmp(curr->rt.delay_expiry, iodev_sqe->rt.delay_expiry) <= 0) {
+	       sys_timepoint_cmp(curr->rt.timeout.expiry, iodev_sqe->rt.timeout.expiry) <= 0) {
 		prev = curr;
 		curr = rtio_tq_next(curr);
 	}
@@ -89,11 +113,12 @@ static struct rtio_iodev_sqe *rtio_tq_pop_expired(struct rtio_timeout_iodev_data
 	struct rtio_iodev_sqe *batch = NULL;
 	struct rtio_iodev_sqe *last = NULL;
 
-	while (data->head != NULL && sys_timepoint_expired(data->head->rt.delay_expiry)) {
+	while (data->head != NULL && sys_timepoint_expired(data->head->rt.timeout.expiry)) {
 		struct rtio_iodev_sqe *iodev_sqe = data->head;
 
 		data->head = rtio_tq_next(iodev_sqe);
 		rtio_tq_set_next(iodev_sqe, NULL);
+		rtio_tq_claim(iodev_sqe);
 
 		if (last == NULL) {
 			batch = iodev_sqe;
@@ -156,7 +181,7 @@ static bool rtio_tq_try_arm(struct rtio_timeout_iodev_data *data)
 
 	if (data->head != NULL) {
 		z_add_timeout(&data->timeout, rtio_tq_expired,
-			      sys_timepoint_timeout(data->head->rt.delay_expiry));
+			      sys_timepoint_timeout(data->head->rt.timeout.expiry));
 	}
 
 	return true;
@@ -181,7 +206,7 @@ static void rtio_tq_expired(struct _timeout *timeout)
 
 	if (data->head != NULL) {
 		z_add_timeout(&data->timeout, rtio_tq_expired,
-			      sys_timepoint_timeout(data->head->rt.delay_expiry));
+			      sys_timepoint_timeout(data->head->rt.timeout.expiry));
 	}
 
 	k_spin_unlock(&data->lock, key);
@@ -195,12 +220,55 @@ static void rtio_tq_expired(struct _timeout *timeout)
 	}
 }
 
+/**
+ * @brief The timeout an operation handled by this iodev asked for
+ *
+ * The operations this iodev serves each describe their own timeout, in the arg
+ * union member their op code selects.
+ *
+ * @retval K_FOREVER if the op is not one this iodev handles
+ */
+static k_timeout_t rtio_timeout_of(const struct rtio_iodev_sqe *iodev_sqe)
+{
+	switch (iodev_sqe->sqe.op) {
+#ifdef CONFIG_RTIO_OP_DELAY
+	case RTIO_OP_DELAY:
+		return iodev_sqe->sqe.delay.timeout;
+#endif
+#ifdef CONFIG_RTIO_OP_DEADLINE
+	case RTIO_OP_DEADLINE:
+		return iodev_sqe->sqe.deadline.timeout;
+#endif
+	default:
+		return K_FOREVER;
+	}
+}
+
 static void rtio_timeout_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
 {
 	struct rtio_timeout_iodev_data *data = iodev_sqe->sqe.iodev->data;
+	k_timeout_t timeout = rtio_timeout_of(iodev_sqe);
 	k_spinlock_key_t key;
 
-	iodev_sqe->rt.delay_expiry = sys_timepoint_calc(iodev_sqe->sqe.delay.timeout);
+	if (K_TIMEOUT_EQ(timeout, K_FOREVER)) {
+		/* Either an op this iodev does not handle, or one asking to wait
+		 * forever, which an expiration cannot express.
+		 */
+		rtio_iodev_sqe_err(iodev_sqe, -EINVAL);
+		return;
+	}
+
+	iodev_sqe->rt.timeout.expiry = sys_timepoint_calc(timeout);
+
+	if (sys_timepoint_expired(iodev_sqe->rt.timeout.expiry)) {
+		/* Nothing to wait for. Completing here rather than arming for the
+		 * next tick announcement is what lets a deadline that has already
+		 * passed stop its chain before any of it reaches an iodev.
+		 */
+		rtio_tq_claim(iodev_sqe);
+		rtio_iodev_sqe_ok(iodev_sqe, 0);
+		return;
+	}
 
 	key = k_spin_lock(&data->lock);
 
@@ -255,6 +323,10 @@ static void rtio_timeout_iodev_cancel(const struct rtio_iodev *iodev, struct rti
 	was_head = (data->head == iodev_sqe);
 	was_pending = rtio_tq_remove(data, iodev_sqe);
 
+	if (was_pending) {
+		rtio_tq_claim(iodev_sqe);
+	}
+
 	if (was_head) {
 		/* We removed the nearest deadline, so the shared timeout must be
 		 * re-armed to the new head. z_try_abort_timeout() (inside
@@ -274,6 +346,34 @@ static void rtio_timeout_iodev_cancel(const struct rtio_iodev *iodev, struct rti
 	if (was_pending) {
 		rtio_iodev_sqe_err(iodev_sqe, -ECANCELED);
 	}
+}
+
+/**
+ * @brief Unlink a submission from the timeout queue, leaving it to the caller
+ *
+ * The counterpart to the cancel hook for a caller that owns the submission and
+ * finishes it itself, which is the executor disarming a deadline whose chain has
+ * ended. Removing it under the lock is also what keeps the expiry handler from
+ * taking it afterwards, so the caller can tell that no action will be started
+ * behind its back.
+ */
+void rtio_timeout_disarm(struct rtio_iodev_sqe *iodev_sqe)
+{
+	struct rtio_timeout_iodev_data *data = iodev_sqe->sqe.iodev->data;
+	k_spinlock_key_t key = k_spin_lock(&data->lock);
+	bool was_head = (data->head == iodev_sqe);
+
+	(void)rtio_tq_remove(data, iodev_sqe);
+
+	if (was_head) {
+		/* See rtio_timeout_iodev_cancel() on the re-arm retry */
+		while (!rtio_tq_try_arm(data)) {
+			k_spin_unlock(&data->lock, key);
+			key = k_spin_lock(&data->lock);
+		}
+	}
+
+	k_spin_unlock(&data->lock, key);
 }
 
 static const struct rtio_iodev_api rtio_timeout_iodev_api = {

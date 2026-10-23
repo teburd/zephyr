@@ -45,13 +45,31 @@ config RTIO_CQE_CALLBACK
 	  The CQE callback will notify when a CQE is submitted to the RTIO context.
 	  It is set using rtio_set_cqe_callback().
 
+config RTIO_TIMEOUT_IODEV
+	bool
+	help
+	  The shared timeout iodev backing the operations that need a kernel
+	  timeout. Selected by those operations rather than set directly.
+
 config RTIO_OP_DELAY
 	bool "Delay Operation"
 	default y
+	select RTIO_TIMEOUT_IODEV
 	help
 	  Enable OP_DELAY which allows for, in chains of operations, delaying using a
 	  kernel timeout. Delays are handled by a shared timeout iodev, so enabling
 	  this does not embed a timeout in each submission queue entry.
+
+config RTIO_OP_DEADLINE
+	bool "Deadline Operation"
+	default y
+	select RTIO_TIMEOUT_IODEV
+	help
+	  Enable OP_DEADLINE, a submission that heads a chain and bounds how long
+	  the chain may take to complete. If the deadline elapses first the chain is
+	  stopped and the deadline completes with -ETIMEDOUT. The deadline is held
+	  in the guarding entry, so enabling this does not embed one in each
+	  submission queue entry.
 
 config RTIO_SQE_CACHELINE_CHECK
 	bool "SQE Cacheline size check"

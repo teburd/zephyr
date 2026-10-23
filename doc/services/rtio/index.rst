@@ -148,6 +148,257 @@ are canceled too and each reports its own ``-ECANCELED``. One that beat the
 cancellation reports whatever its iodev produced, so read ``cqe->result``
 rather than assume.
 
+Deadlines
+*********
+
+.. TODO(final writing): the headings, diagrams, table and code below are the
+   skeleton. The prose under each heading is a draft to rewrite in your own
+   words, and the ``TODO`` comments say what is missing. Remove every ``TODO``
+   comment before submitting.
+
+.. TODO: intro paragraph. Points worth making somewhere in it:
+
+   * a chain says in what order work runs, not how long it may take; a deadline
+     is how that is bounded
+   * the deadline is a submission like any other, with a handle and a
+     completion, rather than a field on every submission, so nothing is paid
+     for by submissions that never use one
+   * contrast with io_uring's ``IORING_OP_LINK_TIMEOUT``, which trails the
+     request it guards, if you want the comparison here
+
+A deadline is prepared with :c:func:`rtio_sqe_prep_deadline` and carries
+:c:macro:`RTIO_SQE_CHAINED` like any chain head. It guards the submissions
+behind it:
+
+.. code-block:: c
+
+   struct rtio_sqe *sqe;
+
+   sqe = rtio_sqe_acquire(r);
+   rtio_sqe_prep_deadline(sqe, K_MSEC(50), DEADLINE_UD);
+   sqe->flags |= RTIO_SQE_CHAINED;
+
+   sqe = rtio_sqe_acquire(r);
+   rtio_sqe_prep_write(sqe, iodev, RTIO_PRIO_NORM, &reg, sizeof(reg), WRITE_UD);
+   sqe->flags |= RTIO_SQE_CHAINED;
+
+   sqe = rtio_sqe_acquire(r);
+   rtio_sqe_prep_read(sqe, iodev, RTIO_PRIO_NORM, buf, sizeof(buf), READ_UD);
+
+   /* Three submissions, so three completions: the two members and the deadline */
+   rtio_submit(r, 3);
+
+.. mermaid::
+   :caption: A chain guarded by a deadline
+   :alt: The deadline heads the chain and links to the write, the write links
+         to the read, and the read is the last member. A dotted link runs from
+         the read back to the deadline, which is how the chain reaches its
+         deadline and how the deadline reaches its members.
+
+   ---
+   config:
+     flowchart:
+       useMaxWidth: false
+   ---
+   flowchart LR
+       dl["deadline<br>K_MSEC(50)"]
+       w["write"]
+       r["read"]
+
+       dl -->|CHAINED| w
+       w -->|CHAINED| r
+       r -.->|ends the chain| dl
+
+       classDef guard stroke-width:2px,stroke-dasharray:4
+       class dl guard
+
+.. TODO: a sentence on what the dotted link is for, if the caption is not
+   enough. It is what lets the chain find its deadline when it ends, and what
+   lets the deadline walk the members it still owns when it elapses.
+
+Arming
+======
+
+A deadline is not a step in the chain it heads. Holding the chain up until the
+deadline elapsed would be the opposite of guarding it, so dispatching the
+deadline arms it and starts the next submission at once; the two then run
+alongside each other.
+
+.. mermaid::
+   :caption: A chain that finishes inside its deadline
+   :alt: On submit the executor arms the deadline and immediately dispatches
+         the write. The write and then the read complete, each producing a
+         completion. The executor then disarms the deadline and produces its
+         completion with a result of zero, which releases the waiting thread.
+
+   sequenceDiagram
+       participant T as Thread
+       participant E as Executor
+       participant TQ as Timeout iodev
+       participant B as Bus iodev
+       participant CQ as Completion queue
+
+       T->>E: rtio_submit(r, 3)
+       E->>TQ: arm the deadline
+       E->>B: write
+       B-->>E: done
+       E->>CQ: write cqe
+       E->>B: read
+       B-->>E: done
+       E->>CQ: read cqe
+       E->>TQ: disarm
+       E->>CQ: deadline cqe, 0
+       CQ-->>T: wait count reached
+
+Pass an absolute timeout, such as :c:macro:`K_TIMEOUT_ABS_MS`, for a deadline
+that does not depend on when the chain is dispatched.
+
+.. TODO: say when each form is the one you want. Relative is for "this work
+   gets 50 ms from the moment it starts", absolute for "this has to be done by
+   the time the next sample is due", which is the case that composes with a
+   periodic schedule.
+
+Elapsing
+========
+
+If the deadline elapses before the chain is over, the chain is stopped and each
+submission that had not completed reports ``-ECANCELED``, cascading as any
+failure in a chain does. The deadline itself completes with ``-ETIMEDOUT``,
+after the chain has unwound, so it is the last completion of the set and
+reports the verdict on work whose results the consumer has already seen.
+
+.. mermaid::
+   :caption: A chain stopped by its deadline
+   :alt: The executor arms the deadline and dispatches the read. The deadline
+         elapses while the read is in flight, so the executor marks the
+         earliest unfinished member and asks its iodev to abort it. The read
+         ends and reports its own result, the member behind it reports
+         -ECANCELED, and the deadline reports -ETIMEDOUT last.
+
+   sequenceDiagram
+       participant E as Executor
+       participant TQ as Timeout iodev
+       participant B as Bus iodev
+       participant CQ as Completion queue
+
+       E->>TQ: arm the deadline
+       E->>B: read
+       Note over TQ: the deadline elapses
+       TQ->>E: the deadline completes
+       E->>E: mark the earliest<br>unfinished member
+       E->>B: cancel, if the iodev has a hook
+       B-->>E: the read ends
+       E->>CQ: read cqe
+       E->>CQ: next member cqe, -ECANCELED
+       E->>CQ: deadline cqe, -ETIMEDOUT
+
+.. TODO: it is worth saying plainly that only one member is marked, and that
+   the mark travels along the chain one link at a time, because that is what
+   makes the stop safe from a timer context: nothing walks a chain whose
+   entries another context may be completing.
+
+What a deadline guarantees
+==========================
+
+What a deadline guarantees follows from cancellation being best effort. It is
+enforced wherever a submission can still be stopped, and does not bound how
+long the work takes, only how long it is allowed to keep going.
+
+.. list-table:: What a submission does when the deadline elapses
+   :header-rows: 1
+   :widths: 34 33 33
+
+   * - Where the submission is
+     - What happens to it
+     - What it reports
+   * - Queued, not yet dispatched
+     - Never reaches its iodev
+     - ``-ECANCELED``
+   * - Held by an iodev that implements a ``cancel`` hook
+     - Aborted where it sits
+     - ``-ECANCELED``
+   * - Transfer already in flight
+     - Runs to its natural completion
+     - Whatever its iodev produced
+
+.. TODO: the practical consequence for the caller, which is the part worth
+   being blunt about:
+
+   * in the first two rows nothing ever touched the buffers
+   * in the third row the transfer was still running, so a buffer may have been
+     written after the deadline passed
+   * the deadline completing is what says the work is over, in every row, so a
+     caller that must know its buffers are idle waits for that completion
+     rather than for -ETIMEDOUT to appear
+
+Cancelling a deadline
+=====================
+
+Cancelling the deadline with :c:func:`rtio_sqe_cancel` cancels the chain it
+guards, which is the one way to stop a whole chain from a single handle. The
+chain then reports ``-ECANCELED`` throughout, including the deadline itself.
+
+.. TODO: note the contrast with cancelling a member's handle, which only ever
+   stops that member, and point at `Cancellation`_ for the rest.
+
+Lifetime of a guarded chain
+===========================
+
+.. mermaid::
+   :caption: The states of a deadline
+   :alt: A deadline is armed when it is dispatched with its chain. From armed
+         it either goes to stopping, when it elapses or is canceled, or
+         straight to ended when the chain finishes first. Stopping goes to
+         ended once the chain has unwound. From ended the chain is released and
+         the deadline produces its completion.
+
+   ---
+   config:
+     state:
+       useMaxWidth: false
+   ---
+   stateDiagram-v2
+       [*] --> Armed : dispatched with its chain
+       Armed --> Stopping : the deadline elapses, -ETIMEDOUT
+       Armed --> Stopping : rtio_sqe_cancel(), -ECANCELED
+       Armed --> Ended : the chain finishes first, 0
+       Stopping --> Ended : the chain unwinds
+       Ended --> [*] : chain released, deadline cqe
+
+Two costs come with a deadline. It occupies a submission queue entry, so a
+guarded chain needs one more than its members. And a guarded chain is returned
+to the pool when it ends rather than as its members complete, since the
+deadline walks the chain it still owns when it elapses. Peak usage is
+unaffected, because a chain's members are all allocated before it is submitted,
+but a long running chain holds them for longer.
+
+.. TODO: the entry held by the deadline and the deferred release are the two
+   things that can surprise someone sizing a pool, so this is the place to say
+   what to size it to. Worth mentioning that a deadline over a stream holds the
+   whole chain for as long as the stream runs.
+
+Streams
+=======
+
+A deadline over a multishot submission gives a stream a duration: the stream
+runs until the deadline elapses, then stops as any canceled multishot does.
+
+.. TODO: this is the shortest useful example in the whole section, so it may be
+   worth a few lines of code: prep_deadline + prep_read_multishot, and what the
+   completions look like (iterations, then -ECANCELED, then -ETIMEDOUT).
+
+Ordering work by deadline
+=========================
+
+An iodev that orders its pending work by deadline reads it with
+:c:func:`rtio_iodev_sqe_deadline`, which walks from a submission to the
+deadline covering it. The walk is meant to be done once, as the submission is
+taken in, with the result kept in the iodev's own queue.
+
+.. TODO: this is the hook for earliest-deadline-first ordering in a driver, and
+   nothing in tree does it yet. Either say that plainly, or cut this heading
+   and leave the API documentation to speak for itself.
+
 Memory pools
 ************
 

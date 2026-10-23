@@ -2625,6 +2625,9 @@ PREDEFINED             = __DOXYGEN__ \
                          CONFIG_NET_MGMT_EVENT \
                          CONFIG_NET_TCP \
                          CONFIG_NET_UDP \
+                         CONFIG_RTIO_OP_DEADLINE \
+                         CONFIG_RTIO_OP_DELAY \
+                         CONFIG_RTIO_TIMEOUT_IODEV \
                          CONFIG_SCHED_CPU_MASK \
                          CONFIG_SCHED_DEADLINE \
                          CONFIG_SCHED_DEADLINE \

@@ -889,9 +889,9 @@ static inline void rtio_access_grant(struct rtio *r, struct k_thread *t)
 	k_object_access_grant(r->consume_sem, t);
 #endif
 
-#ifdef CONFIG_RTIO_OP_DELAY
-	/* Delay submissions are dispatched to the shared timeout iodev, so a thread
-	 * allowed to use this context must also be able to reference it.
+#ifdef CONFIG_RTIO_TIMEOUT_IODEV
+	/* Delay and deadline submissions are dispatched to the shared timeout iodev,
+	 * so a thread allowed to use this context must also be able to reference it.
 	 */
 	k_object_access_grant(&rtio_timeout_iodev, t);
 #endif
@@ -916,7 +916,7 @@ static inline void rtio_access_revoke(struct rtio *r, struct k_thread *t)
 	k_object_access_revoke(r->consume_sem, t);
 #endif
 
-#ifdef CONFIG_RTIO_OP_DELAY
+#ifdef CONFIG_RTIO_TIMEOUT_IODEV
 	k_object_access_revoke(&rtio_timeout_iodev, t);
 #endif
 }

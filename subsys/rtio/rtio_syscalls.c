@@ -47,6 +47,11 @@ static inline bool rtio_vrfy_sqe(struct rtio_sqe *sqe)
 		 */
 		break;
 #endif
+#ifdef CONFIG_RTIO_OP_DEADLINE
+	case RTIO_OP_DEADLINE:
+		/* As for a delay, only a timeout value and opaque userdata. */
+		break;
+#endif
 	case RTIO_OP_TXRX:
 		valid_sqe &= !K_SYSCALL_MEMORY(sqe->txrx.tx_buf, sqe->txrx.buf_len, false);
 		valid_sqe &= !K_SYSCALL_MEMORY(sqe->txrx.rx_buf, sqe->txrx.buf_len, true);

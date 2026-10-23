@@ -1448,6 +1448,560 @@ ZTEST(rtio_api, test_rtio_delay_chained)
 }
 #endif /* CONFIG_RTIO_OP_DELAY */
 
+#ifdef CONFIG_RTIO_OP_DEADLINE
+#define RTIO_DEADLINE_ELEMS 3
+
+RTIO_DEFINE(r_deadline, RTIO_DEADLINE_ELEMS, RTIO_DEADLINE_ELEMS);
+RTIO_IODEV_TEST_DEFINE(iodev_test_deadline);
+
+/* The test iodev takes this long to service one submission. */
+#define IODEV_OP_MS 10
+
+/**
+ * @brief Reclaiming the whole pool, which only succeeds once every entry is back
+ *
+ * A guarded chain is released when it ends rather than as its members complete,
+ * so this doubles as a barrier against observing a chain before it is over.
+ */
+static void deadline_pool_reclaimed(struct rtio *r)
+{
+	struct rtio_sqe *slots[RTIO_DEADLINE_ELEMS];
+
+	zassert_ok(rtio_sqe_acquire_array(r, RTIO_DEADLINE_ELEMS, slots),
+		   "Every entry should be back in the pool");
+	rtio_sqe_drop_all(r);
+}
+
+/**
+ * @brief A chain that finishes inside its deadline completes untouched
+ *
+ * The guard is the last completion either way, so it reports the verdict on work
+ * the consumer has already seen the results of.
+ */
+ZTEST(rtio_api, test_rtio_deadline_met)
+{
+	struct rtio *r = &r_deadline;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+
+	rtio_iodev_test_init(&iodev_test_deadline);
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(sqe, K_MSEC(10 * IODEV_OP_MS), (void *)0);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	for (size_t i = 1; i < RTIO_DEADLINE_ELEMS; i++) {
+		sqe = rtio_sqe_acquire(r);
+		zassert_not_null(sqe, "Expected a valid sqe");
+		rtio_sqe_prep_nop(sqe, (struct rtio_iodev *)&iodev_test_deadline, (void *)i);
+		if (i < RTIO_DEADLINE_ELEMS - 1) {
+			sqe->flags |= RTIO_SQE_CHAINED;
+		}
+	}
+
+	zassert_ok(rtio_submit(r, RTIO_DEADLINE_ELEMS), "Submit should succeed");
+
+	for (size_t i = 1; i < RTIO_DEADLINE_ELEMS; i++) {
+		zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+		zassert_equal_ptr((void *)i, cqe.userdata, "Members complete in order");
+		zassert_ok(cqe.result, "A member within the deadline should complete ok");
+	}
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The guard completes last");
+	zassert_ok(cqe.result, "A chain within its deadline should report ok");
+
+	deadline_pool_reclaimed(r);
+
+	zassert_equal(0, rtio_cqe_copy_out(r, &cqe, 1, K_NO_WAIT),
+		      "A disarmed deadline should not fire later");
+}
+
+/**
+ * @brief An elapsed deadline stops the chain and reports -ETIMEDOUT
+ *
+ * The test iodev has no cancel hook, so the submission in flight when the
+ * deadline elapses runs to its natural completion and reports what it produced.
+ * The one behind it is stopped on the way to its iodev, as a cascading failure.
+ */
+ZTEST(rtio_api, test_rtio_deadline_expired)
+{
+	struct rtio *r = &r_deadline;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+
+	rtio_iodev_test_init(&iodev_test_deadline);
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(sqe, K_MSEC(IODEV_OP_MS / 2), (void *)0);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	for (size_t i = 1; i < RTIO_DEADLINE_ELEMS; i++) {
+		sqe = rtio_sqe_acquire(r);
+		zassert_not_null(sqe, "Expected a valid sqe");
+		rtio_sqe_prep_nop(sqe, (struct rtio_iodev *)&iodev_test_deadline, (void *)i);
+		if (i < RTIO_DEADLINE_ELEMS - 1) {
+			sqe->flags |= RTIO_SQE_CHAINED;
+		}
+	}
+
+	zassert_ok(rtio_submit(r, RTIO_DEADLINE_ELEMS), "Submit should succeed");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)1, cqe.userdata, "The member in flight completes first");
+	zassert_ok(cqe.result, "An iodev that cannot abort reports what it produced");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)2, cqe.userdata, "Then the member behind it");
+	zassert_equal(-ECANCELED, cqe.result, "A stopped member reports -ECANCELED");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The guard completes last");
+	zassert_equal(-ETIMEDOUT, cqe.result, "An elapsed deadline should report -ETIMEDOUT");
+
+	deadline_pool_reclaimed(r);
+}
+
+/**
+ * @brief A deadline that has already passed stops the chain before it is dispatched
+ *
+ * Nothing is handed to an iodev, which is the one case a deadline can stop work
+ * with no chance of a buffer having been touched.
+ */
+ZTEST(rtio_api, test_rtio_deadline_passed)
+{
+	struct rtio *r = &r_deadline;
+	struct rtio_iodev_test_data *data = iodev_test_deadline.data;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+	atomic_t submits;
+
+	rtio_iodev_test_init(&iodev_test_deadline);
+	submits = atomic_get(&data->submit_count);
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(sqe, K_NO_WAIT, (void *)0);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	for (size_t i = 1; i < RTIO_DEADLINE_ELEMS; i++) {
+		sqe = rtio_sqe_acquire(r);
+		zassert_not_null(sqe, "Expected a valid sqe");
+		rtio_sqe_prep_nop(sqe, (struct rtio_iodev *)&iodev_test_deadline, (void *)i);
+		if (i < RTIO_DEADLINE_ELEMS - 1) {
+			sqe->flags |= RTIO_SQE_CHAINED;
+		}
+	}
+
+	zassert_ok(rtio_submit(r, RTIO_DEADLINE_ELEMS), "Submit should succeed");
+
+	for (size_t i = 1; i < RTIO_DEADLINE_ELEMS; i++) {
+		zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+		zassert_equal_ptr((void *)i, cqe.userdata, "Members complete in order");
+		zassert_equal(-ECANCELED, cqe.result, "A stopped member reports -ECANCELED");
+	}
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The guard completes last");
+	zassert_equal(-ETIMEDOUT, cqe.result, "A passed deadline should report -ETIMEDOUT");
+
+	zassert_equal(submits, atomic_get(&data->submit_count),
+		      "No submission should have reached the iodev");
+
+	deadline_pool_reclaimed(r);
+}
+
+/**
+ * @brief An absolute deadline does not depend on when the chain is dispatched
+ */
+ZTEST(rtio_api, test_rtio_deadline_absolute)
+{
+	struct rtio *r = &r_deadline;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+	int64_t expiry_ms = k_uptime_get() + (IODEV_OP_MS / 2);
+
+	rtio_iodev_test_init(&iodev_test_deadline);
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(sqe, K_TIMEOUT_ABS_MS(expiry_ms), (void *)0);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_nop(sqe, (struct rtio_iodev *)&iodev_test_deadline, (void *)1);
+
+	zassert_ok(rtio_submit(r, 2), "Submit should succeed");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)1, cqe.userdata, "The member completes first");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The guard completes last");
+	zassert_equal(-ETIMEDOUT, cqe.result,
+		      "An absolute deadline before the chain could finish should report "
+		      "-ETIMEDOUT");
+	zassert_true(k_uptime_get() >= expiry_ms, "The deadline fired before its tick");
+
+	deadline_pool_reclaimed(r);
+}
+
+/**
+ * @brief Cancelling the deadline cancels the chain it guards
+ *
+ * A deadline is the whole chain's handle, where cancelling by a member's handle
+ * only ever stops that member. The chain is parked on an executor await, so the
+ * submission behind it is provably still undispatched when the deadline is
+ * canceled.
+ */
+ZTEST(rtio_api, test_rtio_deadline_cancel)
+{
+	struct rtio *r = &r_deadline;
+	struct rtio_sqe *guard, *await, *tail;
+	rtio_sqe_handle_t guard_handle;
+	struct rtio_cqe cqe;
+
+	rtio_iodev_test_init(&iodev_test_deadline);
+
+	guard = rtio_sqe_acquire(r);
+	zassert_not_null(guard, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(guard, K_MSEC(10 * IODEV_OP_MS), (void *)0);
+	guard->flags |= RTIO_SQE_CHAINED;
+	guard_handle = rtio_sqe_handle(r, guard);
+
+	await = rtio_sqe_acquire(r);
+	zassert_not_null(await, "Expected a valid sqe");
+	rtio_sqe_prep_await_executor(await, RTIO_PRIO_NORM, (void *)1);
+	await->flags |= RTIO_SQE_CHAINED;
+
+	tail = rtio_sqe_acquire(r);
+	zassert_not_null(tail, "Expected a valid sqe");
+	rtio_sqe_prep_nop(tail, (struct rtio_iodev *)&iodev_test_deadline, (void *)2);
+
+	zassert_ok(rtio_submit(r, 0), "Submit should succeed");
+
+	zassert_ok(rtio_sqe_cancel(r, guard_handle), "Cancelling the deadline should succeed");
+
+	/* The await is what the cancel stopped, and it is released by the signal. */
+	rtio_sqe_signal(await);
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)1, cqe.userdata, "The await completes first");
+	zassert_ok(cqe.result, "A submission that ran to completion reports its own result");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)2, cqe.userdata, "Then the member behind it");
+	zassert_equal(-ECANCELED, cqe.result, "A stopped member reports -ECANCELED");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The guard completes last");
+	zassert_equal(-ECANCELED, cqe.result, "A canceled deadline should report -ECANCELED");
+
+	deadline_pool_reclaimed(r);
+}
+
+/**
+ * @brief A guarded chain holds its entries until it ends
+ *
+ * The pool is sized to the chain exactly, so an entry being available again
+ * proves the chain was released, and the chain is held up by an await until the
+ * completion of the member before it has been observed.
+ */
+ZTEST(rtio_api, test_rtio_deadline_entries_held_until_chain_end)
+{
+	struct rtio *r = &r_deadline;
+	struct rtio_sqe *guard, *first, *await;
+	struct rtio_cqe cqe;
+
+	rtio_iodev_test_init(&iodev_test_deadline);
+
+	guard = rtio_sqe_acquire(r);
+	zassert_not_null(guard, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(guard, K_MSEC(100 * IODEV_OP_MS), (void *)0);
+	guard->flags |= RTIO_SQE_CHAINED;
+
+	first = rtio_sqe_acquire(r);
+	zassert_not_null(first, "Expected a valid sqe");
+	rtio_sqe_prep_nop(first, (struct rtio_iodev *)&iodev_test_deadline, (void *)1);
+	first->flags |= RTIO_SQE_CHAINED;
+
+	await = rtio_sqe_acquire(r);
+	zassert_not_null(await, "Expected a valid sqe");
+	rtio_sqe_prep_await_executor(await, RTIO_PRIO_NORM, (void *)2);
+
+	zassert_ok(rtio_submit(r, 0), "Submit should succeed");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)1, cqe.userdata, "The first member completes");
+	zassert_ok(cqe.result, "The first member should complete ok");
+
+	zassert_is_null(rtio_sqe_acquire(r),
+			"A completed member of a guarded chain must stay out of the pool");
+
+	rtio_sqe_signal(await);
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)2, cqe.userdata, "The await completes");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The guard completes last");
+	zassert_ok(cqe.result, "A chain within its deadline should report ok");
+
+	deadline_pool_reclaimed(r);
+}
+
+#if defined(CONFIG_RTIO_OP_DELAY)
+#define RTIO_DEADLINE_TIMING_CHAINS 2
+#define RTIO_DEADLINE_TIMING_ELEMS  (RTIO_DEADLINE_TIMING_CHAINS * 2)
+
+RTIO_DEFINE(r_deadline_timing, RTIO_DEADLINE_TIMING_ELEMS, RTIO_DEADLINE_TIMING_ELEMS);
+
+/**
+ * @brief Two guarded chains elapse in deadline order, not submission order
+ *
+ * Deadlines share one sorted timeout list, so the chain submitted first with the
+ * later deadline must elapse second. Each chain holds a delay far beyond its own
+ * deadline, so it is stopped by the deadline alone; a delay is also a submission
+ * its iodev can abort, so it is stopped where it sits rather than running out.
+ */
+ZTEST(rtio_api, test_rtio_deadline_reorder)
+{
+	struct rtio *r = &r_deadline_timing;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+	/* Submitted out of deadline order: the first chain elapses last. */
+	const uint32_t deadline_ms[RTIO_DEADLINE_TIMING_CHAINS] = {4 * IODEV_OP_MS, IODEV_OP_MS};
+	const size_t expected_order[RTIO_DEADLINE_TIMING_CHAINS] = {1, 0};
+	int64_t start = k_uptime_ticks();
+
+	for (size_t i = 0; i < RTIO_DEADLINE_TIMING_CHAINS; i++) {
+		sqe = rtio_sqe_acquire(r);
+		zassert_not_null(sqe, "Expected a valid sqe");
+		rtio_sqe_prep_deadline(sqe, K_MSEC(deadline_ms[i]), (void *)i);
+		sqe->flags |= RTIO_SQE_CHAINED;
+
+		sqe = rtio_sqe_acquire(r);
+		zassert_not_null(sqe, "Expected a valid sqe");
+		rtio_sqe_prep_delay(sqe, K_SECONDS(10), NULL);
+		sqe->flags |= RTIO_SQE_NO_RESPONSE;
+	}
+
+	zassert_ok(rtio_submit(r, 0), "Submit should succeed");
+
+	for (size_t i = 0; i < RTIO_DEADLINE_TIMING_CHAINS; i++) {
+		size_t id;
+		int64_t earliest;
+
+		zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+		id = (size_t)cqe.userdata;
+		earliest = start + (int64_t)k_ms_to_ticks_floor64(deadline_ms[id]);
+
+		zassert_equal_ptr((void *)expected_order[i], cqe.userdata,
+				  "Deadlines elapsed out of order at %zu", i);
+		zassert_equal(-ETIMEDOUT, cqe.result, "An elapsed deadline reports -ETIMEDOUT");
+		zassert_true(k_uptime_ticks() >= earliest,
+			     "Deadline %zu elapsed before its tick", id);
+	}
+}
+#endif /* CONFIG_RTIO_OP_DELAY */
+
+#define RTIO_DEADLINE_MID_ELEMS 4
+
+RTIO_DEFINE(r_deadline_mid, RTIO_DEADLINE_MID_ELEMS, RTIO_DEADLINE_MID_ELEMS);
+RTIO_IODEV_TEST_DEFINE(iodev_test_deadline_mid);
+
+/**
+ * @brief A deadline placed inside a chain covers the submissions after it
+ *
+ * A deadline covers what follows it, so one that does not head its chain bounds
+ * the remainder. The submissions before it are not covered and are released as
+ * they complete, like any unguarded chain.
+ */
+ZTEST(rtio_api, test_rtio_deadline_mid_chain)
+{
+	struct rtio *r = &r_deadline_mid;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+
+	rtio_iodev_test_init(&iodev_test_deadline_mid);
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_nop(sqe, (struct rtio_iodev *)&iodev_test_deadline_mid, (void *)1);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(sqe, K_MSEC(IODEV_OP_MS / 2), (void *)0);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	for (size_t i = 2; i < RTIO_DEADLINE_MID_ELEMS; i++) {
+		sqe = rtio_sqe_acquire(r);
+		zassert_not_null(sqe, "Expected a valid sqe");
+		rtio_sqe_prep_nop(sqe, (struct rtio_iodev *)&iodev_test_deadline_mid, (void *)i);
+		if (i < RTIO_DEADLINE_MID_ELEMS - 1) {
+			sqe->flags |= RTIO_SQE_CHAINED;
+		}
+	}
+
+	zassert_ok(rtio_submit(r, RTIO_DEADLINE_MID_ELEMS), "Submit should succeed");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)1, cqe.userdata, "The member before the deadline completes");
+	zassert_ok(cqe.result, "A member the deadline does not cover is untouched");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)2, cqe.userdata, "Then the member in flight");
+	zassert_ok(cqe.result, "An iodev that cannot abort reports what it produced");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)3, cqe.userdata, "Then the member behind it");
+	zassert_equal(-ECANCELED, cqe.result, "A stopped member reports -ECANCELED");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The deadline completes last");
+	zassert_equal(-ETIMEDOUT, cqe.result, "An elapsed deadline should report -ETIMEDOUT");
+
+	struct rtio_sqe *slots[RTIO_DEADLINE_MID_ELEMS];
+
+	zassert_ok(rtio_sqe_acquire_array(r, RTIO_DEADLINE_MID_ELEMS, slots),
+		   "Every entry should be back in the pool");
+	rtio_sqe_drop_all(r);
+}
+
+RTIO_DEFINE(r_deadline_lookup, 3, 3);
+RTIO_IODEV_TEST_DEFINE(iodev_test_deadline_lookup);
+
+static k_timepoint_t lookup_expiry;
+static bool lookup_found;
+static bool lookup_found_unguarded;
+
+static void deadline_lookup_cb(struct rtio *r, const struct rtio_sqe *sqe, int res, void *arg0)
+{
+	struct rtio_iodev_sqe *iodev_sqe = CONTAINER_OF(sqe, struct rtio_iodev_sqe, sqe);
+	bool *found = arg0;
+
+	ARG_UNUSED(r);
+	ARG_UNUSED(res);
+
+	*found = rtio_iodev_sqe_deadline(iodev_sqe, &lookup_expiry);
+}
+
+/**
+ * @brief A member of a guarded chain can look up the deadline covering it
+ *
+ * What an iodev ordering its pending work by deadline relies on. A submission
+ * with no deadline must report that it has none.
+ */
+ZTEST(rtio_api, test_rtio_deadline_lookup)
+{
+	struct rtio *r = &r_deadline_lookup;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+	k_timepoint_t armed_before, armed_after;
+
+	rtio_iodev_test_init(&iodev_test_deadline_lookup);
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_callback_no_cqe(sqe, deadline_lookup_cb, &lookup_found_unguarded, NULL);
+
+	zassert_ok(rtio_submit(r, 0), "Submit should succeed");
+	zassert_false(lookup_found_unguarded, "An unguarded submission has no deadline");
+
+	armed_before = sys_timepoint_calc(K_MSEC(10 * IODEV_OP_MS));
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(sqe, K_MSEC(10 * IODEV_OP_MS), (void *)0);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_callback_no_cqe(sqe, deadline_lookup_cb, &lookup_found, NULL);
+
+	zassert_ok(rtio_submit(r, 1), "Submit should succeed");
+
+	armed_after = sys_timepoint_calc(K_MSEC(10 * IODEV_OP_MS));
+
+	zassert_true(lookup_found, "A guarded submission should report its deadline");
+	zassert_true(sys_timepoint_cmp(lookup_expiry, armed_before) >= 0 &&
+			     sys_timepoint_cmp(lookup_expiry, armed_after) <= 0,
+		     "The deadline reported should be the one the guard armed");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "Only the guard completes");
+	zassert_ok(cqe.result, "A chain within its deadline should report ok");
+}
+
+#define DEADLINE_STREAM_BLK_COUNT 4
+#define DEADLINE_STREAM_BLK_SIZE 16
+
+RTIO_DEFINE_WITH_MEMPOOL(r_deadline_stream, 2, 4, DEADLINE_STREAM_BLK_COUNT,
+			 DEADLINE_STREAM_BLK_SIZE, MEM_BLK_ALIGN);
+RTIO_IODEV_TEST_DEFINE(iodev_test_deadline_stream);
+
+/**
+ * @brief A deadline over a multishot submission stops the stream
+ *
+ * A stream has no natural completion, so a deadline is how it is given a
+ * duration: it runs until the deadline elapses, then stops like any canceled
+ * multishot.
+ */
+ZTEST(rtio_api, test_rtio_deadline_stream)
+{
+	struct rtio *r = &r_deadline_stream;
+	struct rtio_sqe *sqe;
+	struct rtio_cqe cqe;
+	uint8_t *buf;
+	uint32_t buf_len;
+	int iterations = 0;
+
+	rtio_iodev_test_init(&iodev_test_deadline_stream);
+
+	for (int i = 0; i < DEADLINE_STREAM_BLK_SIZE; i++) {
+		mempool_data[i] = i;
+	}
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_deadline(sqe, K_MSEC(3 * IODEV_OP_MS), (void *)0);
+	sqe->flags |= RTIO_SQE_CHAINED;
+
+	sqe = rtio_sqe_acquire(r);
+	zassert_not_null(sqe, "Expected a valid sqe");
+	rtio_sqe_prep_read_multishot(sqe, (struct rtio_iodev *)&iodev_test_deadline_stream, 0,
+				     mempool_data);
+
+	zassert_ok(rtio_submit(r, 0), "Submit should succeed");
+
+	/* Iterations arrive until the deadline stops the stream with -ECANCELED. */
+	while (true) {
+		zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+
+		if (rtio_cqe_get_mempool_buffer(r, &cqe, &buf, &buf_len) == 0) {
+			rtio_release_buffer(r, buf, buf_len);
+		}
+
+		if (cqe.result == -ECANCELED) {
+			break;
+		}
+
+		zassert_ok(cqe.result, "A stream iteration should complete ok");
+		iterations++;
+	}
+
+	zassert_true(iterations > 0, "The stream should have run before the deadline elapsed");
+
+	zassert_equal(1, rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER));
+	zassert_equal_ptr((void *)0, cqe.userdata, "The guard completes last");
+	zassert_equal(-ETIMEDOUT, cqe.result, "An elapsed deadline should report -ETIMEDOUT");
+}
+#endif /* CONFIG_RTIO_OP_DEADLINE */
+
 #define THROUGHPUT_ITERS 100000
 RTIO_DEFINE(r_throughput, SQE_POOL_SIZE, CQE_POOL_SIZE);
 
